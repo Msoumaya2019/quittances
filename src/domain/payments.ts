@@ -16,6 +16,7 @@ import {
   type Paiement,
   type PeriodeLoyer,
   type StatutMois,
+  type TypeDocument,
 } from './types.ts';
 
 /** Cumul des encaissements d'un mois, avec le détail des opérations. */
@@ -256,7 +257,7 @@ export type ActionPrincipale =
 export function actionPrincipale(params: {
   contexte: ContexteMois;
   /** Document déjà émis pour ce mois, s'il existe. */
-  documentExistant?: { id: string; type: 'quittance' | 'recu' | 'avis_echeance' } | null;
+  documentExistant?: { id: string; type: TypeDocument } | null;
 }): ActionPrincipale {
   const { contexte, documentExistant } = params;
   const { statut, solde } = contexte;
@@ -302,8 +303,11 @@ export function actionPrincipale(params: {
  * C'est le garde-fou central : on ne produit une **quittance** que si le
  * règlement est intégral et enregistré. Un paiement partiel donne un **reçu**.
  * Un défaut de paiement donne un **avis d'échéance**.
+ *
+ * Le type de retour est `TypeDocument`, jamais l'union recopiée : recopier
+ * l'union ferait une seconde vérité, qui ne suivrait pas l'ajout d'un type.
  */
-export function documentAutorise(contexte: ContexteMois): 'quittance' | 'recu' | 'avis_echeance' {
+export function documentAutorise(contexte: ContexteMois): TypeDocument {
   if (contexte.statut === 'paye') return 'quittance';
   if (contexte.statut === 'partiel') return 'recu';
   return 'avis_echeance';

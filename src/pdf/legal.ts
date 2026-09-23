@@ -10,7 +10,14 @@
  * Ces textes sont reproduits ici sous forme de résumés rédactionnels. Ils ne
  * remplacent pas le conseil d'un professionnel, et l'application n'invente
  * aucune mention qu'elle ne saurait pas justifier.
+ *
+ * L'import ci-dessous est **de type seulement** : il disparaît à la
+ * compilation, et ce module continue de n'emporter aucun code à l'exécution —
+ * c'est ce qui permet à `node --test` de le charger sans émulateur. Il évite
+ * surtout de recopier l'union des types de document, qui vit dans le domaine.
  */
+
+import type { TypeDocument } from '../domain/types.ts';
 
 export const REFERENCE_LOI_1989 =
   "Loi n° 89-462 du 6 juillet 1989, article 21 : le bailleur est tenu de délivrer gratuitement " +
@@ -90,7 +97,7 @@ export const RAPPEL_LOCATAIRE =
   "Conservez ce document : il peut vous être demandé comme justificatif de paiement de votre loyer.";
 
 /** Avertissement sur la valeur du document. */
-export function avertissement(type: 'quittance' | 'recu' | 'avis_echeance'): string | null {
+export function avertissement(type: TypeDocument): string | null {
   if (type === 'quittance') return null;
   if (type === 'recu') {
     return (
