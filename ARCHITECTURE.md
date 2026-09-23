@@ -221,6 +221,15 @@ npm ci --include=dev --dry-run
 
 ## Compilation et publication
 
+- `.github/workflows/ios-ipa-appareil.yml` produit l'IPA **installable sur un
+  iPhone**. Il compile lui-même, sans passer par EAS : `xcodebuild -sdk
+  iphoneos` avec `CODE_SIGNING_ALLOWED=NO`, donc un binaire qui **vise
+  l'appareil** (`DTPlatformName = iphoneos`, `platform = 2` dans les
+  `LC_BUILD_VERSION` du Mach-O) et qui n'est **pas signé**. C'est exactement ce
+  qu'attend eSign, qui re-signe sur le téléphone. Aucun compte Apple, aucun
+  certificat, aucun mot de passe n'intervient nulle part — et le dépôt public
+  n'en contient donc aucun. Il exige **Xcode 26** (`runs-on: macos-26`) : deux
+  paquets Swift d'Expo SDK 57 déclarent `swift-tools-version: 6.2`.
 - `.github/workflows/android-apk.yml` produit un APK installable, signé par Expo.
 - `.github/workflows/ios-ipa.yml` produit un fichier iOS, signé par Expo si
   `signer_avec_expo` est coché. **Sans identifiant Apple, ce n'est pas un IPA** :
@@ -228,18 +237,22 @@ npm ci --include=dev --dry-run
   `apercu-simulateur` (`ios.simulator: true`) compile donc pour le **simulateur**
   et livre une archive `tar.gz` de `Quittances.app`. Mesuré sur le fichier livré :
   `DTPlatformName = iphonesimulator`, et `platform = 7` dans les deux tranches
-  Mach-O. Un tel fichier ne s'installe sur **aucun iPhone, même après
-  signature** — une application de simulateur reste une application de
-  simulateur. Il s'installe dans le simulateur d'un Mac.
+  Mach-O. **Ce fichier-là** ne s'installe sur aucun iPhone, même après
+  signature — une application de simulateur reste une application de
+  simulateur, et eSign re-signe un binaire sans le recompiler. Il s'installe
+  dans le simulateur d'un Mac ; pour l'appareil, c'est le premier flux qu'il
+  faut lancer. La question à poser à un fichier iOS n'est donc pas « est-il
+  signé ? » mais **« pour quel appareil a-t-il été compilé ? »**.
   Le flux lit l'extension sur l'adresse fournie par Expo et la transmet aux
   étapes suivantes, plutôt que de la forcer : un nom de fichier ne doit pas
   mentir sur son contenu. Le nom du profil et celui de l'artefact obéissent à la
   même règle — `apercu-simulateur`, `ios-quittances` — et `npm run verifier:flux`
   refuse désormais un `--profile` absent de `eas.json`.
-- **Sur une étiquette `v*`**, les deux attachent leur fichier à la publication
-  du dépôt. C'est le canal qui compte : un artefact expire en 90 jours et son
-  téléchargement exige un compte GitHub, alors qu'une publication reste et se
-  télécharge sans compte.
+- **Sur une étiquette `v*`**, les deux flux pilotés par EAS attachent leur
+  fichier à la publication du dépôt. C'est le canal qui compte : un artefact
+  expire en 90 jours et son téléchargement exige un compte GitHub, alors qu'une
+  publication reste et se télécharge sans compte. Le flux appareil, lui, ne se
+  déclenche qu'à la main et ne publie qu'un artefact.
 - `.github/COMPILATION.md` explique, pas à pas, comment récupérer les fichiers.
 
 Aucun certificat ni mot de passe n'est présent dans le dépôt : le seul élément
@@ -276,8 +289,10 @@ orthographié) lui échappe. C'est un défaut d'exécution, pas de syntaxe.
 
 `scripts/verifier-resume-ios.mjs` **exécute** le bloc qui écrit le résumé de fin
 de compilation iOS, dans les deux branches (`signer_avec_expo` à `false` et à
-`true`), et relit le résumé produit. C'est une réponse à un défaut réel : ce bloc
-a annoncé qu'un binaire de simulateur s'installerait après signature, ce qui est
-faux. Il vérifie donc ce que le flux **dit**, pas ce que le binaire **est** — la
-plateforme se mesure sur le binaire, par `DTPlatformName` et `LC_BUILD_VERSION`.
+`true`), et relit le résumé produit. `scripts/verifier-resume-ipa-appareil.mjs`
+fait de même pour le flux appareil. C'est une réponse à un défaut réel : le bloc
+iOS a annoncé qu'un binaire de simulateur s'installerait après signature, ce qui
+est faux. Ces contrôles vérifient donc ce que les flux **disent**, pas ce que les
+binaires **sont** — la plateforme se mesure sur le binaire, par `DTPlatformName`
+et `LC_BUILD_VERSION`, et c'est le rôle de `.verif/verifier-ipa-appareil.py`.
 
