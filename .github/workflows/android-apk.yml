@@ -32,7 +32,21 @@ jobs:
   construire-apk:
     name: Construire l'APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 90 minutes, et non 45. Le plafond precedent tuait le travail EN COURS de
+    # compilation EAS, sans un mot : le 23 septembre 2026, l'execution a ete
+    # annulee a 45 min 33 s, en pleine etape « Lancer la compilation Android »,
+    # et toutes les etapes suivantes ont ete sautees — donc aucun APK, et un
+    # journal qui ne dit pas pourquoi.
+    #
+    # Le plafond n'etait pas faux au depart : les premieres compilations
+    # tenaient en 14 a 21 minutes. La file d'attente d'EAS s'est allongee, et la
+    # derniere compilation REUSSIE a pris 41 min 57 s — a trois minutes du
+    # plafond. Un budget qui n'a plus de marge n'est plus un garde-fou : c'est
+    # une panne qui attend son tour.
+    #
+    # 90 minutes, comme le flux de l'IPA appareil : deux fois le pire cas
+    # observe, et un seul chiffre a retenir pour les deux compilations.
+    timeout-minutes: 90
 
     steps:
       - name: Récupérer le code

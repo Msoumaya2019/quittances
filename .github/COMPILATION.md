@@ -296,6 +296,23 @@ relit les tests avec `tsconfig.tests.json`. Les deux commandes sont nécessaires
 Vous avez probablement une version antérieure installée avec une signature
 différente. Désinstallez l'ancienne application, puis réinstallez.
 
+**La compilation s'arrête sans produire de fichier, et le journal ne dit pas
+pourquoi.**
+Regardez l'état de l'exécution : s'il est **annulé** et non « en échec », la
+compilation a été coupée en cours de route, et les étapes qui récupèrent puis
+publient l'APK ont été **sautées** — d'où l'absence de fichier, sans message
+d'erreur.
+
+La cause la plus probable est le **délai maximum** que le flux s'autorise. La
+compilation Android est confiée à un service extérieur dont la file d'attente
+varie beaucoup : mesuré le 23 septembre 2026, de 14 minutes à 42 minutes pour la
+même application. Un plafond trop juste ne se voit pas tout de suite — il tue le
+travail seulement les jours où la file est longue.
+
+Ce plafond est déclaré dans le flux, à la ligne `timeout-minutes:`. Le porter à
+**90 minutes** pour les deux compilations laisse deux fois la marge du pire cas
+observé. Relancez ensuite la compilation : rien n'est à corriger dans le code.
+
 ---
 
 ## Rappel des commandes utiles, sur votre ordinateur
