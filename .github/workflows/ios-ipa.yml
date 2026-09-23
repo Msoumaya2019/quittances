@@ -35,11 +35,12 @@ on:
     tags:
       - 'v*'
 
-# Lecture seule : le flux récupère le code et publie un artefact, rien de plus.
-# Les identifiants Apple, s'ils servent, sont enregistrés chez Expo et dans les
-# secrets GitHub — jamais utilisés pour écrire dans ce dépôt.
+# Droits d'écriture, et un seul : `contents: write`, pour attacher l'IPA à la
+# publication d'une version étiquetée. Les identifiants Apple, s'ils servent,
+# sont enregistrés chez Expo et dans les secrets GitHub — jamais utilisés pour
+# écrire dans ce dépôt.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   construire-ipa:
@@ -137,6 +138,26 @@ jobs:
           path: app-release.ipa
           retention-days: 90
           if-no-files-found: error
+
+      - name: Attacher l'IPA à la version
+        # Seulement pour une étiquette `v*`, comme pour l'APK. Rappel : un IPA
+        # non signé ne s'installe pas sur un iPhone — l'attacher sert à
+        # conserver une trace, pas à le distribuer.
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          etiquette="${GITHUB_REF_NAME}"
+          if gh release view "$etiquette" >/dev/null 2>&1; then
+            gh release upload "$etiquette" app-release.ipa --clobber
+          elif gh release create "$etiquette" app-release.ipa --title "Quittances ${etiquette}" --generate-notes; then
+            echo "Publication ${etiquette} créée."
+          else
+            # Les deux flux se déclenchent sur la même étiquette : la
+            # publication peut avoir été créée par l'autre entre-temps.
+            gh release upload "$etiquette" app-release.ipa --clobber
+          fi
 
       - name: Rappeler ce que ce fichier permet
         run: |
