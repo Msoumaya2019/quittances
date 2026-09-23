@@ -12,6 +12,7 @@
 // Les chemins portent l'extension `.ts`, comme dans `src/domain` : le rendu
 // HTML est ainsi exécutable par `node --test`, sans émulateur ni transpileur.
 import { formatMontant } from '../domain/money.ts';
+import type { PaiementImprime } from '../domain/payments.ts';
 import { LIBELLE_DOCUMENT, type ModeleDocument, type TypeDocument } from '../domain/types.ts';
 import {
   avertissement,
@@ -58,9 +59,17 @@ export interface ContenuDocument {
 
   /** Somme effectivement reçue, pour une quittance ou un reçu. */
   montantRecu: number;
-  /** Dates réelles des encaissements, mises en forme. */
-  datesPaiement: string[];
-  modesPaiement: string[];
+  /**
+   * Encaissements à imprimer : une entrée par date, chacune portant ses propres
+   * modes de paiement.
+   *
+   * Une seule liste, et non deux en parallèle : deux listes dédoublonnées
+   * séparément ne s'apparient pas, et le document finissait par nommer un mode
+   * de paiement qui n'était pas celui de l'encaissement — mesuré par
+   * `.verif/eprouver-paiements.py`. L'appariement est fait une fois, dans
+   * `paiementsImprimes` (`domain/payments.ts`).
+   */
+  paiements: PaiementImprime[];
 
   /** Date d'exigibilité du loyer du mois, mise en forme : « 05/08/2026 ». */
   dateEcheance: string;
@@ -154,19 +163,22 @@ function tableauMontants(contenu: ContenuDocument): string {
 
 /** Détail des encaissements, imprimé après le tableau. */
 function detailPaiements(contenu: ContenuDocument): string {
-  if (contenu.datesPaiement.length === 0) return '';
+  if (contenu.paiements.length === 0) return '';
 
-  const lignes = contenu.datesPaiement
-    .map((date, index) => {
-      const mode = contenu.modesPaiement[index];
-      return `<div class="ligne-paiement">Reçu le ${echapper(date)}${mode ? ` — ${echapper(mode)}` : ''}</div>`;
+  // Chaque ligne tient sa date et ses modes du **même** objet : il n'y a plus
+  // d'indice à faire coïncider, donc plus de décalage possible.
+  const lignes = contenu.paiements
+    .map((paiement) => {
+      const modes = paiement.modes.map((m) => echapper(m)).join(', ');
+      const suffixe = modes.length > 0 ? ` — ${modes}` : '';
+      return `<div class="ligne-paiement">Reçu le ${echapper(paiement.date)}${suffixe}</div>`;
     })
     .join('');
 
   return `
     <div>
       <div class="detail-ligne" style="margin-bottom: 1.5mm;">
-        Date${contenu.datesPaiement.length > 1 ? 's' : ''} de paiement
+        Date${contenu.paiements.length > 1 ? 's' : ''} de paiement
       </div>
       ${lignes}
     </div>

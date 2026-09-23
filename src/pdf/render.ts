@@ -17,7 +17,7 @@ import {
   titulairesDuBail,
 } from '../db/repositories/properties';
 import { trouverProprietaire } from '../db/repositories/owners';
-import { cumulerPaiementsPourCle, determinerStatut, soldeRestant } from '../domain/payments';
+import { cumulerPaiementsPourCle, determinerStatut, paiementsImprimes, soldeRestant } from '../domain/payments';
 import { mentionPourDocument } from '../domain/mentions';
 import { montantDuPourCle } from '../domain/rent';
 import { paiementsPourBail } from './chargement';
@@ -38,7 +38,7 @@ import {
   dernierJour,
   periodeActuelle,
 } from '../domain/period';
-import { MODES_PAIEMENT, nomPourDocument, type Document, type TypeDocument } from '../domain/types';
+import { nomPourDocument, type Document, type TypeDocument } from '../domain/types';
 import { adresseEnLignes } from '../domain/types';
 import { rendreHtml, type ContenuDocument } from './models';
 import { PAGE_IMPRESSION } from './page';
@@ -153,14 +153,6 @@ export async function emettreDocument(demande: DemandeEmission): Promise<Documen
       ? titulaires.map((t) => nomPourDocument(t))
       : ['Le locataire'];
 
-  const modesPaiement = Array.from(
-    new Set(
-      cumul.paiements.map(
-        (p) => MODES_PAIEMENT.find((m) => m.valeur === p.mode)?.libelle ?? 'Autre',
-      ),
-    ),
-  );
-
   const signatureIncluse = reglages.signatureActive && !!reglages.signatureBase64;
 
   // Date d'exigibilité du loyer du mois : le jour convenu au bail, ramené au
@@ -192,8 +184,10 @@ export async function emettreDocument(demande: DemandeEmission): Promise<Documen
       total: montantDu.total,
     },
     montantRecu: cumul.encaisse,
-    datesPaiement: cumul.dates.map((d) => formaterDateFr(d)),
-    modesPaiement,
+    // L'appariement date/mode est fait une seule fois, dans le domaine : deux
+    // listes parallèles finissaient par nommer un mode de paiement qui n'était
+    // pas celui de l'encaissement.
+    paiements: paiementsImprimes(cumul),
     dateEcheance: formaterDateCourte(echeance),
     periodeDebut: formaterDateCourte(premierJour(mois)),
     periodeFin: formaterDateCourte(dernierJour(mois)),

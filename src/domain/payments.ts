@@ -7,14 +7,15 @@
  */
 
 import { ZERO, type Centimes } from './money.ts';
-import { versCle, type ClePeriode, type Periode } from './period.ts';
+import { formaterDateFr, versCle, type ClePeriode, type Periode } from './period.ts';
 import { montantDuPourMois } from './rent.ts';
-import type {
-  Bail,
-  MontantDu,
-  Paiement,
-  PeriodeLoyer,
-  StatutMois,
+import {
+  MODES_PAIEMENT,
+  type Bail,
+  type MontantDu,
+  type Paiement,
+  type PeriodeLoyer,
+  type StatutMois,
 } from './types.ts';
 
 /** Cumul des encaissements d'un mois, avec le détail des opérations. */
@@ -83,6 +84,52 @@ export function cumulerPaiementsPourCle(
     paiements: duMois,
     dates: Array.from(new Set(duMois.map((p) => p.datePaiement))),
   };
+}
+
+/** Une date d'encaissement et les modes réellement enregistrés ce jour-là. */
+export interface PaiementImprime {
+  /** Date écrite comme le document l'imprime : « 5 août 2026 ». */
+  date: string;
+  /** Libellés des modes de ce jour, sans répétition, dans l'ordre d'enregistrement. */
+  modes: string[];
+}
+
+/**
+ * Les lignes de paiement à imprimer sur un document : une par **date**, chacune
+ * portant les modes réellement enregistrés ce jour-là.
+ *
+ * La forme compte. Deux listes séparées — les dates d'un côté, les modes de
+ * l'autre — ne s'apparient pas : chacune est dédoublonnée de son côté, et rien
+ * ne garantit qu'elles avancent du même pas. Mesuré par
+ * `.verif/eprouver-paiements.py`, avec un virement et des espèces le 5 août
+ * puis un chèque le 12 : le document imprimait « Reçu le 12 août 2026 —
+ * Espèces ». La quittance attestait donc un encaissement en espèces qui n'avait
+ * pas eu lieu, et perdait le mode du second paiement du 5.
+ *
+ * La règle vit ici, dans le domaine, et non dans le rendu : c'est ce qui rend
+ * l'appariement impossible à refaire autrement ailleurs.
+ */
+export function paiementsImprimes(cumul: CumulPaiements): PaiementImprime[] {
+  const parDate = new Map<string, string[]>();
+
+  for (const paiement of cumul.paiements) {
+    const libelle =
+      MODES_PAIEMENT.find((m) => m.valeur === paiement.mode)?.libelle ?? 'Autre';
+
+    const modes = parDate.get(paiement.datePaiement);
+    if (!modes) {
+      parDate.set(paiement.datePaiement, [libelle]);
+    } else if (!modes.includes(libelle)) {
+      modes.push(libelle);
+    }
+  }
+
+  // `cumul.paiements` est déjà rangé du plus ancien au plus récent, et une
+  // `Map` conserve l'ordre d'insertion : les dates sortent dans l'ordre.
+  return [...parDate.entries()].map(([date, modes]) => ({
+    date: formaterDateFr(date),
+    modes,
+  }));
 }
 
 /**
