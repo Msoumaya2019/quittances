@@ -21,6 +21,7 @@ import type {
   Proprietaire,
   TitulaireBail,
 } from '@/domain/types';
+import { documentExiste } from '@/pdf/partage';
 
 import { dechiffrer, ErreurSauvegarde, verifierEnveloppe, type EnveloppeSauvegarde } from './crypto';
 import { VERSION_CONTENU, type ContenuSauvegarde } from './export';
@@ -290,14 +291,28 @@ export async function appliquerSauvegarde(
 }
 
 /**
- * Compte les documents dont le PDF n'est plus présent sur l'appareil.
+ * Les documents dont le PDF n'est plus présent sur l'appareil.
  *
- * Une sauvegarde contient la trace des documents, pas les fichiers PDF
- * eux-mêmes : ils peuvent être régénérés. On le signale à l'utilisateur plutôt
- * que de le laisser découvrir plus tard qu'un document ne s'ouvre pas.
+ * Une sauvegarde contient la trace des documents, **pas les fichiers PDF
+ * eux-mêmes**. Le chemin, lui, est restauré tel quel : il désigne un fichier du
+ * dossier de l'application, qui n'existe plus si la sauvegarde est restaurée
+ * sur un autre téléphone, ou après une réinstallation — le chemin d'une
+ * application change à chaque installation.
+ *
+ * Le contrôle porte donc sur le **fichier**, et non sur la présence d'un
+ * chemin : un chemin restauré n'est pas un fichier. Tester `!cheminFichier` ne
+ * verrait rien, puisque la restauration récrit justement un chemin.
+ *
+ * L'application ne régénère jamais un document émis : un PDF manquant le reste.
+ * D'où l'intérêt de le dire tout de suite à l'utilisateur.
  */
-export function documentsSansFichier(documents: Document[]): Document[] {
-  return documents.filter((d) => !d.cheminFichier);
+export async function documentsSansFichier(documents: Document[]): Promise<Document[]> {
+  const verdicts = await Promise.all(
+    documents.map(async (document) =>
+      (await documentExiste(document.cheminFichier)) ? null : document,
+    ),
+  );
+  return verdicts.filter((document): document is Document => document !== null);
 }
 
 /** Types réexportés pour l'écran de restauration. */

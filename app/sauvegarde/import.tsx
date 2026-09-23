@@ -4,6 +4,12 @@
  * Parcours volontairement prudent : choisir le fichier, saisir le mot de passe,
  * **voir ce que contient la sauvegarde**, puis confirmer. On n'écrase jamais des
  * données existantes sans que l'utilisateur ait lu ce qu'il s'apprête à faire.
+ *
+ * Une sauvegarde contient la **trace** des documents, pas les fichiers PDF. Une
+ * fois la restauration faite, l'écran regarde donc, fichiers en main, combien de
+ * documents restaurés n'ont plus le leur, et le dit. L'application ne régénère
+ * jamais un document émis : promettre le contraire ferait perdre au bailleur un
+ * document qu'il croit à l'abri.
  */
 
 import { useState } from 'react';
@@ -23,11 +29,36 @@ import {
 } from '@/ui/components';
 import { espaces, typographie } from '@/ui/tokens';
 import { lireEnveloppe } from '@/backup/export';
-import { appliquerSauvegarde, lireSauvegarde, type BilanRestauration } from '@/backup/import';
+import {
+  appliquerSauvegarde,
+  documentsSansFichier,
+  lireSauvegarde,
+  type BilanRestauration,
+} from '@/backup/import';
+import { tousLesDocuments } from '@/db/repositories/documents';
 import type { ContenuSauvegarde } from '@/backup/export';
 import type { EnveloppeSauvegarde } from '@/backup/crypto';
 import { useApplication } from '@/state/ApplicationContext';
 import { useStyles, type Couleurs } from '@/ui/theme';
+
+/**
+ * Le message affiché quand des PDF manquent après une restauration.
+ *
+ * Il nomme la cause, dit ce que l'application ne fera pas, et indique le seul
+ * recours réel : les PDF déjà partagés, que le bailleur a peut-être gardés.
+ */
+function messagePdfManquants(nombre: number): string {
+  const debut =
+    nombre === 1
+      ? 'Un document restauré n’a plus son fichier PDF.'
+      : `${nombre} documents restaurés n’ont plus leur fichier PDF.`;
+
+  return (
+    `${debut} Une sauvegarde contient la trace des documents, pas les PDF ` +
+    'eux-mêmes, et l’application ne régénère jamais un document émis. Si vous ' +
+    'aviez partagé ces PDF, vous les retrouverez là où vous les avez enregistrés.'
+  );
+}
 
 export default function EcranImportSauvegarde() {
   const styles = useStyles(creerStyles);
@@ -44,6 +75,8 @@ export default function EcranImportSauvegarde() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [confirme, setConfirme] = useState(false);
   const [bilan, setBilan] = useState<BilanRestauration | null>(null);
+  /** Documents restaurés dont le PDF est absent. `null` = on ne sait pas encore. */
+  const [pdfManquants, setPdfManquants] = useState<number | null>(null);
 
   /** Ouvre un fichier et reconnaît une sauvegarde, sans rien déchiffrer. */
   async function choisirFichier() {
@@ -53,6 +86,7 @@ export default function EcranImportSauvegarde() {
     setChemin(null);
     setNomFichier(null);
     setBilan(null);
+    setPdfManquants(null);
     setMotDePasse('');
 
     try {
@@ -107,6 +141,16 @@ export default function EcranImportSauvegarde() {
       setEnveloppe(null);
       setMotDePasse('');
       rafraichir();
+
+      // Ce comptage est un confort, pas une preuve de restauration : s'il
+      // échoue, la restauration reste réussie et on se tait plutôt que de
+      // l'annoncer comme un échec.
+      try {
+        const documents = await tousLesDocuments();
+        setPdfManquants((await documentsSansFichier(documents)).length);
+      } catch {
+        setPdfManquants(null);
+      }
     } catch (e) {
       setErreur(
         e instanceof Error
@@ -136,8 +180,13 @@ export default function EcranImportSauvegarde() {
         <>
           <BandeauMessage
             ton="succes"
-            message="Vos données ont été remplacées par celles de la sauvegarde. Les documents apparaissent dans l’historique : les PDF peuvent être régénérés à tout moment."
+            message="Vos données ont été remplacées par celles de la sauvegarde. Vos logements, vos paiements et l’historique de vos documents sont revenus tels qu’ils étaient."
           />
+
+          {pdfManquants !== null && pdfManquants > 0 ? (
+            <BandeauMessage ton="avertissement" message={messagePdfManquants(pdfManquants)} />
+          ) : null}
+
           <Carte>
             <Text style={styles.section}>Ce qui a été restauré</Text>
             <LigneDetail libelle="Propriétaires" valeur={String(bilan.proprietaires)} />
@@ -145,7 +194,14 @@ export default function EcranImportSauvegarde() {
             <LigneDetail libelle="Locataires" valeur={String(bilan.titulaires)} />
             <LigneDetail libelle="Périodes de loyer" valeur={String(bilan.periodesLoyer)} />
             <LigneDetail libelle="Paiements" valeur={String(bilan.paiements)} />
-            <LigneDetail libelle="Documents" valeur={String(bilan.documents)} />
+            <LigneDetail
+              libelle="Documents"
+              valeur={
+                pdfManquants !== null && pdfManquants > 0
+                  ? `${bilan.documents} (dont ${pdfManquants} sans PDF)`
+                  : String(bilan.documents)
+              }
+            />
             <LigneDetail libelle="Préférences et signature" valeur="Restaurées" />
           </Carte>
           <Bouton libelle="Terminer" onPress={() => router.back()} />

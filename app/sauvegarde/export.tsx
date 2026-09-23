@@ -134,14 +134,24 @@ export default function EcranExportSauvegarde() {
           <Carte>
             <Text style={styles.section}>Ce que contient la sauvegarde</Text>
             <Text style={styles.aide}>
-              L’intégralité de vos données, y compris votre signature et vos préférences :
+              Vos données de gestion, y compris votre signature et vos préférences :
             </Text>
             <LigneDetail libelle="Propriétaires et coordonnées" valeur="Inclus" />
             <LigneDetail libelle="Logements et locataires" valeur="Inclus" />
             <LigneDetail libelle="Historique des loyers" valeur="Inclus" />
             <LigneDetail libelle="Tous les paiements" valeur="Inclus" />
             <LigneDetail libelle="Documents émis et réglages" valeur="Inclus" />
+            <LigneDetail libelle="Fichiers PDF des quittances" valeur="Non inclus" />
           </Carte>
+
+          {/* Les PDF ne sont pas dans l'archive, et l'application n'en refabrique
+              jamais : le bailleur doit donc les garder lui-même. Le dire ici, au
+              moment où il croit tout mettre à l'abri, et non le jour où il
+              cherche un document disparu. */}
+          <BandeauMessage
+            ton="avertissement"
+            message="Les fichiers PDF eux-mêmes ne sont pas dans la sauvegarde. L’application ne les régénère jamais : une quittance émise reste celle qui a été émise. Partagez ou enregistrez vos quittances au fur et à mesure si vous voulez les conserver."
+          />
 
           <BandeauMessage
             ton="avertissement"
