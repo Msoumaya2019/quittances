@@ -43,7 +43,8 @@
     "verifier": "tsc --noEmit",
     "test:domaine": "node --test tests/*.test.ts",
     "verifier:flux": "node scripts/check-workflows.mjs",
-    "verifier:tout": "npm run verifier:flux && npm run verifier && npm run test:domaine"
+    "verifier:resume": "node scripts/verifier-resume-ios.mjs",
+    "verifier:tout": "npm run verifier:flux && npm run verifier:resume && npm run verifier && npm run test:domaine"
   },
   "private": true
 }

@@ -124,10 +124,12 @@ npm install --legacy-peer-deps
 npm run verifier:tout
 ```
 
-Trois contrôles, dans l'ordre : les flux de travail GitHub, les types TypeScript,
-puis les tests de la couche domaine. Les tests tournent en quelques secondes
-sous Node, sans émulateur ni appareil, et **chaque commande annonce son propre
-total** — un chiffre écrit ici vieillirait sans prévenir.
+Quatre contrôles, dans l'ordre : les flux de travail GitHub — y compris le nom
+de profil de compilation, qui doit exister dans `eas.json` —, le message que le
+flux iOS publie à la fin, les types TypeScript, puis les tests de la couche
+domaine. Les tests tournent en quelques secondes sous Node, sans émulateur ni
+appareil, et **chaque commande annonce son propre total** — un chiffre écrit ici
+vieillirait sans prévenir.
 
 ## Ce qui est vérifié, et ce qui reste à éprouver
 

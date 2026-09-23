@@ -75,6 +75,12 @@ jobs:
         # Quelques secondes, contre une heure de compilation iOS.
         run: node scripts/check-workflows.mjs
 
+      - name: Vérifier ce que le flux dira à la fin
+        # Ce bloc a déjà promis qu'un binaire de simulateur s'installerait après
+        # signature. On l'exécute donc, dans les deux branches, plutôt que de le
+        # relire : une phrase fausse part sans bruit.
+        run: npm run verifier:resume
+
       - name: Vérifier les types
         run: npx tsc --noEmit
 

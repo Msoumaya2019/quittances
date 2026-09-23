@@ -250,10 +250,11 @@ compilations refusent de produire une application dont les types ou les tests
 ## Vérifications disponibles
 
 ```bash
-npm run verifier:tout   # les trois contrôles, dans l'ordre
-npm run verifier:flux   # contrôles sur les flux de travail
-npm run verifier        # types TypeScript
-npm run test:domaine    # tests de la couche domaine
+npm run verifier:tout    # les quatre contrôles, dans l'ordre
+npm run verifier:flux    # contrôles sur les flux de travail
+npm run verifier:resume  # ce que le flux iOS annonce à la fin
+npm run verifier         # types TypeScript
+npm run test:domaine     # tests de la couche domaine
 ```
 
 Les tests portent sur le domaine pur — arithmétique monétaire, périodes,
@@ -263,12 +264,20 @@ du tableau ci-dessus.
 
 `scripts/check-workflows.mjs` valide les flux GitHub avant de pousser : YAML
 analysé, chaque script `run:` passé à `bash -n`, actions épinglées, permissions
-déclarées et suffisantes. Il est **le seul lecteur** de `.github/workflows`, donc
-sa liste de flux attendus est **fermée dans les deux sens** : un flux manquant
-échoue, un flux ajouté sans être déclaré échoue aussi. C'est le seul contrôle du
-projet dont un sujet absent produirait un vert.
+déclarées et suffisantes, et tout `--profile` cité doit exister dans `eas.json`.
+Il est **le seul à énumérer** `.github/workflows`, donc sa liste de flux attendus
+est **fermée dans les deux sens** : un flux manquant échoue, un flux ajouté sans
+être déclaré échoue aussi. C'est le seul contrôle du projet dont un sujet absent
+produirait un vert.
 
 Sa portée est écrite dans son en-tête, et elle mérite d'être connue :
 `bash -n` analyse sans évaluer, donc une expansion fautive (`${CHEMIN}` mal
 orthographié) lui échappe. C'est un défaut d'exécution, pas de syntaxe.
+
+`scripts/verifier-resume-ios.mjs` **exécute** le bloc qui écrit le résumé de fin
+de compilation iOS, dans les deux branches (`signer_avec_expo` à `false` et à
+`true`), et relit le résumé produit. C'est une réponse à un défaut réel : ce bloc
+a annoncé qu'un binaire de simulateur s'installerait après signature, ce qui est
+faux. Il vérifie donc ce que le flux **dit**, pas ce que le binaire **est** — la
+plateforme se mesure sur le binaire, par `DTPlatformName` et `LC_BUILD_VERSION`.
 
