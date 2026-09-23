@@ -16,6 +16,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useApplication } from '@/state/ApplicationContext';
+import { LONGUEUR_MENTION_LIBRE_MAX } from '@/domain/mentions';
 import {
   BandeauMessage,
   Bouton,
@@ -129,10 +130,10 @@ export default function EcranMentions() {
             valeur={mention}
             onChangement={setMention}
             placeholder="Exemple : quittance établie pour servir et valoir ce que de droit."
-            aide="Imprimée au bas de chaque document. Une ou deux phrases suffisent."
+            aide={`Imprimée au bas de chaque document. Une ou deux phrases suffisent — ${LONGUEUR_MENTION_LIBRE_MAX} caractères au plus, pour que le texte tienne sur la feuille.`}
             multiligne
             nombreDeLignes={3}
-            maxLength={300}
+            maxLength={LONGUEUR_MENTION_LIBRE_MAX}
           />
         </Carte>
 

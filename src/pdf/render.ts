@@ -18,6 +18,7 @@ import {
 } from '../db/repositories/properties';
 import { trouverProprietaire } from '../db/repositories/owners';
 import { cumulerPaiementsPourCle, determinerStatut, soldeRestant } from '../domain/payments';
+import { mentionPourDocument } from '../domain/mentions';
 import { montantDuPourCle } from '../domain/rent';
 import { paiementsPourBail } from './chargement';
 import {
@@ -200,7 +201,10 @@ export async function emettreDocument(demande: DemandeEmission): Promise<Documen
     resteAPercevoir: solde,
     lieuEmission: reglages.lieuEmission || proprietaire.ville,
     signatureBase64: signatureIncluse ? reglages.signatureBase64 : null,
-    mentionLibre: reglages.mentionLibre,
+    // La mention est bornée ici, et pas seulement à la saisie : une sauvegarde
+    // restaurée peut en porter une plus longue, et un volet en `flex` ne se
+    // poursuit pas sur la page suivante — il perd le débordement en silence.
+    mentionLibre: mentionPourDocument(reglages.mentionLibre),
     mentionCharges: reglages.mentionCharges,
   };
 
