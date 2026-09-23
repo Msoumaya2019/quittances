@@ -38,20 +38,27 @@ Quatre onglets :
 - **Logement** — vos biens, leurs locataires, leurs loyers, avec l'historique
   mois par mois.
 - **Réglages** — thème, propriétaire, modèles de document, sauvegarde chiffrée,
-  rappels.
+  rappels, et la **remise à zéro** de l'application.
 
 Points de fond :
 
 - **Le statut « payé » n'est pas modifiable à la main.** Il découle mécaniquement
   de la somme des paiements enregistrés. On ne peut donc pas marquer un mois payé
   sans enregistrer le paiement correspondant.
-- **Deux modèles de document** : classique et moderne.
+- **Trois modèles de document** : **coloré et convivial** (celui par défaut),
+  classique et professionnel, moderne et épuré. Chaque quittance garde le modèle
+  avec lequel elle a été émise : changer de modèle ne réécrit aucun document
+  déjà produit.
 - **Mentions légales françaises** incluses dans les documents.
 - **Sauvegarde chiffrée** par mot de passe (AES-256-GCM), exportable et
   restaurable, entièrement hors ligne.
 - **Verrou biométrique** optionnel à l'ouverture.
 - **Rappel mensuel local** pour ne pas oublier d'encaisser, programmé par le
   système du téléphone, sans serveur.
+- **Remise à zéro complète** depuis les réglages : elle efface les logements, les
+  locataires, les paiements, les quittances, les fichiers PDF et les préférences,
+  et ramène l'application à son état d'installation. Il faut recopier un mot pour
+  la confirmer, et **il n'y a ni corbeille ni annulation**.
 
 ## Installer sur Android
 

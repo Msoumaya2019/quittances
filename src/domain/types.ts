@@ -273,18 +273,43 @@ export const LIBELLE_DOCUMENT: Record<TypeDocument, string> = {
 };
 
 /**
- * Modèles de mise en page disponibles.
+ * Modèles de mise en page qu'un document peut porter.
  *
- * `officiel` reproduit la feuille du bailleur : trois volets sur une seule page
- * A4 — la quittance, l'avis d'échéance, puis le talon détachable. C'est le
- * modèle par défaut, parce que c'est le papier que le bailleur remet déjà.
+ * C'est l'union de la **lecture**, et elle est plus large que celle du choix :
+ * elle garde `officiel` parce que des documents émis avant le retrait du papier
+ * du bailleur le portent encore, et qu'une fiche enregistrée ne doit pas se
+ * mettre à mentir sur ce qu'elle est. Le champ `modele` d'un `Document` reste
+ * donc honnête pour tout l'historique, sans qu'aucune migration soit nécessaire.
+ *
+ * Ce qui se **choisit** est plus étroit — voir `MODELES_PROPOSES`.
  */
-export type ModeleDocument = 'officiel' | 'classique' | 'moderne';
+export type ModeleDocument = 'officiel' | 'classique' | 'colore' | 'moderne';
+
+/**
+ * Modèles proposés dans les Réglages, et seuls admissibles comme défaut.
+ *
+ * C'est ce tableau qui fait foi : `ModelePropose` s'en déduit, si bien qu'un
+ * modèle ajouté ici devient choisissable partout, et qu'un modèle retiré cesse
+ * de l'être **partout** — le compilateur refuse alors de l'écrire dans les
+ * réglages. `officiel` en est absent : le papier du bailleur a été retiré.
+ *
+ * L'ordre est celui de l'affichage, et il n'est pas alphabétique : le modèle
+ * proposé par défaut vient en premier.
+ */
+export const MODELES_PROPOSES = ['colore', 'classique', 'moderne'] as const;
+
+export type ModelePropose = (typeof MODELES_PROPOSES)[number];
 
 export const LIBELLE_MODELE: Record<ModeleDocument, string> = {
-  officiel: 'Officiel — la feuille du bailleur',
+  colore: 'Coloré et convivial',
   classique: 'Classique et professionnel',
   moderne: 'Moderne et épuré',
+  /**
+   * Le libellé reste, bien que le modèle ne soit plus proposé : il nomme les
+   * documents déjà émis avec lui. Le dire « ancien » évite qu'on le cherche
+   * dans les Réglages et qu'on croie à un défaut d'affichage.
+   */
+  officiel: 'Officiel — ancien modèle, plus proposé',
 };
 
 /**

@@ -183,3 +183,38 @@ export const TABLES = [
 ] as const;
 
 export type NomTable = (typeof TABLES)[number];
+
+/**
+ * Les tables à vider pour remettre l'application à zéro, **dans l'ordre**.
+ *
+ * L'ordre est une contrainte, pas une commodité : `PRAGMA foreign_keys = ON` est
+ * actif (`database.ts`), et `logements.proprietaire_id` est déclaré
+ * `ON DELETE RESTRICT`. Supprimer un propriétaire avant ses logements fait donc
+ * échouer la transaction, et l'application resterait à moitié effacée — le pire
+ * des états, puisque l'utilisateur croirait avoir tout supprimé.
+ *
+ * Les dépendances lues dans `MIGRATIONS` :
+ *
+ *   documents      -> logements, baux
+ *   paiements      -> baux
+ *   periodes_loyer -> baux
+ *   titulaires     -> baux
+ *   baux           -> logements
+ *   logements      -> proprietaires   (RESTRICT)
+ *   reglages       -> aucune
+ *
+ * Une table enfant se vide donc **avant** sa table parente. `tests/reinitialisation.test.ts`
+ * ne recopie pas cet ordre : il relit les `REFERENCES` de `MIGRATIONS` et exige
+ * que la liste soit un ordre topologique de ce graphe. Une table ajoutée demain
+ * sans être mise ici, ou mise au mauvais rang, fait donc tomber le contrôle.
+ */
+export const TABLES_A_VIDER: readonly NomTable[] = [
+  'documents',
+  'paiements',
+  'periodes_loyer',
+  'titulaires',
+  'baux',
+  'logements',
+  'proprietaires',
+  'reglages',
+];

@@ -39,6 +39,7 @@ app/                        # routes Expo Router (une route = un fichier)
     [id].tsx                # fiche
   mentions.tsx              # mentions portées sur les documents
   signature.tsx             # signature du bailleur
+  reinitialiser.tsx         # remise à zéro complète, confirmée par un mot
   sauvegarde/
     export.tsx              # création d'une sauvegarde chiffrée
     import.tsx              # restauration d'une sauvegarde
@@ -51,17 +52,25 @@ src/
     rent.ts                 # loyer dû pour un mois, selon date d'effet et bail
     payments.ts             # cumul des paiements, solde, statut, action contextuelle
     numbering.ts            # numérotation unique et stable des documents
+    rappels.ts              # texte des rappels, sans mois figé
+    reinitialisation.ts     # le mot qui confirme un effacement, règle pure
   db/
-    schema.ts               # schéma SQL et migrations versionnées
+    schema.ts               # schéma SQL, migrations versionnées, tables à vider
     database.ts             # ouverture, pragmas, migration au démarrage
+    reinitialisation.ts     # effacement de toutes les données et des PDF
     repositories/           # owners, properties, tenancies, rentTerms, payments,
                             # documents, settings
     index.ts                # instantiation des dépôts
   pdf/
-    styles.ts               # styles partagés par les modèles
-    modelClassique.ts       # modèle 1 : classique et professionnel
-    modelModerne.ts         # modèle 2 : moderne et épuré
+    styles.ts               # styles partagés par tous les modèles
+    styles-colore.ts        # palette du modèle coloré, qui ne suit pas le thème
+    models.ts               # les trois modèles de document, en HTML
+    page.ts                 # format de page demandé à l'impression
     render.ts               # assemblage HTML puis impression PDF
+    chargement.ts           # écriture et lecture des fichiers PDF
+    groupee.ts              # génération en série
+    partage.ts              # partage d'un document
+    encodage.ts             # échappement du texte inséré dans le HTML
     legal.ts                # mentions légales françaises obligatoires
   backup/
     crypto.ts               # chiffrement authentifié (AES-GCM) + dérivation de clé
@@ -135,11 +144,14 @@ seule fonction pure**, pour être éprouvable sans base de données et sans tél
 | Promesse | Où elle vit | Comment on la vérifie |
 | --- | --- | --- |
 | Jamais de quittance sans paiement intégral enregistré | `documentAutorise` et `peutEmettreQuittance` dans `src/domain/payments.ts`, doublées du garde-fou de `emettreDocument` dans `src/pdf/render.ts` | `tests/coherence.test.ts` |
-| Aucun autre document ne se crée, mais tout document déjà émis reste lisible | `DocumentEmissible` et `documentAutorise` (`null` hors règlement intégral) dans `src/domain/payments.ts` ; le rendu garde ses branches `recu` / `avis_echeance` | `tests/payments.test.ts`, `tests/modele-officiel.test.ts` |
+| Aucun autre document ne se crée, mais tout document déjà émis reste lisible | `DocumentEmissible` et `documentAutorise` (`null` hors règlement intégral) dans `src/domain/payments.ts` ; le rendu garde ses branches `recu` / `avis_echeance` | `tests/payments.test.ts`, `tests/modele-colore.test.ts` |
 | Une quittance oubliée reste rattrapable, sans parcourir les mois un par un | `quittancesARattraper` dans `src/domain/payments.ts` | `tests/payments.test.ts` |
 | Un changement de loyer ne modifie aucun mois passé | `planifierChangementLoyer` dans `src/domain/rent.ts` | `tests/rent.test.ts` |
 | Aucune règle de calcul n'est dupliquée entre l'écran et le document | `contexteDuMois` dans `src/domain/payments.ts`, seul point d'assemblage | `tests/payments.test.ts` |
 | Le rappel de loyers ne peut pas annoncer un mois faux | `texteRappel` dans `src/domain/rappels.ts` — le message ne nomme jamais de mois, parce qu'il est figé une fois pour toutes | `tests/rappels.test.ts` |
+| Une remise à zéro n'oublie aucune table, et son ordre respecte les clés étrangères | `TABLES_A_VIDER` dans `src/db/schema.ts`, dont l'ordre est **dérivé** des `REFERENCES` de `MIGRATIONS` | `tests/reinitialisation.test.ts` |
+| Rien ne survit à l'effacement : ni les lignes, ni les PDF, ni le rappel programmé | `effacerToutesLesDonnees` (`src/db/reinitialisation.ts`), `annulerRappel`, `rechargerReglages` | `tests/reinitialisation-fichiers.test.ts` |
+| Le mot qui confirme un effacement est celui que le domaine définit | `confirmationValide` dans `src/domain/reinitialisation.ts` | `tests/reinitialisation.test.ts` |
 
 Le dépôt en base de `ajouterPeriodeLoyer` ne fait qu'**appliquer** le plan
 calculé par le domaine : la décision est prise ailleurs, et la transaction
@@ -174,6 +186,45 @@ interrupteur absent.
 Au lancement, `RappelsDeLoyers` dans `app/_layout.tsx` reprogramme le rappel si
 le réglage est actif : une réinstallation efface la programmation sans prévenir,
 et ce réarmement rend l'état auto-réparateur.
+
+## La remise à zéro
+
+L'écran `app/reinitialiser.tsx`, atteint depuis les réglages, remet l'application
+dans son état d'installation : logements, baux, titulaires, périodes de loyer,
+paiements, documents, fichiers PDF et réglages. **Il n'y a ni corbeille, ni
+annulation** : le bouton destructeur n'est actif qu'après recopie du mot défini
+par `MOT_CONFIRMATION` (`src/domain/reinitialisation.ts`), et la règle
+`confirmationValide` est pure, donc éprouvable sans téléphone.
+
+Trois décisions portent la sûreté de cette opération :
+
+- **L'ordre de suppression est dérivé du schéma.** `TABLES_A_VIDER`
+  (`src/db/schema.ts`) vide chaque table **enfant avant son parent**. Ce n'est pas
+  une commodité : `PRAGMA foreign_keys = ON` est actif et
+  `logements.proprietaire_id` est déclaré `ON DELETE RESTRICT`, si bien qu'un
+  propriétaire supprimé avant ses logements ferait échouer la transaction — et
+  laisserait l'application **à moitié effacée**, le pire des états puisque le
+  bailleur croirait avoir tout supprimé. `tests/reinitialisation.test.ts` **relit
+  les `REFERENCES` de `MIGRATIONS`** et exige que la liste en soit un ordre
+  topologique : une table ajoutée demain sans être mise dans la liste, ou mise au
+  mauvais rang, tombe là plutôt que sur le téléphone.
+- **L'effacement suit la liste du schéma, il ne la recopie pas.**
+  `effacerToutesLesDonnees` (`src/db/reinitialisation.ts`) parcourt
+  `TABLES_A_VIDER` dans une seule transaction, puis supprime le dossier
+  `documents/` — celui-là même où `src/pdf/render.ts` écrit les quittances. Le
+  dossier entier, et non les chemins un par un : c'est ce qui attrape aussi les
+  PDF qu'une ligne perdue avait déjà rendus orphelins.
+  `tests/reinitialisation-fichiers.test.ts` **dérive** le nom du dossier du
+  moteur de rendu : renommé d'un seul côté, le contrôle tombe.
+- **Deux choses ne sont pas dans la base** et doivent être défaites par l'écran :
+  le **rappel programmé**, que le système détient et qui survivrait à
+  l'effacement (`annulerRappel`), et les **réglages en mémoire**, que
+  `rafraichir` ne relit pas (`rechargerReglages`). Sans le second, le thème et la
+  signature resteraient affichés alors que la base ne les porte plus.
+
+L'écran efface d'abord les lignes, puis les fichiers. L'ordre inverse serait
+pire : effacer les PDF d'abord laisserait des documents listés mais illisibles,
+c'est-à-dire des quittances que l'application prétendrait encore pouvoir ouvrir.
 
 ## Le point d'entrée
 

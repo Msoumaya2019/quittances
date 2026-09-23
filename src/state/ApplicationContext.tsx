@@ -32,6 +32,16 @@ interface ValeurApplication {
 
   reglages: Reglages;
   majReglages: (partiel: Partial<Reglages>) => Promise<void>;
+  /**
+   * Relit les réglages de la base et les repose dans le contexte.
+   *
+   * Nécessaire après une remise à zéro : la table `reglages` est vidée, donc
+   * `majReglages` n'aurait rien à écrire, et `rafraichir` ne fait qu'incrémenter
+   * un compteur — il ne relit rien. Sans ce rechargement, le thème, le modèle et
+   * la signature resteraient en mémoire, et l'application aurait l'air remise à
+   * zéro sans l'être.
+   */
+  rechargerReglages: () => Promise<void>;
 
   /**
    * Couleurs du thème choisi, recalculées quand la couleur d'accent ou le mode
@@ -107,6 +117,10 @@ export function FournisseurApplication({ children }: { children: React.ReactNode
     setReglages((actuels) => ({ ...actuels, ...partiel }));
   }, []);
 
+  const rechargerReglages = useCallback(async () => {
+    setReglages(await lireReglages());
+  }, []);
+
   const rafraichir = useCallback(() => {
     setCleRafraichissement((valeur) => valeur + 1);
   }, []);
@@ -134,6 +148,7 @@ export function FournisseurApplication({ children }: { children: React.ReactNode
       estMoisCourant,
       reglages,
       majReglages,
+      rechargerReglages,
       palette,
       cleRafraichissement,
       rafraichir,
@@ -149,6 +164,7 @@ export function FournisseurApplication({ children }: { children: React.ReactNode
       estMoisCourant,
       reglages,
       majReglages,
+      rechargerReglages,
       palette,
       cleRafraichissement,
       rafraichir,

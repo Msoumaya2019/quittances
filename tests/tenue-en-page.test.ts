@@ -2,30 +2,34 @@
  * La feuille tient sur une seule page, et son format est demandé au moteur.
  *
  * Un défaut mesuré le 23 septembre 2026 : les quittances sortaient sur **deux
- * pages**, le talon à découper seul sur la seconde. Le HTML était pourtant
- * correct — rendu par le moteur d'impression de Chromium, il tenait sur une page
- * A4, 210 × 297 mm. Le défaut était ailleurs : `expo-print` prend le format
- * **US Letter** par défaut (612 × 792 pt, soit 215,9 × 279,4 mm), et une feuille
- * de 297 mm n'entre pas dans une page de 279,4 mm. Mesuré : la même feuille,
- * rendue sur une page Letter, donne bien **deux** pages.
+ * pages**. Le HTML était pourtant correct — rendu par le moteur d'impression de
+ * Chromium, il tenait sur une page A4, 210 × 297 mm. Le défaut était ailleurs :
+ * `expo-print` prend le format **US Letter** par défaut (612 × 792 pt, soit
+ * 215,9 × 279,4 mm), et une feuille de 297 mm n'entre pas dans une page de
+ * 279,4 mm. Mesuré : la même feuille, rendue sur une page Letter, donne bien
+ * **deux** pages.
  *
  * Ce contrôle tient donc les deux bouts :
  *
  *   1. le format demandé au moteur contient la feuille, avec de la marge ;
  *   2. l'appel d'impression demande explicitement ce format — c'est **l'option
  *      oubliée** qui était le défaut, pas la géométrie ;
- *   3. la feuille elle-même tient dans 297 mm, par le haut : le volet prend le
- *      reste, le talon garde sa hauteur ;
- *   4. le cadre du tableau épouse son contenu au lieu de s'étirer pour remplir
- *      le volet, ce qui laissait une centaine de millimètres de dégradé vide.
+ *   3. aucune table ne porte de plafond de hauteur, qui rognerait une ligne en
+ *      silence.
+ *
+ * Ce contrôle portait sur le modèle « officiel », retiré le 23 septembre 2026
+ * avec sa feuille au format du bailleur. Les règles qu'il vérifiait sont
+ * désormais celles de `STYLES_BASE`, que les trois modèles restants partagent :
+ * le contrôle suit la règle au lieu de suivre un modèle, et il n'a donc pas
+ * perdu de vigueur en changeant de cible.
  *
  * Où ce contrôle s'arrête : il lit des sources et des constantes, il ne rend
  * rien, et il ne compte aucune page. C'est `.verif/mesurer-pages.py` qui
- * **compte les pages** sur la pièce réellement produite : il régénère le rendu
- * par `.verif/rendre-officiel.ts`, imprime chaque document dans les deux
- * formats par le moteur de Chromium, et exige une page dans le format demandé
- * comme deux pages dans le format Letter — le témoin négatif, sans lequel un
- * banc qui annonce « une page » pourrait simplement n'avoir rien imprimé.
+ * **compte les pages** sur la pièce réellement produite : il régénère le rendu,
+ * imprime chaque document dans les deux formats par le moteur de Chromium, et
+ * exige une page dans le format demandé comme deux pages dans le format Letter
+ * — le témoin négatif, sans lequel un banc qui annonce « une page » pourrait
+ * simplement n'avoir rien imprimé.
  */
 
 import test from 'node:test';
@@ -37,7 +41,8 @@ import { fileURLToPath } from 'node:url';
 import { PAGE_IMPRESSION, millimetresEnPoints } from '../src/pdf/page.ts';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
-const STYLES = join(ICI, '..', 'src', 'pdf', 'styles-officiel.ts');
+const STYLES = join(ICI, '..', 'src', 'pdf', 'styles.ts');
+const STYLES_COLORE = join(ICI, '..', 'src', 'pdf', 'styles-colore.ts');
 const RENDU = join(ICI, '..', 'src', 'pdf', 'render.ts');
 
 /** La hauteur d'une page A4, en millimètres. */
@@ -78,10 +83,10 @@ function millimetres(regleCss: string, propriete: string): number {
 }
 
 test('Tenue en page : le format demandé au moteur contient la feuille', () => {
-  const feuille = regle(lire(STYLES), '.feuille');
+  const page = regle(lire(STYLES), '.page');
 
-  const largeur = millimetres(feuille, 'width');
-  const hauteur = millimetres(feuille, 'height');
+  const largeur = millimetres(page, 'width');
+  const hauteur = millimetres(page, 'min-height');
 
   assert.ok(
     millimetresEnPoints(largeur) <= PAGE_IMPRESSION.largeurPt,
@@ -92,6 +97,16 @@ test('Tenue en page : le format demandé au moteur contient la feuille', () => {
     millimetresEnPoints(hauteur) <= PAGE_IMPRESSION.hauteurPt,
     `la page fait ${PAGE_IMPRESSION.hauteurPt} pt et la feuille ${hauteur} mm `
       + `(${millimetresEnPoints(hauteur).toFixed(1)} pt) : la feuille déborde en hauteur`,
+  );
+});
+
+test('Tenue en page : la feuille tient dans 297 mm', () => {
+  const page = regle(lire(STYLES), '.page');
+  const hauteur = millimetres(page, 'min-height');
+
+  assert.ok(
+    hauteur <= HAUTEUR_A4,
+    `la feuille demande ${hauteur} mm, au-delà des ${HAUTEUR_A4} mm d'une page A4`,
   );
 });
 
@@ -117,32 +132,20 @@ test('Tenue en page : l’impression demande explicitement le format', () => {
   );
 });
 
-test('Tenue en page : la feuille tient dans 297 mm', () => {
-  const source = lire(STYLES);
+test('Tenue en page : aucune table ne porte de plafond de hauteur', () => {
+  // Les deux familles de tables imprimées : celle des trois modèles
+  // (`table.montants`), et celle du modèle coloré (`.cc-tableau`).
+  const tables = [
+    { nom: 'table.montants', source: regle(lire(STYLES), 'table.montants') },
+    { nom: '.cc-tableau', source: regle(lire(STYLES_COLORE), '.cc-tableau') },
+  ];
 
-  const volet = millimetres(regle(source, '.volet'), 'min-height');
-  const talon = millimetres(regle(source, '.talon'), 'flex');
-
-  assert.ok(
-    volet + talon <= HAUTEUR_A4,
-    `volet ${volet} mm + talon ${talon} mm = ${volet + talon} mm, `
-      + `au-delà des ${HAUTEUR_A4} mm d'une page A4`,
-  );
-});
-
-test('Tenue en page : le cadre du tableau épouse son contenu', () => {
-  const cadre = regle(lire(STYLES), '.cadre-tableau');
-
-  assert.doesNotMatch(
-    cadre,
-    /max-height/,
-    'un plafond sur le cadre rognerait une ligne de tableau en silence : '
-      + 'une quittance ne doit jamais perdre une ligne',
-  );
-  assert.doesNotMatch(
-    cadre,
-    /flex:\s*[1-9]/,
-    'le cadre s’étire pour remplir le volet : c’est ce qui laissait une '
-      + 'centaine de millimètres de dégradé vide pour deux lignes de tableau',
-  );
+  for (const { nom, source } of tables) {
+    assert.doesNotMatch(
+      source,
+      /max-height/,
+      `${nom} porte un plafond de hauteur : il rognerait une ligne de tableau en `
+        + 'silence, et une quittance ne doit jamais perdre une ligne',
+    );
+  }
 });

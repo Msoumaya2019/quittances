@@ -6,15 +6,22 @@
  */
 
 import { executer, lireToutes } from '../database';
-import type { ModeleDocument } from '../../domain/types';
+import { MODELES_PROPOSES, type ModelePropose } from '../../domain/types';
 // Import de type uniquement : `palette.ts` ne contient que des données, et rien
 // n'est embarqué à l'exécution. Les réglages ont besoin de connaître les valeurs
 // admises, pas de dessiner.
 import type { CouleurTheme, ModeTheme } from '../../ui/palette';
 
 export interface Reglages {
-  /** Modèle de document utilisé par défaut. */
-  modeleParDefaut: ModeleDocument;
+  /**
+   * Modèle de document utilisé par défaut.
+   *
+   * Le type est celui des modèles **proposés**, plus étroit que celui des
+   * modèles lisibles : il est donc impossible d'écrire `officiel` ici, et le
+   * compilateur le refuse. C'est ce qui rend le retrait du papier du bailleur
+   * définitif plutôt que déconseillé.
+   */
+  modeleParDefaut: ModelePropose;
   /** Couleur d'accent choisie par le bailleur. */
   couleurTheme: CouleurTheme;
   /** Mode clair ou nuit. */
@@ -40,9 +47,9 @@ export interface Reglages {
 }
 
 export const REGLAGES_PAR_DEFAUT: Reglages = {
-  // La feuille du bailleur par défaut : c'est le papier qu'il remet déjà, et
-  // c'est donc celui qui demande le moins d'explications au premier lancement.
-  modeleParDefaut: 'officiel',
+  // Le modèle coloré par défaut : c'est celui que le bailleur a choisi, et il
+  // porte toutes les informations obligatoires.
+  modeleParDefaut: 'colore',
   couleurTheme: 'vert',
   modeTheme: 'clair',
   signatureBase64: null,
@@ -78,9 +85,6 @@ const COULEURS_ADMISES: CouleurTheme[] = ['bleu', 'vert', 'rose', 'noir'];
 /** Modes admis. */
 const MODES_ADMIS: ModeTheme[] = ['clair', 'sombre'];
 
-/** Modèles de document admis. */
-const MODELES_ADMIS: ModeleDocument[] = ['officiel', 'classique', 'moderne'];
-
 function serialiser(valeur: unknown): string {
   return JSON.stringify(valeur);
 }
@@ -112,7 +116,13 @@ export async function lireReglages(): Promise<Reglages> {
   }
 
   // Contrôles de forme : une valeur corrompue ne doit pas casser l'application.
-  if (!MODELES_ADMIS.includes(resultat.modeleParDefaut)) {
+  //
+  // Le contrôle porte sur la valeur **lue**, qui peut être n'importe quoi — un
+  // `officiel` écrit par une version antérieure, ou une chaîne abîmée. Le type,
+  // lui, ne connaît que les modèles proposés : sans ce passage par `string`, le
+  // compilateur croirait la comparaison toujours vraie et l'écarterait.
+  const modeleLu: string = resultat.modeleParDefaut;
+  if (!(MODELES_PROPOSES as readonly string[]).includes(modeleLu)) {
     resultat.modeleParDefaut = REGLAGES_PAR_DEFAUT.modeleParDefaut;
   }
   // Une couleur ou un mode inconnu — réglage écrit par une version antérieure,

@@ -23,7 +23,7 @@ import {
   LigneDetail,
 } from '@/ui/components';
 import { espaces, rayons, typographie } from '@/ui/tokens';
-import { LIBELLE_MODELE, type ModeleDocument } from '@/domain/types';
+import { LIBELLE_MODELE, MODELES_PROPOSES, type ModelePropose } from '@/domain/types';
 import { useApplication } from '@/state/ApplicationContext';
 import { listerProprietaires } from '@/db/repositories/owners';
 import { listerLogements } from '@/db/repositories/properties';
@@ -40,17 +40,20 @@ import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
 /**
  * Ce que chaque modèle donne à voir, en une phrase.
  *
- * On décrit l'aspect, jamais la qualité : « officiel » n'est pas meilleur que
- * « moderne », c'est le papier du bailleur ou une autre présentation.
+ * On décrit l'aspect, jamais la qualité : aucun modèle n'est meilleur qu'un
+ * autre, c'est une présentation ou une autre. Le type est celui des modèles
+ * **proposés** : décrire un modèle qu'on ne propose plus n'aurait pas de sens,
+ * et le compilateur le refuse.
  */
-const DESCRIPTION_MODELE: Record<ModeleDocument, string> = {
-  officiel: 'Votre feuille habituelle : le document et son talon détachable, sur une page.',
+const DESCRIPTION_MODELE: Record<ModelePropose, string> = {
+  colore: 'Bandeau coloré, montant mis en avant, cartes pour chaque partie.',
   classique: 'Présentation sobre et traditionnelle, très lisible à l’impression.',
   moderne: 'Mise en page moderne, bandeau coloré, montant mis en avant.',
 };
 
 export default function EcranReglages() {
   const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   const { reglages, majReglages, rafraichir } = useApplication();
   const insets = useSafeAreaInsets();
 
@@ -85,7 +88,7 @@ export default function EcranReglages() {
     }, [chargerChiffres]),
   );
 
-  async function choisirModele(modele: ModeleDocument) {
+  async function choisirModele(modele: ModelePropose) {
     try {
       await majReglages({ modeleParDefaut: modele });
     } catch (e) {
@@ -178,8 +181,8 @@ export default function EcranReglages() {
         <Text style={styles.section}>Apparence</Text>
         <Text style={styles.aide}>
           La couleur choisie habille les boutons, l’onglet actif et les titres. Les documents, eux,
-          gardent toujours la présentation officielle : une quittance ne change pas d’aspect parce
-          que vous avez changé de thème.
+          gardent leur propre palette : une quittance ne change pas d’aspect parce que vous avez
+          changé de thème, et celle que vous avez remise l’an dernier se réimprime à l’identique.
         </Text>
 
         <View style={styles.nuancier}>
@@ -253,7 +256,7 @@ export default function EcranReglages() {
           changent pas.
         </Text>
 
-        {(['officiel', 'classique', 'moderne'] as ModeleDocument[]).map((modele) => {
+        {MODELES_PROPOSES.map((modele) => {
           const actif = reglages.modeleParDefaut === modele;
           return (
             <Pressable
@@ -389,6 +392,27 @@ export default function EcranReglages() {
         />
       </Carte>
 
+      {/*
+        La remise à zéro complète. Elle est volontairement séparée de la carte
+        « À propos », et son bouton porte la variante `danger` : les deux
+        réinitialisations ne font pas la même chose, et les confondre coûterait
+        des quittances. Le texte le dit avant l'appui, pas après.
+      */}
+      <Carte couleurAccent={couleurs.rouge}>
+        <Text style={styles.section}>Tout effacer</Text>
+        <Text style={styles.aide}>
+          Remet l’application dans son état d’installation : logements, locataires, baux, paiements,
+          quittances, fichiers PDF et réglages. Cette action est définitive et ne peut pas être
+          annulée — contrairement à « Réinitialiser les préférences » ci-dessus, qui ne touche ni
+          vos logements ni vos quittances.
+        </Text>
+        <Bouton
+          libelle="Tout effacer et repartir de zéro"
+          variante="danger"
+          onPress={() => router.push('/reinitialiser')}
+        />
+      </Carte>
+
       <DialogueConfirmation
         visible={confirmeReinit}
         titre="Réinitialiser les préférences ?"
@@ -400,7 +424,7 @@ export default function EcranReglages() {
             await majReglages({
               couleurTheme: 'vert',
               modeTheme: 'clair',
-              modeleParDefaut: 'officiel',
+              modeleParDefaut: 'colore',
               signatureActive: false,
               rappelPaiements: false,
             });

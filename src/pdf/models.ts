@@ -1,23 +1,25 @@
 /**
- * Contenu des documents : structure commune, puis deux modèles.
+ * Contenu des documents : structure commune, puis trois modèles.
  *
  * On sépare nettement le contenu de la présentation :
  *  - `ContenuDocument` décrit ce qui doit figurer sur le papier ;
  *  - chaque modèle décide de la mise en page.
  *
- * Les deux modèles partagent les mêmes informations. Aucun des deux ne cache
- * une mention légale : le choix porte sur l'esthétique, jamais sur le fond.
+ * Les trois modèles partagent les mêmes informations. Aucun ne cache une
+ * mention légale : le choix porte sur l'esthétique, jamais sur le fond.
  */
 
 // Les chemins portent l'extension `.ts`, comme dans `src/domain` : le rendu
 // HTML est ainsi exécutable par `node --test`, sans émulateur ni transpileur.
 import { formatMontant } from '../domain/money.ts';
 import type { PaiementImprime } from '../domain/payments.ts';
-import { LIBELLE_DOCUMENT, type ModeleDocument, type TypeDocument } from '../domain/types.ts';
+import {
+  LIBELLE_DOCUMENT,
+  type ModelePropose,
+  type TypeDocument,
+} from '../domain/types.ts';
 import {
   avertissement,
-  MENTION_ANNULATION_RECUS,
-  MENTION_RESERVE_DROITS,
   RAPPEL_LOCATAIRE,
   REFERENCE_DECRET_2015,
   REFERENCE_LOI_1989,
@@ -26,7 +28,7 @@ import {
   mentionRecu,
 } from './legal.ts';
 import { COULEURS_DOCUMENT, echapper, STYLES_BASE } from './styles.ts';
-import { STYLES_OFFICIEL } from './styles-officiel.ts';
+import { COULEURS_COLORE, STYLES_COLORE } from './styles-colore.ts';
 
 /** Tout ce qui est imprimé sur un document. */
 export interface ContenuDocument {
@@ -82,8 +84,9 @@ export interface ContenuDocument {
   /**
    * Reste à percevoir sur la période, en centimes.
    *
-   * C'est la seule source de l'onglet « A PAYER » et du tampon « PAYÉ » : le
-   * document ne peut donc pas affirmer un paiement que la base ne porte pas.
+   * C'est la seule source du tampon — « Payé » ou « Reste à payer » — quel que
+   * soit le modèle : le document ne peut donc pas affirmer un paiement que la
+   * base ne porte pas.
    */
   resteAPercevoir: number;
 
@@ -526,199 +529,178 @@ ${STYLES_BASE}
 }
 
 // ---------------------------------------------------------------------------
-// Modèle 3 : officiel — la feuille du bailleur
+// Modèle 3 : coloré et convivial
 // ---------------------------------------------------------------------------
 
 /**
- * Un volet du modèle officiel.
+ * Une carte d'identité colorée : le bailleur, le locataire, ou le logement.
  *
- * Le volet porte le titre, l'émetteur, le tableau des montants avec sa ligne de
- * total, et les deux mentions en italique bleu — une sous chaque colonne, comme
- * sur le papier du bailleur.
+ * Le même bloc sert les trois, avec une variante de couleur. Les dupliquer
+ * aurait laissé trois mises en forme divergentes le jour où l'une bouge.
  */
-function voletOfficiel(params: {
-  classe: string;
-  titre: string;
-  contenu: ContenuDocument;
-  /** Fond de la colonne « désignation » : bleu pour la quittance, crème sinon. */
-  colonneDesignation: string;
-  colonneMontant: string;
-  /** Texte de l'onglet de total, vide quand tout est réglé. */
-  onglet: string;
-  mentionGauche: string;
-  mentionDroite: string;
+function carteColore(params: {
+  /** `cc-locataire` change la teinte ; vide pour la couleur principale. */
+  variante: string;
+  etiquette: string;
+  /** Lignes déjà échappées, la première en gras. */
+  lignes: string[];
+  /** Passe la carte sur toute la largeur au lieu de partager la ligne. */
+  pleineLargeur?: boolean;
 }): string {
-  const contenu = params.contenu;
-  const { montants, mentionCharges } = contenu;
+  const [premiere, ...suivantes] = params.lignes;
 
-  // La deuxième ligne du tableau n'apparaît que s'il y a des charges à
-  // distinguer du loyer : sinon le tableau n'aurait qu'une ligne, ce qui est
-  // exact, mais deux fois la même somme.
-  const avecCharges = mentionCharges && montants.charges > 0;
-  const chargesGauche = avecCharges ? '<div class="ligne">Provisions sur charges</div>' : '';
-  const chargesDroite = avecCharges
-    ? `<div class="ligne">${echapper(formatMontant(montants.charges))}</div>`
-    : '';
-
-  const designation = contenu.logement.nom.trim() || 'Appartement';
-
+  // Le blanc sous la carte pleine largeur est ecrit ici, et non dans la feuille
+  // de style : seule cette variante le porte, et une classe de plus pour une
+  // seule regle couterait plus cher qu'elle ne rapporte. Il est passe de 4 mm a
+  // 3 mm avec le reste du modele, apres la mesure de 326,23 mm pour 297,39.
   return `
-    <section class="volet ${params.classe}">
-      <h1 class="titre-volet">${echapper(params.titre)}</h1>
-
-      <div class="volet-corps">
-
-        <div class="volet-gauche">
-          <div class="emetteur">
-            <div class="nom">${echapper(contenu.emetteur.nom)}</div>
-            ${contenu.emetteur.adresse.map((l) => `<div>${echapper(l)}</div>`).join('')}
-          </div>
-
-          <div class="cadre-tableau">
-            <div class="tableau-officiel">
-              <div class="entete-tableau">
-                <div class="cellule designation">Désignation des locaux ou opérations</div>
-                <div class="cellule montant">Montant</div>
-              </div>
-              <div class="corps-tableau">
-                <div class="colonne-designation ${params.colonneDesignation}">
-                  <div class="ligne">${echapper(designation)}</div>
-                  ${chargesGauche}
-                </div>
-                <div class="colonne-montant ${params.colonneMontant}">
-                  <div class="ligne">${echapper(formatMontant(montants.loyer))}</div>
-                  ${chargesDroite}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="ligne-total">
-            <div class="onglet">${echapper(params.onglet)}</div>
-            <div class="montant-total">${echapper(formatMontant(montants.total))}</div>
-          </div>
-        </div>
-
-        <div class="volet-droite">
-          <div class="reference">
-            <span class="etiquette">Période :</span>
-            DU ${echapper(contenu.periodeDebut)} AU ${echapper(contenu.periodeFin)}
-          </div>
-          <div class="reference">
-            <span class="etiquette">Immeuble :</span>
-            ${echapper(contenu.logement.adresse.join(', '))}
-          </div>
-
-          <div class="destinataire">
-            ${contenu.locataires.map((l) => echapper(l)).join('<br />')}
-          </div>
-
-          <div class="adresse-logement">
-            ${contenu.logement.adresse.map((l) => echapper(l)).join('<br />')}
-          </div>
-        </div>
-
-      </div>
-
-      <div class="volet-mentions">
-        <div class="mention-gauche">
-          <p class="mentions-legales">${echapper(params.mentionGauche)}</p>
-          ${contenu.mentionLibre ? `<p class="mentions-legales">${echapper(contenu.mentionLibre)}</p>` : ''}
-        </div>
-        <div class="mention-droite">
-          <p class="mentions-legales">${echapper(params.mentionDroite)}</p>
-        </div>
-      </div>
-    </section>
-  `;
-}
-
-/** Le talon détachable, avec sa bande verticale et son tampon. */
-function talonOfficiel(contenu: ContenuDocument): string {
-  // Le tampon suit le solde réel, jamais la nature du document : un avis
-  // d'échéance n'est pas « payé », un reçu partiel non plus.
-  const regle = contenu.resteAPercevoir <= 0;
-
-  return `
-    <div class="talon">
-      <div class="bande-originale"><span>DOCUMENT ORIGINAL</span></div>
-
-      <div class="talon-panneau">
-        <h2 class="talon-titre">Talon détachable à joindre à votre règlement</h2>
-
-        <div class="talon-haut">
-          <div class="exigible">Loyer exigible le ${echapper(contenu.echeanceLibelle)}</div>
-          <div class="bailleur">
-            ${echapper(contenu.emetteur.nom)}<br />
-            ${contenu.emetteur.adresse.map((l) => echapper(l)).join('<br />')}
-          </div>
-        </div>
-
-        <div class="talon-bas">
-          <div class="boite-locataire">
-            <div class="titulaires">${echapper(contenu.locataires.join(' et '))}</div>
-            <div class="grille-talon">
-              <div class="etiquettes">
-                <div>Période</div>
-                <div>Montant</div>
-              </div>
-              <div class="valeurs">
-                <div>DU ${echapper(contenu.periodeDebut)} AU ${echapper(contenu.periodeFin)}</div>
-                <div class="droite">${echapper(formatMontant(contenu.montants.total))}</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="talon-droite">
-            ${
-              contenu.signatureBase64
-                ? `<div class="signature-officielle">
-                     <img src="${contenu.signatureBase64}" alt="Signature du bailleur" />
-                     <div>${echapper(contenu.emetteur.nom)}</div>
-                   </div>`
-                : ''
-            }
-            <p class="renvoyer">À renvoyer à l'adresse ci-dessus</p>
-            ${regle ? '<div class="tampon-zone"><span class="tampon">Payé</span></div>' : ''}
-          </div>
-        </div>
+    <div class="${['cc-carte', params.variante].filter(Boolean).join(' ')}"${params.pleineLargeur ? ' style="margin-bottom: 3mm;"' : ''}>
+      <div class="cc-etiquette">${echapper(params.etiquette)}</div>
+      <div class="cc-valeur">
+        <strong>${premiere ?? ''}</strong>
+        ${suivantes.map((l) => `<br />${l}`).join('')}
       </div>
     </div>
   `;
 }
 
 /**
- * Rend la feuille du bailleur.
+ * Tableau des montants du modèle coloré.
  *
- * Deux volets, pas trois : le modèle papier porte la quittance **et** l'avis
- * d'échéance pour le même mois, l'un marqué « payé » et l'autre « à payer ».
- * Ces deux affirmations ne peuvent pas être vraies ensemble, et l'application
- * ne peut donc pas les imprimer toutes les deux. Le volet rendu est celui du
- * document demandé ; l'onglet de total et le tampon disent, eux, l'état réel
- * du mois.
+ * Mêmes chiffres que les autres modèles, et mêmes règles : les charges ne
+ * figurent que si le bailleur a choisi de les séparer **et** qu'il y en a. La
+ * ligne de total est mise en avant, parce que c'est le montant qu'on vient
+ * chercher.
  */
-export function rendreModeleOfficiel(contenu: ContenuDocument): string {
-  const estQuittance = contenu.type === 'quittance';
-  const regle = contenu.resteAPercevoir <= 0;
+function tableauMontantsColore(contenu: ContenuDocument): string {
+  const { montants, mentionCharges } = contenu;
+  const separe = mentionCharges && montants.charges > 0;
 
-  // Sur le papier du bailleur, la quittance a la colonne de désignation bleue
-  // et l'avis d'échéance l'a crème : les deux se distinguent au premier regard.
-  const colonneDesignation = estQuittance ? 'colonne-bleue' : 'colonne-creme';
-  const colonneMontant = estQuittance ? 'colonne-creme' : 'colonne-bleue';
+  const ligneCharges = separe
+    ? `<tr class="cc-pair">
+         <td>Charges (provision)</td>
+         <td class="cc-montant">${echapper(formatMontant(montants.charges))}</td>
+       </tr>`
+    : '';
 
-  // L'onglet ne dit rien de plus que le solde : vide quand tout est réglé,
-  // ce qui reproduit exactement l'onglet nu de la quittance du modèle.
-  const onglet = regle ? '' : 'A PAYER';
+  return `
+    <table class="cc-tableau">
+      <thead>
+        <tr>
+          <th>Désignation</th>
+          <th class="cc-montant">Montant</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Loyer${separe ? ' hors charges' : ''}</td>
+          <td class="cc-montant">${echapper(formatMontant(montants.loyer))}</td>
+        </tr>
+        ${ligneCharges}
+        <tr class="cc-total">
+          <td>${echapper(separe ? 'Total loyer et charges' : 'Total')}</td>
+          <td class="cc-montant">${echapper(formatMontant(montants.total))}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+}
 
-  // Les mentions du modèle ne valent que pour une quittance : elles parlent de
-  // ce que la quittance annule et réserve. Ailleurs, on dit ce que le document
-  // est — un reçu ou un avis — sans détourner ces phrases de leur objet.
-  const mentionGauche = estQuittance
-    ? MENTION_RESERVE_DROITS
-    : (avertissement(contenu.type) ?? '');
-  const mentionDroite = estQuittance
-    ? MENTION_ANNULATION_RECUS
-    : mentionReconnaissance(contenu);
+/**
+ * Détail des encaissements, en puces colorées.
+ *
+ * Le paragraphe se replie de lui-même, comme dans les autres modèles : c'est
+ * ce qui permet à vingt encaissements de tenir sans pousser le document sur une
+ * seconde feuille. La puce est décorative ; chaque entrée garde sa date et ses
+ * propres modes, dans le même ordre.
+ */
+function detailPaiementsColore(contenu: ContenuDocument): string {
+  if (contenu.paiements.length === 0) return '';
+
+  const entrees = contenu.paiements
+    .map((paiement) => {
+      const modes = paiement.modes.map((m) => echapper(m)).join(', ');
+      const suffixe = modes.length > 0 ? ` — ${modes}` : '';
+      return `<span class="ligne-paiement">Reçu le ${echapper(paiement.date)}${suffixe}</span>`;
+    })
+    .join('<span class="separateur-paiement"> ; </span>');
+
+  return `
+    <div class="cc-paiements">
+      <div class="cc-paiements-titre">
+        ${contenu.paiements.length > 1
+          ? `${contenu.paiements.length} encaissements`
+          : 'Encaissement'}
+      </div>
+      <span class="cc-puce">●</span> ${entrees}
+    </div>
+  `;
+}
+
+/**
+ * Modèle coloré et convivial.
+ *
+ * Il ne reproduit aucun papier existant : c'est une présentation choisie. Il
+ * porte donc **tout** ce que portent les autres — les deux parties, l'adresse
+ * du logement, le détail des montants, les encaissements, la mention légale,
+ * les références, le rappel au locataire et la signature. Le choix du modèle ne
+ * retire jamais une information : c'est la règle qui tient les trois modèles
+ * interchangeables.
+ *
+ * Il partage la mise en page de `STYLES_BASE` — la feuille A4 et ses marges —
+ * et n'ajoute que la couche colorée. La tenue en page est donc celle des autres
+ * modèles, mesurée par les mêmes bancs.
+ */
+export function rendreModeleColore(contenu: ContenuDocument): string {
+  const couleur = COULEURS_COLORE.principaleFonce;
+  const resteAPercevoir = contenu.resteAPercevoir > 0;
+
+  // Le montant mis en avant et son libellé suivent la **nature** du document,
+  // exactement comme dans les deux autres modèles. Un reçu partiel annonçait
+  // ici « Total réglé » au-dessus du total, à côté d'un tampon « Reste à
+  // payer » : le document se contredisait sur la même ligne. Le tampon, lui,
+  // suit `resteAPercevoir`, qui est la décision du domaine.
+  const libelleMontant =
+    contenu.type === 'recu'
+      ? 'Montant reçu'
+      : contenu.type === 'quittance'
+        ? 'Total réglé'
+        : 'Montant dû';
+  const montantMisEnAvant =
+    contenu.type === 'recu' ? contenu.montantRecu : contenu.montants.total;
+
+  const adresseBailleur = [
+    contenu.emetteur.nom,
+    ...contenu.emetteur.adresse,
+    contenu.emetteur.telephone ? `Tél. ${contenu.emetteur.telephone}` : null,
+    contenu.emetteur.email,
+    contenu.emetteur.siret ? `SIRET ${contenu.emetteur.siret}` : null,
+  ].filter((l): l is string => Boolean(l));
+
+  const carteBailleur = carteColore({
+    variante: '',
+    etiquette: 'Bailleur',
+    lignes: [
+      echapper(contenu.emetteur.qualite ?? contenu.emetteur.nom),
+      ...adresseBailleur.map((l) => echapper(l)),
+    ],
+  });
+
+  const carteLocataire = carteColore({
+    variante: 'cc-locataire',
+    etiquette: contenu.locataires.length > 1 ? 'Locataires' : 'Locataire',
+    lignes:
+      contenu.locataires.length > 0
+        ? contenu.locataires.map((l) => echapper(l))
+        : ['—'],
+  });
+
+  const carteLogement = carteColore({
+    variante: '',
+    etiquette: 'Logement concerné',
+    lignes: [echapper(contenu.logement.nom), ...contenu.logement.adresse.map((l) => echapper(l))],
+    pleineLargeur: true,
+  });
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -726,33 +708,65 @@ export function rendreModeleOfficiel(contenu: ContenuDocument): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${echapper(LIBELLE_DOCUMENT[contenu.type])} ${echapper(contenu.periodeLibelle)}</title>
-<style>${STYLES_OFFICIEL}</style>
+<style>${STYLES_BASE}${STYLES_COLORE}</style>
 </head>
 <body>
-  <div class="feuille">
+  <div class="page">
 
-    ${voletOfficiel({
-      classe: estQuittance ? 'volet-quittance' : 'volet-avis',
-      titre: LIBELLE_DOCUMENT[contenu.type],
-      contenu,
-      colonneDesignation,
-      colonneMontant,
-      onglet,
-      mentionGauche,
-      mentionDroite,
-    })}
+    <div class="cc-bandeau">
+      <div>
+        <h1 class="cc-titre">${echapper(LIBELLE_DOCUMENT[contenu.type])}</h1>
+        <div class="cc-periode">${echapper(contenu.periodeLibelle)}</div>
+      </div>
+      <div class="cc-numero">
+        <strong>N° ${echapper(contenu.numero)}</strong>
+        Émis le ${echapper(contenu.dateEmission)}
+      </div>
+    </div>
 
-    <div class="decoupe"></div>
+    <div class="cc-cartes">
+      ${carteBailleur}
+      ${carteLocataire}
+    </div>
 
-    ${talonOfficiel(contenu)}
+    ${carteLogement}
 
+    <div class="cc-total">
+      <div>
+        <div class="cc-libelle">${echapper(libelleMontant)}</div>
+        <div class="cc-sous-libelle">
+          Loyer et charges de ${echapper(contenu.periodeLibelle)}
+        </div>
+        <span class="cc-tampon${resteAPercevoir ? ' cc-a-payer' : ''}">
+          ${resteAPercevoir ? 'Reste à payer' : 'Payé'}
+        </span>
+      </div>
+      <div class="cc-montant">${echapper(formatMontant(montantMisEnAvant))}</div>
+    </div>
+
+    ${tableauMontantsColore(contenu)}
+
+    ${detailPaiementsColore(contenu)}
+
+    <div class="cc-mention">
+      <div class="cc-mention-titre">Reconnaissance du bailleur</div>
+      ${echapper(mentionReconnaissance(contenu))}
+    </div>
+
+    ${bandeauAvertissement(contenu)}
+
+    ${contenu.mentionLibre ? `<div class="mention-libre">${echapper(contenu.mentionLibre)}</div>` : ''}
+
+    ${blocSignature(contenu, couleur)}
+
+    ${piedDePage(contenu)}
   </div>
 </body>
 </html>`;
 }
 
 /** Rend le contenu selon le modèle demandé. */
-export function rendreHtml(contenu: ContenuDocument, modele: ModeleDocument): string {
-  if (modele === 'officiel') return rendreModeleOfficiel(contenu);
+export function rendreHtml(contenu: ContenuDocument, modele: ModelePropose): string {
+  if (modele === 'colore') return rendreModeleColore(contenu);
   return modele === 'moderne' ? rendreModeleModerne(contenu) : rendreModeleClassique(contenu);
 }
