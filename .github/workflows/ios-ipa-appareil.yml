@@ -160,12 +160,18 @@ jobs:
           rm -rf Payload
           mkdir -p Payload
           cp -R "$produit" "Payload/$nom.app"
-          rm -f Quittances-1.0.0-appareil-non-signe.ipa
-          zip -qry Quittances-1.0.0-appareil-non-signe.ipa Payload
-          ls -lh Quittances-1.0.0-appareil-non-signe.ipa
+          # La version est LUE dans `app.json`, jamais recopiée. Écrite deux
+          # fois, elle finit par mentir : un fichier nommé 1.0.0 qui contient un
+          # binaire 1.0.1 ne se voit qu'après l'installation, et le nom est
+          # justement ce qui sert à choisir le bon fichier.
+          version=$(node -p "require('./app.json').expo.version")
+          fichier="Quittances-${version}-appareil-non-signe.ipa"
+          rm -f "$fichier"
+          zip -qry "$fichier" Payload
+          ls -lh "$fichier"
           # Le nom est transmis aux étapes suivantes : aucune ne peut se tromper
           # de fichier.
-          echo "FICHIER=Quittances-1.0.0-appareil-non-signe.ipa" >> "$GITHUB_ENV"
+          echo "FICHIER=$fichier" >> "$GITHUB_ENV"
 
       - name: Vérifier sur le fichier que le binaire vise bien l'appareil
         # Le contrôle décisif. Une compilation de simulateur porte

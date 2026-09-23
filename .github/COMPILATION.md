@@ -178,7 +178,7 @@ fichier-là ne s'installe sur aucun iPhone, ni maintenant, ni après signature.*
 Il s'installe dans le simulateur iOS d'un Mac :
 
 ```bash
-tar -xzf Quittances-1.0.0-ios-simulateur.tar.gz
+tar -xzf Quittances-*-ios-simulateur.tar.gz
 xcrun simctl install booted Quittances.app
 ```
 
@@ -194,7 +194,8 @@ mais **compilé pour l'appareil** — c'est exactement ce qu'attend eSign.
 1. Onglet **Actions** → flux **« IPA appareil »** (`ios-ipa-appareil.yml`) → *Run workflow*. Comptez une
    quinzaine de minutes.
 2. À la fin, téléchargez l'artefact **`ipa-appareil-non-signe`** : il contient
-   `Quittances-1.0.0-appareil-non-signe.ipa`.
+   l'IPA, nommé `Quittances-<version>-appareil-non-signe.ipa`. La version est
+   celle de `app.json` — le flux la lit, il ne la recopie pas.
 3. Transférez le fichier sur votre iPhone (AirDrop, l'app Fichiers, ou un lien
    de partage), ouvrez-le dans **eSign**, puis signez-le avec votre certificat.
    eSign installe alors l'application sur l'appareil.
