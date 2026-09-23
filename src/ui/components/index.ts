@@ -19,4 +19,5 @@ export { Segments, type Segment } from './Segments';
 export { LigneDetail } from './LigneDetail';
 export { CarteLogementItem } from './CarteLogement';
 export { BoutonFlottant } from './BoutonFlottant';
+export { BarreActionFixe } from './BarreActionFixe';
 export { VerrouBiometrique } from './VerrouBiometrique';

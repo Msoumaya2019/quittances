@@ -47,6 +47,7 @@ import {
   bailEnCours,
   cloturerBail,
   periodesLoyerDuBail,
+  supprimerLogement,
   titulairesDuBail,
   trouverLogement,
 } from '@/db/repositories/properties';
@@ -75,6 +76,7 @@ export default function EcranLogement() {
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [confirmeFinBail, setConfirmeFinBail] = useState(false);
+  const [confirmeSuppression, setConfirmeSuppression] = useState(false);
   const [travail, setTravail] = useState(false);
 
   const charger = useCallback(async () => {
@@ -157,6 +159,29 @@ export default function EcranLogement() {
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "La fin de bail n'a pas pu être enregistrée.");
       setConfirmeFinBail(false);
+    } finally {
+      setTravail(false);
+    }
+  }
+
+  /**
+   * Supprime le logement, ses baux, ses paiements et ses documents.
+   *
+   * Les fichiers PDF deja produits restent sur le telephone : une quittance
+   * remise au locataire ne disparait pas parce que le bailleur a supprime la
+   * fiche. Le message de confirmation le dit, pour eviter la surprise.
+   */
+  async function supprimerCeLogement() {
+    if (!etat?.logement) return;
+    setTravail(true);
+    try {
+      await supprimerLogement(etat.logement.id);
+      rafraichir();
+      setConfirmeSuppression(false);
+      router.replace('/logements');
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Le logement n'a pas pu etre supprime.");
+      setConfirmeSuppression(false);
     } finally {
       setTravail(false);
     }
@@ -361,14 +386,26 @@ export default function EcranLogement() {
               </Carte>
             ) : null}
 
-            {/* Fin de bail */}
+            {/* Locataire : modifier, faire partir, ou en installer un */}
             <View style={styles.actions}>
               {bail ? (
-                <Bouton
-                  libelle="Le locataire est parti"
-                  variante="discret"
-                  onPress={() => setConfirmeFinBail(true)}
-                />
+                <>
+                  <Bouton
+                    libelle="Modifier le locataire"
+                    variante="secondaire"
+                    onPress={() =>
+                      router.push({
+                        pathname: '/logement/[id]/locataires',
+                        params: { id: logement.id },
+                      })
+                    }
+                  />
+                  <Bouton
+                    libelle="Le locataire est parti"
+                    variante="discret"
+                    onPress={() => setConfirmeFinBail(true)}
+                  />
+                </>
               ) : (
                 <Bouton
                   libelle="Ajouter un locataire"
@@ -381,6 +418,15 @@ export default function EcranLogement() {
                   }
                 />
               )}
+            </View>
+
+            {/* Suppression : derniere carte, pour ne pas la croiser par erreur */}
+            <View style={styles.actions}>
+              <Bouton
+                libelle="Supprimer ce logement"
+                variante="danger"
+                onPress={() => setConfirmeSuppression(true)}
+              />
             </View>
           </>
         ) : null}
@@ -395,6 +441,19 @@ export default function EcranLogement() {
         occupe={travail}
         onConfirmer={terminerBail}
         onAnnuler={() => setConfirmeFinBail(false)}
+      />
+
+      <DialogueConfirmation
+        visible={confirmeSuppression}
+        titre="Supprimer ce logement ?"
+        message={`${
+          logement?.nom ?? 'Ce logement'
+        }, son locataire, ses paiements et ses documents seront effaces de l'application. Les quittances deja enregistrees sur le telephone restent lisibles. Cette action ne peut pas etre annulee.`}
+        libelleConfirmer="Supprimer definitivement"
+        danger
+        occupe={travail}
+        onConfirmer={supprimerCeLogement}
+        onAnnuler={() => setConfirmeSuppression(false)}
       />
     </>
   );

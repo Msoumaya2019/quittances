@@ -27,7 +27,7 @@ import { Indicateur } from '@/ui/components/Indicateur';
 import { Segments } from '@/ui/components/Segments';
 import { BarreProgression } from '@/ui/components/BarreProgression';
 import { FeuilleAction, type OptionFeuille } from '@/ui/components/FeuilleAction';
-import { BoutonFlottant } from '@/ui/components/BoutonFlottant';
+import { BarreActionFixe } from '@/ui/components/BarreActionFixe';
 import { espaces, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import { libelleLongCapitalise, decaler, versCle, depuisCle } from '@/domain/period';
@@ -201,7 +201,7 @@ export default function EcranAccueil() {
         keyExtractor={(item) => item.logement.id}
         contentContainerStyle={[
           styles.liste,
-          { paddingTop: insets.top + espaces.sm, paddingBottom: 120 },
+          { paddingTop: insets.top + espaces.sm, paddingBottom: espaces.xxl },
         ]}
         refreshControl={
           <RefreshControl
@@ -246,10 +246,9 @@ export default function EcranAccueil() {
         )}
       />
 
-      <BoutonFlottant
-        onPress={() => router.push('/logement/nouveau')}
+      <BarreActionFixe
         libelle="Ajouter un logement"
-        bas={insets.bottom + 76}
+        onPress={() => router.push('/logement/nouveau')}
       />
 
       {/* Choix du mois pour une quittance antérieure */}

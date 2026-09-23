@@ -1,9 +1,13 @@
 /**
- * Onglet LOGEMENTS.
+ * Onglet LOGEMENT.
  *
  * Tous les logements, y compris ceux sans locataire. C'est l'écran de gestion :
  * on y cherche, on y ouvre, on y ajoute. Les montants et les statuts du mois
  * affiché y figurent aussi, pour rester cohérent avec l'accueil.
+ *
+ * L'action « Ajouter un logement » est une barre fixe, sous la liste : elle ne
+ * recouvre aucune carte, et la marge basse de la liste n'a plus à réserver la
+ * place d'un bouton superposé.
  */
 
 import { useCallback, useMemo, useState } from 'react';
@@ -13,7 +17,7 @@ import { router, useFocusEffect } from 'expo-router';
 
 import {
   BandeauMessage,
-  BoutonFlottant,
+  BarreActionFixe,
   Carte,
   Champ,
   EcranVide,
@@ -29,7 +33,7 @@ import { useApplication } from '@/state/ApplicationContext';
 import { useDonneesAccueil, type CarteLogement } from '@/hooks/useAccueil';
 import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
 
-export default function EcranLogements() {
+export default function EcranLogement() {
   const styles = useStyles(creerStyles);
   const couleurs = useCouleurs();
   const { mois, cleRafraichissement, rafraichir } = useApplication();
@@ -70,6 +74,8 @@ export default function EcranLogements() {
     setRafraichissement(false);
   }
 
+  const aucunLogement = donnees.cartes.length === 0;
+
   return (
     <View style={styles.plein}>
       <FlatList
@@ -77,7 +83,9 @@ export default function EcranLogements() {
         keyExtractor={(item) => item.logement.id}
         contentContainerStyle={[
           styles.liste,
-          { paddingTop: insets.top + espaces.sm, paddingBottom: insets.bottom + 100 },
+          // La barre d'action est sous la liste, pas au-dessus : quelques points
+          // d'air suffisent, là où un bouton flottant demandait cent points.
+          { paddingTop: insets.top + espaces.sm, paddingBottom: espaces.xxl },
         ]}
         refreshControl={
           <RefreshControl
@@ -90,9 +98,9 @@ export default function EcranLogements() {
         ListHeaderComponent={
           <View style={styles.entete}>
             <EnTeteEcran
-              titre="Logements"
+              titre="Logement"
               sousTitre={
-                donnees.cartes.length === 0
+                aucunLogement
                   ? undefined
                   : `${donnees.cartes.length} ${donnees.cartes.length > 1 ? 'logements' : 'logement'} — ${libelleLongCapitalise(mois)}`
               }
@@ -141,7 +149,15 @@ export default function EcranLogements() {
         }
       />
 
-      <BoutonFlottant libelle="Ajouter" onPress={() => router.push('/logement/nouveau')} />
+      {/* Sans logement, l'écran vide porte déjà l'action : deux boutons
+          identiques à l'écran donneraient l'impression d'un doublon. */}
+      {aucunLogement ? null : (
+        <BarreActionFixe
+          libelle="Ajouter un logement"
+          aide="Logement, locataire et loyer se saisissent en quatre étapes."
+          onPress={() => router.push('/logement/nouveau')}
+        />
+      )}
     </View>
   );
 }

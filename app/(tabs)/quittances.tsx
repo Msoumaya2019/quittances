@@ -1,10 +1,12 @@
 /**
- * Onglet QUITTANCES.
+ * Onglet QUITTANCE.
  *
- * Deux usages :
- *  - générer en une fois les quittances du mois : les logements intégralement
- *    payés sont présélectionnés, on décoche ceux qu'on ne veut pas, on lance ;
- *  - parcourir tous les documents déjà émis, toutes années confondues.
+ * Trois usages, dans l'ordre où ils se présentent :
+ *  - **un logement** : on touche le logement, l'application prépare son
+ *    document du mois. C'est le geste courant ;
+ *  - **plusieurs** : les quittances du mois en une fois, les logements
+ *    intégralement payés présélectionnés ;
+ *  - **déjà émis** : tous les documents produits, toutes années confondues.
  *
  * La génération de masse est séquentielle et tolérante : l'échec sur un
  * logement ne prive jamais des autres documents.
@@ -22,6 +24,7 @@ import {
   EcranVide,
   EnTeteEcran,
   LigneDetail,
+  PastilleNeutre,
   PastilleStatut,
   SelecteurMois,
   Segments,
@@ -40,11 +43,12 @@ import {
   nomArchivePourMois,
   partagerArchive,
 } from '@/pdf/groupee';
-import { useStyles, type Couleurs } from '@/ui/theme';
+import { useCouleurs, useStyles, type Couleurs } from '@/ui/theme';
 
-type Vue = 'mois' | 'tous';
+type Vue = 'un' | 'mois' | 'tous';
 
 export default function EcranQuittances() {
+  const couleurs = useCouleurs();
   const styles = useStyles(creerStyles);
   const {
     mois,
@@ -58,7 +62,7 @@ export default function EcranQuittances() {
   const insets = useSafeAreaInsets();
   const donnees = useDonneesAccueil(mois, cleRafraichissement);
 
-  const [vue, setVue] = useState<Vue>('mois');
+  const [vue, setVue] = useState<Vue>('un');
   const [ecartes, setEcartes] = useState<Set<string>>(new Set());
   const [documents, setDocuments] = useState<Document[]>([]);
   const [chargementDocs, setChargementDocs] = useState(true);
@@ -223,14 +227,77 @@ export default function EcranQuittances() {
 
         <Segments
           segments={[
-            { valeur: 'mois', libelle: 'Ce mois-ci' },
-            { valeur: 'tous', libelle: 'Tous les documents' },
+            { valeur: 'un', libelle: 'Un logement' },
+            { valeur: 'mois', libelle: 'Plusieurs' },
+            { valeur: 'tous', libelle: 'Déjà émis' },
           ]}
           valeur={vue}
           onChanger={(v: Vue) => setVue(v)}
         />
 
-        {vue === 'mois' ? (
+        {vue === 'un' ? (
+          <>
+            <SelecteurMois
+              periode={mois}
+              onPrecedent={moisPrecedent}
+              onSuivant={moisSuivant}
+              onAujourdhui={revenirAuMoisCourant}
+              estMoisCourant={estMoisCourant}
+            />
+
+            {erreur ? <BandeauMessage ton="erreur" message={erreur} /> : null}
+            {bilan ? <BandeauMessage ton="succes" message={bilan} /> : null}
+
+            <Carte>
+              <Text style={styles.section}>Choisir un logement</Text>
+              <Text style={styles.aide}>
+                Appuyez sur un logement pour préparer son document du mois. L’application choisit
+                alors ce qui est permis : une quittance si le mois est intégralement réglé, sinon un
+                reçu ou un avis d’échéance.
+              </Text>
+
+              {donnees.cartes.length === 0 ? (
+                <Text style={styles.aide}>Aucun logement enregistré pour l’instant.</Text>
+              ) : (
+                donnees.cartes.map((c) => (
+                  <Pressable
+                    key={c.logement.id}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/quittance/apercu',
+                        params: {
+                          logementId: c.logement.id,
+                          periode: cleDuMois,
+                          type: 'auto',
+                        },
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Préparer le document de ${c.logement.nom}`}
+                    style={styles.ligneSelection}
+                  >
+                    <View style={styles.ligneSelectionTextes}>
+                      <Text style={[typographie.corpsAppuye, styles.nomSelection]}>
+                        {c.logement.nom}
+                      </Text>
+                      <Text style={[typographie.petit, styles.detailSelection]}>
+                        {c.statut === 'paye'
+                          ? `${formatMontant(c.montantDu.total, { decimales: 'auto' })} — intégralement payé`
+                          : `${formatMontant(c.montantDu.total, { decimales: 'auto' })} — ${formatMontant(c.solde, { decimales: 'auto' })} restant`}
+                      </Text>
+                    </View>
+
+                    {c.documentExistant ? (
+                      <PastilleNeutre libelle="Déjà émis" couleur={couleurs.texteTertiaire} />
+                    ) : (
+                      <PastilleStatut statut={c.statut} compacte />
+                    )}
+                  </Pressable>
+                ))
+              )}
+            </Carte>
+          </>
+        ) : vue === 'mois' ? (
           <>
             <SelecteurMois
               periode={mois}
