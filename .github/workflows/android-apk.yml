@@ -131,7 +131,12 @@ jobs:
           # par Expo, pour que le nom du fichier ne mente pas sur son contenu.
           nom="${adresse##*/}"
           extension="${nom#*.}"
-          fichier="app-release.${extension}"
+          # La version est LUE dans `app.json`, jamais recopiee : ecrite deux
+          # fois, elle finit par mentir. Un fichier nomme « app-release.apk »
+          # ne disait pas non plus quelle version il portait, et rien ne
+          # permettait de distinguer deux telechargements.
+          version=$(node -p "require('./app.json').expo.version")
+          fichier="Quittances-${version}-android.${extension}"
           curl --fail --location "$adresse" --output "$fichier"
           ls -lh "$fichier"
           echo "FICHIER=${fichier}" >> "$GITHUB_ENV"

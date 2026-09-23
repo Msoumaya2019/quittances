@@ -131,7 +131,9 @@ Vous pouvez fermer la page et revenir plus tard : la compilation continue.
 2. Cliquez sur la ligne de la compilation terminée (rond vert).
 3. Faites défiler jusqu'au bas de la page, section **Artifacts**.
 4. Cliquez sur **apk-quittances**. Un fichier `.zip` se télécharge.
-5. Décompressez-le : vous obtenez `app-release.apk`.
+5. Décompressez-le : vous obtenez `Quittances-<version>-android.apk`. La version
+   est celle de `app.json` — le flux la lit, il ne la recopie pas. Le nom du
+   fichier dit donc toujours quelle version il porte.
 
 GitHub conserve ces fichiers 90 jours. Passé ce délai, il suffit de relancer la
 compilation.
@@ -140,8 +142,8 @@ compilation.
 
 ## Étape 6 — Installer sur le téléphone Android
 
-1. Transférez `app-release.apk` vers le téléphone — par câble, par courriel, ou
-   par un lien de transfert de fichiers. À vous de choisir.
+1. Transférez `Quittances-<version>-android.apk` vers le téléphone — par câble,
+   par courriel, ou par un lien de transfert de fichiers. À vous de choisir.
 2. Sur le téléphone, ouvrez le fichier. Android affiche un avertissement du type
    « Pour votre sécurité, votre téléphone n'est pas autorisé à installer des
    applications inconnues provenant de cette source ».
