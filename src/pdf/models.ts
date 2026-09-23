@@ -107,12 +107,16 @@ function mentionReconnaissance(contenu: ContenuDocument): string {
   }
 
   if (contenu.type === 'recu') {
-    const restant = Math.max(0, contenu.montants.total - contenu.montantRecu);
+    // Le reste est **lu**, jamais recalculé : `resteAPercevoir` est la décision
+    // du domaine, et la seule source de l'onglet comme du tampon. Une seconde
+    // soustraction donnerait aujourd'hui le même chiffre, puis divergerait en
+    // silence le jour où le solde se calcule autrement — le texte du reçu
+    // annoncerait alors un reste, le tampon un autre.
     return mentionRecu({
       periodeLibelle: contenu.periodeLibelle,
       montantRecu: formatMontant(contenu.montantRecu),
       montantDu: formatMontant(contenu.montants.total),
-      montantRestant: formatMontant(restant),
+      montantRestant: formatMontant(contenu.resteAPercevoir),
     });
   }
 

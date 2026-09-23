@@ -200,6 +200,31 @@ describe('Modèle officiel : le solde commande l’onglet et le tampon', () => {
       assert.notEqual(tampon, aPayer, `solde ${reste} : tampon et onglet doivent se contredire`);
     }
   });
+
+  it('le texte du reçu suit le même reste que l’onglet et le tampon', () => {
+    // Le texte du reçu et le solde doivent venir d'**une seule** décision. Une
+    // seconde soustraction dans le rendu donnerait aujourd'hui le même chiffre,
+    // et divergerait en silence le jour où le solde se calcule autrement.
+    //
+    // Le cas le prouve en les faisant diverger exprès : le texte doit lire
+    // `resteAPercevoir` (10,00 €), et non recalculer `total − montantRecu`
+    // (300,00 €). La mention est commune aux trois modèles, donc les trois sont
+    // éprouvés — c'est le même texte qui serait faux.
+    const divergent = {
+      type: 'recu' as const,
+      montantRecu: 100000,
+      resteAPercevoir: 1000,
+    };
+
+    for (const modele of ['officiel', 'classique', 'moderne'] as const) {
+      assert.match(
+        rendreHtml(contenu(divergent), modele),
+        /il reste 10,00 € à régler/,
+        `${modele} : le texte du reçu doit lire « resteAPercevoir », la source `
+          + 'unique du solde, et non le recalculer',
+      );
+    }
+  });
 });
 
 describe('Modèle officiel : échappement', () => {
