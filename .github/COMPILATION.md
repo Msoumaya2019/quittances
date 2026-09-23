@@ -115,7 +115,7 @@ Vérifiez que `app.json` contient bien un bloc ressemblant à ceci :
 ## Étape 4 — Lancer la compilation Android
 
 1. Sur GitHub, ouvrez l'onglet **Actions** de votre dépôt.
-2. Dans la colonne de gauche, cliquez sur **APK Android**.
+2. Dans la colonne de gauche, cliquez sur **APK Android** (`android-apk.yml`).
 3. À droite, cliquez sur **Run workflow**, puis sur le bouton vert
    **Run workflow** qui apparaît.
 4. Actualisez la page. Une ligne apparaît avec un rond orange : la compilation
@@ -158,22 +158,24 @@ hors du magasin Play. Vous pouvez désactiver l'autorisation après l'installati
 
 ## Pour un iPhone
 
-Soyons précis, car c'est le point où l'on perd du temps à tort — et où l'on
-croit souvent qu'il suffirait de faire signer le fichier.
+Il y a **trois façons** d'arriver à une application qui s'installe sur votre
+iPhone. La première ne demande **aucun compte Apple** et aucun Mac : vous signez
+vous-même, sur le téléphone. Les deux autres passent par un identifiant Apple.
 
-**Ce dépôt ne contient aucun identifiant Apple, et le flux de travail iOS n'en
-demande aucun.** Sans identifiant Apple, Expo n'a rien à signer : un IPA est une
-archive *signée*, donc il n'y a pas d'IPA. Ce qui est produit est une compilation
-pour le **simulateur**, livrée en `tar.gz` contenant `Quittances.app`.
+Un mot d'abord, car c'est le point où l'on perd du temps à tort — et où l'on
+croit souvent qu'il suffirait de faire signer le fichier. **« Signé » et
+« compilé pour un appareil » sont deux questions distinctes.** Un fichier compilé
+pour le *simulateur* reste un fichier de simulateur, quoi qu'on signe dessus :
+un outil de signature re-signe un binaire, il ne le recompile pas.
 
-Nous avons mesuré ce fichier plutôt que de le supposer. Son `Info.plist` porte
+Le flux **iOS** (`ios-ipa.yml`) de ce dépôt produit un fichier de simulateur, et il le dit. Nous
+l'avons mesuré plutôt que de le supposer : son `Info.plist` porte
 `DTPlatformName = iphonesimulator`, et ses deux tranches Mach-O (`x86_64`,
 `arm64`) déclarent `platform = 7`, c'est-à-dire iOSSimulator.
 
-La conséquence est plus sévère qu'un simple défaut de signature : **ce fichier ne
-s'installe sur aucun iPhone, ni maintenant, ni après signature.** Une application
-compilée pour le simulateur reste une application de simulateur, même signée. Il
-s'installe dans le simulateur iOS d'un Mac :
+La conséquence est plus sévère qu'un simple défaut de signature : **ce
+fichier-là ne s'installe sur aucun iPhone, ni maintenant, ni après signature.**
+Il s'installe dans le simulateur iOS d'un Mac :
 
 ```bash
 tar -xzf Quittances-1.0.0-ios-simulateur.tar.gz
@@ -181,9 +183,33 @@ xcrun simctl install booted Quittances.app
 ```
 
 Il sert donc à archiver, et à vérifier que le projet iOS compile. Pour un
-téléphone, il faut votre compte Apple, et l'un des deux chemins ci-dessous.
+téléphone, prenez l'un des trois chemins ci-dessous.
 
-### Chemin A — confier la signature à Expo (le plus simple)
+### Chemin A — signer vous-même avec eSign (aucun compte Apple)
+
+C'est le chemin le plus direct, et le seul qui ne demande ni compte Apple
+Developer, ni Apple ID, ni Mac. Le dépôt compile pour vous un IPA **non signé**
+mais **compilé pour l'appareil** — c'est exactement ce qu'attend eSign.
+
+1. Onglet **Actions** → flux **« IPA appareil »** (`ios-ipa-appareil.yml`) → *Run workflow*. Comptez une
+   quinzaine de minutes.
+2. À la fin, téléchargez l'artefact **`ipa-appareil-non-signe`** : il contient
+   `Quittances-1.0.0-appareil-non-signe.ipa`.
+3. Transférez le fichier sur votre iPhone (AirDrop, l'app Fichiers, ou un lien
+   de partage), ouvrez-le dans **eSign**, puis signez-le avec votre certificat.
+   eSign installe alors l'application sur l'appareil.
+
+Deux choses à savoir avant de vous y fier :
+
+- **Votre certificat a une durée de vie** — sept jours pour un certificat
+  gratuit, un an pour un compte Apple Developer. À l'expiration, l'application
+  cesse de se lancer : il faut resigner le même IPA.
+- **Signer crée une identité nouvelle pour iOS.** Le conteneur de l'application
+  peut être recréé, et les données locales avec lui. **Exportez une sauvegarde
+  depuis l'application, et gardez son mot de passe**, avant de vous appuyer sur
+  cette installation.
+
+### Chemin B — confier la signature à Expo (le plus simple, compte Apple requis)
 
 Expo peut gérer le certificat et le profil à votre place. Il vous faudra :
 
@@ -205,7 +231,7 @@ Si vous préférez passer par GitHub, lancez le flux **iOS** en cochant
 l'option `signer_avec_expo`. Les identifiants Apple devront alors être
 enregistrés chez Expo, pas dans GitHub.
 
-### Chemin B — compiler sur un Mac avec Xcode
+### Chemin C — compiler sur un Mac avec Xcode
 
 Si vous avez accès à un Mac, c'est le chemin où vous gardez la maîtrise
 complète de vos certificats :

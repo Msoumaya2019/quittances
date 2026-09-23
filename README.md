@@ -159,8 +159,8 @@ npm run verifier:tout
 ```
 
 Quatre contrôles, dans l'ordre : les flux de travail GitHub — y compris le nom
-de profil de compilation, qui doit exister dans `eas.json` —, le message que le
-flux iOS publie à la fin, les types TypeScript, puis les tests de la couche
+de profil de compilation, qui doit exister dans `eas.json` —, les messages que
+les flux iOS publient à la fin, les types TypeScript, puis les tests de la couche
 domaine. Les tests tournent en quelques secondes sous Node, sans émulateur ni
 appareil, et **chaque commande annonce son propre total** — un chiffre écrit ici
 vieillirait sans prévenir.
@@ -171,7 +171,7 @@ Par honnêteté, la frontière est écrite ici.
 
 **Vérifié avant chaque compilation** — l'installation des dépendances telle que la
 fait le serveur de compilation, l'absence d'erreur de type, les tests du domaine,
-et la validité des deux flux de travail. Un fichier publié est donc toujours un
+et la validité des trois flux de travail. Un fichier publié est donc toujours un
 fichier dont les types et les tests passaient.
 
 **Vérifié à la main, sur les binaires livrés** — la signature et le contenu des
