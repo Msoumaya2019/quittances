@@ -546,8 +546,10 @@ export async function remplacerTitulaires(
  * Supprime un logement et tout ce qui s'y rattache.
  *
  * Les documents PDF restent sur le disque : la suppression de la base ne doit
- * pas faire disparaître des quittances déjà remises au locataire. On prévient
- * donc l'appelant, qui décide de nettoyer les fichiers.
+ * pas faire disparaître des quittances déjà remises au locataire. Le nombre de
+ * documents retirés de l'application est rendu à l'appelant, mais aucun écran
+ * ne s'en sert encore, et les fichiers ne sont pas nettoyés : ils deviennent
+ * orphelins, sans référence en base.
  */
 export async function supprimerLogement(id: string): Promise<{ documentsSupprimes: number }> {
   const ligne = await lireUne<{ total: number }>(

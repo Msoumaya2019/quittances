@@ -72,7 +72,7 @@ export default function EcranSucces() {
       const ouvert = await ouvrirDocument(document.cheminFichier);
       if (!ouvert) {
         setMessagePartage(
-          "Le fichier PDF n'est plus présent sur l'appareil. Vous pouvez le régénérer depuis la carte du logement.",
+          "Le fichier PDF n'est plus présent sur l'appareil. Le document reste enregistré, mais son fichier ne peut plus être ouvert. Si vous l'aviez partagé, vous le retrouverez là où vous l'avez enregistré.",
         );
       }
     } catch {
@@ -90,7 +90,7 @@ export default function EcranSucces() {
       const envoye = await partagerDocument(document.cheminFichier, document.numero);
       if (!envoye) {
         setMessagePartage(
-          "Le fichier PDF n'est plus présent sur l'appareil. Vous pouvez le régénérer depuis la carte du logement.",
+          "Le fichier PDF n'est plus présent sur l'appareil. Le document reste enregistré, mais son fichier ne peut plus être ouvert. Si vous l'aviez partagé, vous le retrouverez là où vous l'avez enregistré.",
         );
       }
     } catch (e) {

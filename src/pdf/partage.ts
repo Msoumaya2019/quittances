@@ -38,8 +38,10 @@ export async function documentExiste(chemin: string): Promise<boolean> {
 
 /**
  * Ouvre la feuille de partage pour un PDF.
- * Renvoie `false` si le fichier a disparu, pour que l'écran puisse proposer de
- * régénérer le document plutôt que d'afficher une erreur technique.
+ * Renvoie `false` si le fichier a disparu, pour que l'écran puisse le dire
+ * plutôt que d'afficher une erreur technique. Le document n'est pas régénéré :
+ * une quittance émise reste celle qui a été émise, et son fichier manquant ne
+ * se reconstitue pas — l'écran ne doit donc pas promettre le contraire.
  */
 export async function partagerDocument(chemin: string, titre?: string): Promise<boolean> {
   if (!(await documentExiste(chemin))) return false;
