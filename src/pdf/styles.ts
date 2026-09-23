@@ -72,7 +72,7 @@ export const STYLES_BASE = `
   .page {
     width: 210mm;
     min-height: 285mm;
-    padding: 14mm 18mm 12mm 18mm;
+    padding: 10mm 18mm 8mm 18mm;
     display: flex;
     flex-direction: column;
   }
@@ -166,7 +166,7 @@ export const STYLES_BASE = `
   table.montants {
     width: 100%;
     border-collapse: collapse;
-    margin: 5mm 0;
+    margin: 3mm 0;
   }
 
   table.montants th {
@@ -175,7 +175,7 @@ export const STYLES_BASE = `
     text-transform: uppercase;
     letter-spacing: 0.6pt;
     color: #777777;
-    padding: 0 0 2mm 0;
+    padding: 0 0 1.5mm 0;
     border-bottom: 1px solid #DDDDDD;
   }
 
@@ -185,7 +185,7 @@ export const STYLES_BASE = `
   }
 
   table.montants td {
-    padding: 2.5mm 0;
+    padding: 2mm 0;
     border-bottom: 1px solid #EEEEEE;
   }
 
@@ -194,7 +194,21 @@ export const STYLES_BASE = `
     font-weight: 700;
     border-bottom: none;
     border-top: 2px solid #1A1A1A;
-    padding-top: 3mm;
+    padding-top: 2.5mm;
+  }
+
+  /*
+   * Le detail des encaissements coule dans un paragraphe, et c'est une
+   * exigence de tenue en page : une ligne par encaissement pesait 6,28 mm, et
+   * la quittance passait sur une seconde feuille des le huitieme. Les entrees
+   * sont donc en ligne, separees par un point-virgule, et le paragraphe se
+   * replie de lui-meme. Le texte imprime ne change pas.
+   */
+  .detail-paiements {
+    margin-top: 2mm;
+    font-size: 10pt;
+    color: #333333;
+    line-height: 1.5;
   }
 
   .detail-ligne {
@@ -205,11 +219,11 @@ export const STYLES_BASE = `
   /* Bloc de reconnaissance ---------------------------------------------- */
 
   .reconnaissance {
-    margin: 6mm 0;
-    padding: 5mm;
+    margin: 3mm 0;
+    padding: 3mm;
     border-radius: 3mm;
     font-size: 11pt;
-    line-height: 1.7;
+    line-height: 1.6;
   }
 
   .avertissement {
@@ -224,7 +238,7 @@ export const STYLES_BASE = `
 
   .pied {
     margin-top: auto;
-    padding-top: 6mm;
+    padding-top: 4mm;
     border-top: 1px solid #DDDDDD;
     font-size: 8.5pt;
     color: #777777;
@@ -268,10 +282,13 @@ export const STYLES_BASE = `
 
   /* Éléments de liste --------------------------------------------------- */
 
+  /* En ligne, sans marge : c'est le paragraphe qui decide ou couper. */
   .ligne-paiement {
-    font-size: 10pt;
     color: #333333;
-    margin: 1mm 0;
+  }
+
+  .separateur-paiement {
+    color: #999999;
   }
 `;
 

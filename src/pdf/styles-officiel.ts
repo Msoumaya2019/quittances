@@ -67,9 +67,31 @@ export const STYLES_OFFICIEL = `
 
   /* La feuille : deux volets empilés, à découper. ----------------------- */
 
+  /*
+   * La feuille est mise a l'echelle, et c'est une exigence d'impression.
+   *
+   * Mesure du 23 septembre 2026, en cherchant l'encre sur le rendu : la feuille
+   * occupait le papier de bord a bord — 0,00 mm a gauche, 0,00 mm a droite,
+   * 0,00 mm en bas, et 2 mm une fois le talon rentre, parce que le cadre du
+   * tableau s'arrete la. Or une imprimante A4 ne sait pas imprimer les derniers
+   * millimetres : le cadre, et le texte qui s'en approche, se coupent.
+   *
+   * Reduire les largeurs ne marcherait pas : plusieurs blocs sont en
+   * millimetres fixes (colonne de designation, retraits des mentions), et les
+   * retrecir les ferait se chevaucher ou deborder. La mise a l'echelle, elle,
+   * insere tous les blocs ensemble et garde exactement leurs proportions.
+   *
+   * 0,93 laisse environ 7,5 mm a gauche et a droite, 10,6 mm en haut et en bas.
+   * Beaucoup d'imprimantes ne savent pas imprimer les 6,35 mm du bord : a 0,94
+   * la marge mesuree tombait a 6,00 mm, juste en dessous. La hauteur de mise en
+   * page reste 297 mm : la pagination ne change pas, seul l'aspect est reduit,
+   * et le document continue de tenir sur une seule feuille.
+   */
   .feuille {
     width: 210mm;
     height: 297mm;
+    transform: scale(0.93);
+    transform-origin: center center;
     display: flex;
     flex-direction: column;
     overflow: hidden;

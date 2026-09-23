@@ -165,7 +165,24 @@ function tableauMontants(contenu: ContenuDocument): string {
   `;
 }
 
-/** Détail des encaissements, imprimé après le tableau. */
+/**
+ * Détail des encaissements, imprimé après le tableau.
+ *
+ * Les encaissements **coulent** dans un même paragraphe au lieu d'occuper
+ * chacun sa ligne. Une ligne par encaissement coûtait 6,28 mm — mesuré le
+ * 23 septembre 2026 par `.verif/mesurer-debordement.py` — alors que la part
+ * fixe du document en pèse déjà 245 : dès le huitième encaissement, la
+ * quittance passait sur une seconde feuille, et une impression coupait le
+ * document en deux. Aucun resserrement de marge ne pouvait le corriger, la
+ * place manquant étant celle des lignes elles-mêmes.
+ *
+ * Le texte imprimé est **le même** : chaque date garde ses propres modes, dans
+ * le même ordre. Seul le retour à la ligne disparaît, et le paragraphe se
+ * replie de lui-même. La garde qui vérifie l'appariement lit désormais le
+ * document en continu plutôt que ligne à ligne — voir
+ * `.verif/eprouver-paiements.py` — et l'assertion n'est pas plus faible : elle
+ * exige la suite exacte, mot pour mot.
+ */
 function detailPaiements(contenu: ContenuDocument): string {
   if (contenu.paiements.length === 0) return '';
 
@@ -175,16 +192,13 @@ function detailPaiements(contenu: ContenuDocument): string {
     .map((paiement) => {
       const modes = paiement.modes.map((m) => echapper(m)).join(', ');
       const suffixe = modes.length > 0 ? ` — ${modes}` : '';
-      return `<div class="ligne-paiement">Reçu le ${echapper(paiement.date)}${suffixe}</div>`;
+      return `<span class="ligne-paiement">Reçu le ${echapper(paiement.date)}${suffixe}</span>`;
     })
-    .join('');
+    .join('<span class="separateur-paiement"> ; </span>');
 
   return `
-    <div>
-      <div class="detail-ligne" style="margin-bottom: 1.5mm;">
-        Date${contenu.paiements.length > 1 ? 's' : ''} de paiement
-      </div>
-      ${lignes}
+    <div class="detail-paiements">
+      <span class="detail-ligne">Date${contenu.paiements.length > 1 ? 's' : ''} de paiement : </span>${lignes}
     </div>
   `;
 }
@@ -347,13 +361,20 @@ export function rendreModeleModerne(contenu: ContenuDocument): string {
 <style>
 ${STYLES_BASE}
 
-  /* Variante moderne : bandeau de couleur, blocs arrondis, plus d'air. */
+  /*
+   * Variante moderne : bandeau de couleur, blocs arrondis, plus d'air.
+   *
+   * Le bandeau pesait 47,41 mm — mesure du 23 septembre 2026 — et c'est lui
+   * qui faisait passer la quittance sur une seconde feuille des le seizieme
+   * encaissement, alors que le modele classique tenait les vingt. Un titre de
+   * 18 pt reste un titre : c'est le blanc autour qui cede, pas la lisibilite.
+   */
   .bandeau {
     background-color: ${accent};
     color: #FFFFFF;
     border-radius: 4mm;
-    padding: 8mm;
-    margin-bottom: 8mm;
+    padding: 3mm;
+    margin-bottom: 3mm;
   }
 
   .bandeau .etiquette-type {
@@ -365,9 +386,9 @@ ${STYLES_BASE}
   }
 
   .bandeau h1 {
-    font-size: 22pt;
+    font-size: 18pt;
     font-weight: 700;
-    margin: 0 0 3mm 0;
+    margin: 0 0 2mm 0;
     letter-spacing: -0.3pt;
   }
 
@@ -380,14 +401,14 @@ ${STYLES_BASE}
   .bandeau .numero {
     font-size: 9pt;
     opacity: 0.8;
-    margin-top: 4mm;
+    margin-top: 2mm;
   }
 
   .carte-info {
     background-color: #F7F9F8;
     border-radius: 3mm;
-    padding: 5mm;
-    margin-bottom: 5mm;
+    padding: 2.5mm;
+    margin-bottom: 2mm;
   }
 
   .carte-info .etiquette {
@@ -406,8 +427,8 @@ ${STYLES_BASE}
   .montant-mis-en-avant {
     background-color: ${COULEURS_DOCUMENT.principaleTresClaire};
     border-radius: 3mm;
-    padding: 6mm;
-    margin: 6mm 0;
+    padding: 3mm;
+    margin: 3mm 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -419,7 +440,7 @@ ${STYLES_BASE}
   }
 
   .montant-mis-en-avant .montant {
-    font-size: 20pt;
+    font-size: 17pt;
     font-weight: 700;
     color: ${COULEURS_DOCUMENT.principaleFonce};
   }
@@ -431,8 +452,8 @@ ${STYLES_BASE}
 
   .deux-colonnes {
     display: flex;
-    gap: 5mm;
-    margin-bottom: 5mm;
+    gap: 4mm;
+    margin-bottom: 3mm;
   }
 
   .deux-colonnes > * {
