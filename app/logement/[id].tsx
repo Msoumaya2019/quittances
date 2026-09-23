@@ -364,6 +364,23 @@ export default function EcranLogement() {
               ) : null}
             </Carte>
 
+            {/* Le bien lui-même : adresse, référence, jour d'échéance, loyer.
+                L'écran de modification existait, mais rien n'y menait : le
+                bailleur ne pouvait corriger une adresse qu'en supprimant le
+                logement, donc en perdant son historique. */}
+            <View style={styles.actions}>
+              <Bouton
+                libelle="Modifier le logement"
+                variante="secondaire"
+                onPress={() =>
+                  router.push({
+                    pathname: '/logement/[id]/modifier',
+                    params: { id: logement.id },
+                  })
+                }
+              />
+            </View>
+
             {/* Historique des loyers */}
             {periodes.length > 0 ? (
               <Carte>
