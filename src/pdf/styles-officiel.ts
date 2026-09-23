@@ -12,6 +12,7 @@
  *   retrait de l'émetteur        12,87 mm   (11 mm après la marge de 2 mm)
  *   bandeau d'en-tête            48,91 → 53,93 mm   (5 mm), fond #32558D
  *   hauteur d'une ligne          6,2 mm
+ *   table de la quittance        33 mm             (plancher, deux lignes)
  *   ligne de total               86,98 → 95,70 mm   (8,7 mm)
  *   onglet de total              44,68 → 65,48 mm   (20,8 mm), coins bas arrondis
  *   bande « DOCUMENT ORIGINAL »  0 → 5,5 mm, fond #DCE9F2
@@ -20,10 +21,11 @@
  *
  * Le modèle papier porte **trois** volets : quittance, avis d'échéance, talon.
  * La feuille produite ici en porte deux : le document demandé, puis le talon.
- * La raison est dans `rendreModeleOfficiel`. Les deux volets se partagent donc
- * la hauteur que trois occupaient : le volet s'étire, et son tableau avec lui —
- * ce que le modèle fait déjà, sa seconde table étant bien plus haute que la
- * première sans porter plus de lignes.
+ * La raison est dans `rendreModeleOfficiel`. Le volet du document occupe donc
+ * la hauteur que deux volets occupaient : son contenu se groupe en haut, comme
+ * sur le modèle, et le blanc se trouve au bas du volet, avant le filet de
+ * découpe. La table, elle, épouse son contenu — mesuré sur le modèle, celle de
+ * la quittance fait 33 mm pour deux lignes.
  *
  * Le rendu est fait par la visionneuse du système : on reste sur des techniques
  * sûres — pas de police téléchargée, pas de ressource distante, pas de requête
@@ -91,7 +93,12 @@ export const STYLES_OFFICIEL = `
     text-transform: uppercase;
   }
 
-  .volet-corps { flex: 1 1 auto; display: flex; width: 100%; }
+  /* Le corps ne s'étire pas : il prend la hauteur de son contenu, et les
+     mentions suivent le total de près. C'est la disposition du modèle, dont le
+     volet de quittance fait une centaine de millimètres : le blanc se trouve
+     alors au bas du volet, avant le filet de découpe, et non au milieu de la
+     feuille. Mesuré sur le modèle : mentions à 91 mm, total à 84 mm. */
+  .volet-corps { flex: 0 0 auto; display: flex; width: 100%; }
 
   /* Colonne de gauche : l'émetteur, le tableau, la ligne de total. */
   .volet-gauche {
@@ -125,13 +132,18 @@ export const STYLES_OFFICIEL = `
 
   /* Tableau ------------------------------------------------------------- */
 
-  /* Le cadre prend la hauteur libre du volet, dans une limite qui garde la
-     table proche de celle du modèle — 33 mm pour la quittance, 52 mm pour
-     l'avis. Les lignes restent en haut, le dégradé remplit le reste. */
+  /* Le cadre épouse son contenu, avec un plancher qui garde la table proche de
+     celle du modèle — 33 mm. Au-delà, il grandit avec ses lignes : une
+     quittance qui porte plusieurs lignes de loyer ne doit rien perdre, d'où
+     l'absence de plafond, qui rognerait une ligne en silence.
+
+     Mesuré avant correction : le cadre s'étirait à 118 mm pour deux lignes,
+     dont une centaine de millimètres de dégradé vide au milieu de la feuille.
+     Le commentaire d'alors annonçait déjà 33 mm : le code ne faisait pas ce
+     qu'il disait. */
   .cadre-tableau {
-    flex: 1 1 auto;
-    min-height: 38mm;
-    max-height: 118mm;
+    flex: 0 0 auto;
+    min-height: 33mm;
     width: 96mm;
     display: flex;
     flex-direction: column;
@@ -250,8 +262,8 @@ export const STYLES_OFFICIEL = `
 
   /* Sur le modèle, les deux mentions sont à la même hauteur et ferment le
      volet : la gauche commence à 10,9 mm, la droite à 107,5 mm. Elles vivent
-     donc dans une rangée commune, poussée au bas du volet. */
-  .volet-mentions { display: flex; margin-top: auto; padding-top: 6mm; }
+     donc dans une rangée commune, qui suit le corps du volet. */
+  .volet-mentions { display: flex; padding-top: 6mm; }
   .volet-mentions .mention-gauche { flex: 0 0 96mm; width: 96mm; padding-left: 9mm; }
   .volet-mentions .mention-droite { flex: 1 1 auto; padding-left: 9.5mm; }
 

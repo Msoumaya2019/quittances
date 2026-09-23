@@ -40,6 +40,7 @@ import {
 import { MODES_PAIEMENT, nomPourDocument, type Document, type TypeDocument } from '../domain/types';
 import { adresseEnLignes } from '../domain/types';
 import { rendreHtml, type ContenuDocument } from './models';
+import { PAGE_IMPRESSION } from './page';
 
 export class ErreurEmission extends Error {
   constructor(message: string) {
@@ -208,7 +209,17 @@ export async function emettreDocument(demande: DemandeEmission): Promise<Documen
   // --- Impression du PDF -------------------------------------------------
   let uriTemporaire: string;
   try {
-    const resultat = await Print.printToFileAsync({ html, base64: false });
+    // Le format de page doit être demandé explicitement : sans ces deux
+    // valeurs, `expo-print` prend le format US Letter — 279,4 mm de haut — et
+    // la feuille de 297 mm se scinde en deux, le talon à découper partant seul
+    // sur la seconde page. Voir `page.ts` pour la mesure et le choix des
+    // valeurs.
+    const resultat = await Print.printToFileAsync({
+      html,
+      base64: false,
+      width: PAGE_IMPRESSION.largeurPt,
+      height: PAGE_IMPRESSION.hauteurPt,
+    });
     uriTemporaire = resultat.uri;
   } catch (erreur) {
     throw new ErreurEmission(
