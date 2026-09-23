@@ -106,15 +106,21 @@ jobs:
                   process.stdout.write(url);
                 });
               ")
-          echo "APK : $adresse"
-          curl --fail --location "$adresse" --output app-release.apk
-          ls -lh app-release.apk
+          echo "Fichier : $adresse"
+          # Ne jamais forcer l'extension : elle est lue sur l'adresse fournie
+          # par Expo, pour que le nom du fichier ne mente pas sur son contenu.
+          nom="${adresse##*/}"
+          extension="${nom#*.}"
+          fichier="app-release.${extension}"
+          curl --fail --location "$adresse" --output "$fichier"
+          ls -lh "$fichier"
+          echo "FICHIER=${fichier}" >> "$GITHUB_ENV"
 
       - name: Publier l'APK
         uses: actions/upload-artifact@v4
         with:
           name: apk-quittances
-          path: app-release.apk
+          path: ${{ env.FICHIER }}
           retention-days: 90
           if-no-files-found: error
 
@@ -131,11 +137,11 @@ jobs:
           set -euo pipefail
           etiquette="${GITHUB_REF_NAME}"
           if gh release view "$etiquette" >/dev/null 2>&1; then
-            gh release upload "$etiquette" app-release.apk --clobber
-          elif gh release create "$etiquette" app-release.apk --title "Quittances ${etiquette}" --generate-notes; then
+            gh release upload "$etiquette" "$FICHIER" --clobber
+          elif gh release create "$etiquette" "$FICHIER" --title "Quittances ${etiquette}" --generate-notes; then
             echo "Publication ${etiquette} créée."
           else
             # Les deux flux se déclenchent sur la même étiquette : la
             # publication peut avoir été créée par l'autre entre-temps.
-            gh release upload "$etiquette" app-release.apk --clobber
+            gh release upload "$etiquette" "$FICHIER" --clobber
           fi

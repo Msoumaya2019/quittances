@@ -99,7 +99,7 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: eas build --platform ios --profile apercu-non-signe --non-interactive --wait
 
-      - name: Récupérer l'IPA
+      - name: Récupérer le fichier produit
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
@@ -127,22 +127,34 @@ jobs:
                   process.stdout.write(url);
                 });
               ")
-          echo "IPA : $adresse"
-          curl --fail --location "$adresse" --output app-release.ipa
-          ls -lh app-release.ipa
+          echo "Fichier : $adresse"
+          # Ne JAMAIS forcer l'extension. Sans signature, Expo ne peut pas
+          # produire d'IPA — un IPA exige une signature — et livre une archive
+          # tar.gz de Quittances.app. La nommer « .ipa » ferait croire à un
+          # fichier installable, et les outils de re-signature refuseraient une
+          # archive qu'ils ne savent pas ouvrir.
+          nom="${adresse##*/}"
+          extension="${nom#*.}"
+          fichier="app-release.${extension}"
+          curl --fail --location "$adresse" --output "$fichier"
+          ls -lh "$fichier"
+          echo "extension reelle : ${extension}"
+          # Le nom du fichier est transmis aux étapes suivantes : elles ne
+          # peuvent donc pas se tromper d'extension à leur tour.
+          echo "FICHIER=${fichier}" >> "$GITHUB_ENV"
 
       - name: Publier l'IPA
         uses: actions/upload-artifact@v4
         with:
           name: ipa-quittances
-          path: app-release.ipa
+          path: ${{ env.FICHIER }}
           retention-days: 90
           if-no-files-found: error
 
-      - name: Attacher l'IPA à la version
-        # Seulement pour une étiquette `v*`, comme pour l'APK. Rappel : un IPA
-        # non signé ne s'installe pas sur un iPhone — l'attacher sert à
-        # conserver une trace, pas à le distribuer.
+      - name: Attacher le fichier à la version
+        # Seulement pour une étiquette `v*`, comme pour l'APK. Rappel : sans
+        # signature il n'y a pas d'IPA, seulement une archive — l'attacher sert
+        # à conserver une trace, pas à distribuer.
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -150,26 +162,31 @@ jobs:
           set -euo pipefail
           etiquette="${GITHUB_REF_NAME}"
           if gh release view "$etiquette" >/dev/null 2>&1; then
-            gh release upload "$etiquette" app-release.ipa --clobber
-          elif gh release create "$etiquette" app-release.ipa --title "Quittances ${etiquette}" --generate-notes; then
+            gh release upload "$etiquette" "$FICHIER" --clobber
+          elif gh release create "$etiquette" "$FICHIER" --title "Quittances ${etiquette}" --generate-notes; then
             echo "Publication ${etiquette} créée."
           else
             # Les deux flux se déclenchent sur la même étiquette : la
             # publication peut avoir été créée par l'autre entre-temps.
-            gh release upload "$etiquette" app-release.ipa --clobber
+            gh release upload "$etiquette" "$FICHIER" --clobber
           fi
 
       - name: Rappeler ce que ce fichier permet
         run: |
           {
-            echo "## IPA produit"
+            echo "## Fichier iOS produit"
+            echo ""
+            echo "Fichier attaché : ${FICHIER}"
             echo ""
             if [ "${{ inputs.signer_avec_expo }}" = "true" ]; then
               echo "Cette compilation a été signée par Expo : elle peut être installée"
               echo "sur un iPhone via l'adresse de téléchargement fournie par Expo."
             else
-              echo "Cette compilation **n'est pas signée** : iOS refusera de l'installer"
-              echo "directement sur un iPhone. Elle sert à archiver, à installer sur un"
-              echo "simulateur, ou à être signée ensuite avec vos propres certificats."
+              echo "Cette compilation **n'est pas signée**. Expo ne peut alors pas produire"
+              echo "d'IPA — un IPA exige une signature — et livre une **archive tar.gz** de"
+              echo "Quittances.app. Elle **ne s'installe pas** sur un iPhone en l'état."
+              echo ""
+              echo "Elle sert à archiver, à installer sur un simulateur, ou à être signée"
+              echo "ensuite avec vos propres certificats."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
