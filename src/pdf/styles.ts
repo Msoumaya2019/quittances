@@ -44,10 +44,35 @@ export const STYLES_BASE = `
     print-color-adjust: exact;
   }
 
+  /*
+   * Les blancs de cette feuille sont plus courts que ceux du bailleur, et
+   * c'est une correction, pas un choix esthetique.
+   *
+   * Mesure du 23 septembre 2026, sur une quittance d'UNE seule ligne de
+   * paiement : les blocs de ce modele pesent 268,46 mm, et la feuille demandee
+   * par l'application en offre 297,39. Avec 20 mm en haut, 16 mm en bas et des
+   * marges de bloc plus larges, la boite atteignait 304,46 mm — sept
+   * millimetres de trop, donc une SECONDE feuille et une coupure a
+   * l'impression. Le defaut ne dependait pas du contenu : il apparaissait des
+   * la premiere ligne.
+   *
+   * La hauteur minimale, elle, etait posee a 297 mm : sur une feuille de
+   * 297,39, il ne restait que 0,39 mm — un millimetre et demi de pixel. Comme
+   * le contenu ne pese que 279,46 mm, cette contrainte n'ajoutait pas de place
+   * utile : elle consommait la marge disponible, et faisait dependre la tenue
+   * en page d'un arrondi du moteur d'impression.
+   *
+   * A 285 mm, le pied reste colle au bas de la feuille pour un document court,
+   * et il reste 12,39 mm de marge. Au-dela, c'est le contenu qui decide.
+   *
+   * Forcer une hauteur fixe de 297 mm ramenerait aussi a une page, mais en
+   * rognant les derniers millimetres — exactement la coupure qu'on veut
+   * eviter. Le blanc se reduit donc la ou il ne porte rien.
+   */
   .page {
     width: 210mm;
-    min-height: 297mm;
-    padding: 20mm 18mm 16mm 18mm;
+    min-height: 285mm;
+    padding: 14mm 18mm 12mm 18mm;
     display: flex;
     flex-direction: column;
   }
@@ -59,7 +84,7 @@ export const STYLES_BASE = `
     justify-content: space-between;
     align-items: flex-start;
     gap: 12mm;
-    margin-bottom: 10mm;
+    margin-bottom: 8mm;
   }
 
   .emetteur .nom {
@@ -90,7 +115,7 @@ export const STYLES_BASE = `
 
   .titre-document {
     text-align: center;
-    margin: 4mm 0 8mm 0;
+    margin: 3mm 0 6mm 0;
   }
 
   .titre-document h1 {
@@ -112,7 +137,7 @@ export const STYLES_BASE = `
   .parties {
     display: flex;
     gap: 10mm;
-    margin-bottom: 8mm;
+    margin-bottom: 6mm;
   }
 
   .partie {
@@ -141,7 +166,7 @@ export const STYLES_BASE = `
   table.montants {
     width: 100%;
     border-collapse: collapse;
-    margin: 6mm 0;
+    margin: 5mm 0;
   }
 
   table.montants th {
@@ -180,8 +205,8 @@ export const STYLES_BASE = `
   /* Bloc de reconnaissance ---------------------------------------------- */
 
   .reconnaissance {
-    margin: 8mm 0;
-    padding: 6mm;
+    margin: 6mm 0;
+    padding: 5mm;
     border-radius: 3mm;
     font-size: 11pt;
     line-height: 1.7;
