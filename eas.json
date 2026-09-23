@@ -21,7 +21,7 @@
         "simulator": false
       }
     },
-    "apercu-non-signe": {
+    "apercu-simulateur": {
       "distribution": "internal",
       "channel": "apercu",
       "android": {

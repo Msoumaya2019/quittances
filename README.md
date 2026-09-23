@@ -71,12 +71,32 @@ PLUS si vous voulez les conserver.
 
 ### Et sur iPhone ?
 
-Pas par ce chemin. Un fichier IPA non signé **ne s'installe pas** sur un iPhone :
-Apple exige une signature liée à un compte développeur. Le flux de travail
-`ios-ipa.yml` existe et produit bien un IPA, mais pour l'installer il faut soit
-un compte Apple Developer (99 $/an) pour une distribution ad hoc, soit passer par
-l'App Store, soit compiler depuis un Mac avec un identifiant Apple gratuit pour
-un usage personnel limité dans le temps.
+Pas par ce chemin, et ce n'est pas un oubli : **aucun fichier iOS obtenable ici ne
+s'installe sur un iPhone.**
+
+La raison est plus précise qu'on ne le croit d'ordinaire. Ce dépôt ne contient
+aucun identifiant Apple. Sans identifiant Apple, Expo n'a **rien à signer** — et
+un IPA est par définition une archive *signée*. Le flux `ios-ipa.yml` compile
+donc pour le **simulateur**, et livre une archive `tar.gz` contenant
+`Quittances.app`. Mesuré sur le fichier réellement produit : son `Info.plist`
+porte `DTPlatformName = iphonesimulator`, et ses deux tranches Mach-O déclarent
+`platform = 7` (iOSSimulator).
+
+Conséquence, et c'est le point qui trompe : ce fichier ne s'installe sur **aucun
+iPhone**, ni maintenant, **ni après signature**. Une application compilée pour le
+simulateur reste une application de simulateur, même signée. Il s'installe dans
+le simulateur iOS d'un Mac (`xcrun simctl install`), et sert à archiver ou à
+vérifier que le projet iOS compile.
+
+Pour installer réellement sur un iPhone, il faut donc votre compte Apple, et
+l'un de ces deux chemins :
+
+- **faire signer par Expo** — cochez `signer_avec_expo` au lancement du flux, ou
+  lancez `npx eas-cli build --platform ios --profile apercu`. Expo gère le
+  certificat et le profil à votre place. Sans compte Apple Developer (99 $/an),
+  l'application cesse de fonctionner au bout de sept jours ;
+- **compiler sur un Mac avec Xcode** — `npx expo run:ios --device`. Vous gardez
+  la maîtrise complète de vos certificats, et rien ne transite par Expo.
 
 ## Compiler vous-même
 
@@ -104,19 +124,24 @@ npm install --legacy-peer-deps
 npm run verifier:tout
 ```
 
-Trois contrôles, dans l'ordre : les flux de travail GitHub (62 vérifications),
-les types TypeScript, puis **139 tests sur la couche domaine**. Les tests
-tournent en quelques secondes sous Node, sans émulateur ni appareil.
+Trois contrôles, dans l'ordre : les flux de travail GitHub, les types TypeScript,
+puis les tests de la couche domaine. Les tests tournent en quelques secondes
+sous Node, sans émulateur ni appareil, et **chaque commande annonce son propre
+total** — un chiffre écrit ici vieillirait sans prévenir.
 
 ## Ce qui est vérifié, et ce qui reste à éprouver
 
 Par honnêteté, la frontière est écrite ici.
 
-**Vérifié automatiquement** — l'installation des dépendances telle que la fait le
-serveur de compilation, l'absence d'erreur de type, les 139 tests du domaine,
-la validité des deux flux de travail, la signature et le contenu de l'APK
-(paquet d'application présent, aucune permission inutile, non déverrouillable),
-et l'absence de tout secret dans le dépôt et dans son historique.
+**Vérifié avant chaque compilation** — l'installation des dépendances telle que la
+fait le serveur de compilation, l'absence d'erreur de type, les tests du domaine,
+et la validité des deux flux de travail. Un fichier publié est donc toujours un
+fichier dont les types et les tests passaient.
+
+**Vérifié à la main, sur les binaires livrés** — la signature et le contenu des
+fichiers : paquet d'application réellement présent, aucune permission inutile,
+`debuggable` absent, identifiant et étiquette conformes. Et l'absence de tout
+secret dans le dépôt comme dans son historique.
 
 **Pas encore éprouvé** — l'exécution de l'application sur un téléphone réel, et
 le rendu visuel des écrans. Aucun appareil n'était disponible au moment du
@@ -130,8 +155,10 @@ logement, enregistrer un paiement, générer une quittance, et vérifier le PDF.
   fichier suivi ni dans l'historique Git.
 - **Aucun certificat, aucun mot de passe de signature.** L'APK est signé par le
   service Expo, avec une clé qu'Expo détient pour vous.
-- Les flux de travail déclarent des permissions minimales (`contents: read`) et
-  refusent de produire une application dont les types ou les tests échouent.
+- Les flux de travail refusent de produire une application dont les types ou les
+  tests échouent. Le seul droit qu'ils demandent au jeton fourni par GitHub est
+  `contents: write`, pour attacher un fichier à la publication d'une version.
+  Le jeton Expo, lui, n'a aucun droit sur ce dépôt.
 
 ## Architecture
 

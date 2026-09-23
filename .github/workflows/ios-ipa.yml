@@ -1,33 +1,44 @@
-# Compilation d'un IPA iOS, sans certificat ni profil dans ce dépôt.
+# Compilation iOS, sans certificat ni profil dans ce dépôt.
 #
 # À lire avant de lancer quoi que ce soit, car c'est ici que les attentes
-# doivent être justes :
+# doivent être justes.
 #
-#  - Un IPA **non signé ne s'installe pas** sur un iPhone en usage normal.
-#    iOS refuse d'exécuter une application dont la signature ne correspond pas
-#    à un profil autorisé par Apple. Le fichier produit ici sert donc à
-#    archiver la compilation, à l'installer sur un simulateur, ou à la signer
-#    ensuite — pas à être posé sur un téléphone tel quel.
+#  - Ce dépôt ne contient aucun identifiant Apple. Sans identifiant Apple, Expo
+#    ne peut pas produire d'application pour un appareil : il n'y a rien à
+#    signer, et un IPA est par définition une archive *signée*. Le chemin sans
+#    signature compile donc pour le **simulateur** (profil `apercu-simulateur`,
+#    `ios.simulator: true`) et livre une archive `tar.gz` de `Quittances.app`.
+#
+#  - Mesuré sur le fichier livré, et non supposé : son `Info.plist` porte
+#    `DTPlatformName = iphonesimulator`, et les deux tranches Mach-O
+#    (x86_64, arm64) déclarent `platform = 7`, c'est-à-dire iOSSimulator.
+#
+#  - Conséquence, et c'est le point qu'on comprend mal : ce fichier ne
+#    s'installe sur **aucun iPhone**, ni maintenant, ni après signature. Une
+#    application compilée pour le simulateur reste une application de
+#    simulateur, même signée. Il s'installe dans le simulateur iOS d'un Mac
+#    (`xcrun simctl install`), et sert à archiver ou à vérifier que le projet
+#    iOS compile.
 #
 #  - Pour installer sur un vrai iPhone, deux chemins existent, tous deux
 #    demandant votre compte Apple :
 #      1. faire signer la compilation par Expo, qui gère le certificat et le
 #         profil à votre place (nécessite un compte Apple Developer pour une
 #         durée de vie au-delà de sept jours) ;
-#      2. compiler hors ligne sur un Mac avec Xcode, où vous êtes déjà
-#         propriétaire de vos certificats.
+#      2. compiler sur un Mac avec Xcode, où vous êtes déjà propriétaire de
+#         vos certificats.
 #
 #  - Aucun certificat, aucun mot de passe et aucun profil de signature ne doit
 #    être déposé dans ce dépôt public. Si vous choisissez la signature par
 #    Expo, les éléments sensibles restent dans les secrets GitHub et chez Expo.
 
-name: IPA iOS
+name: iOS
 
 on:
   workflow_dispatch:
     inputs:
       signer_avec_expo:
-        description: 'Confier la signature à Expo (nécessite un compte Apple déclaré chez Expo)'
+        description: 'Faire signer par Expo (compte Apple requis). Décoché : compilation pour le simulateur, non signée.'
         type: boolean
         default: false
 
@@ -35,8 +46,8 @@ on:
     tags:
       - 'v*'
 
-# Droits d'écriture, et un seul : `contents: write`, pour attacher l'IPA à la
-# publication d'une version étiquetée. Les identifiants Apple, s'ils servent,
+# Droits d'écriture, et un seul : `contents: write`, pour attacher le fichier à
+# la publication d'une version étiquetée. Les identifiants Apple, s'ils servent,
 # sont enregistrés chez Expo et dans les secrets GitHub — jamais utilisés pour
 # écrire dans ce dépôt.
 permissions:
@@ -44,7 +55,7 @@ permissions:
 
 jobs:
   construire-ipa:
-    name: Construire l'IPA
+    name: Construire le fichier iOS
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -91,13 +102,16 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: eas build --platform ios --profile apercu --non-interactive --wait
 
-      # Chemin 2 : compilation sans signature, pour archive ou simulateur.
+      # Chemin 2 : compilation pour le simulateur, sans signature. Ce n'est pas
+      # un pis-aller choisi par confort : sans identifiant Apple, Expo n'a rien
+      # à signer, donc aucune compilation pour appareil n'est possible. Le seul
+      # fichier iOS obtenable ici est une archive de simulateur.
       # Une compilation iOS exige un Mac ; Expo en fournit un.
-      - name: Compilation iOS sans signature
+      - name: Compilation iOS pour le simulateur
         if: ${{ !inputs.signer_avec_expo }}
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform ios --profile apercu-non-signe --non-interactive --wait
+        run: eas build --platform ios --profile apercu-simulateur --non-interactive --wait
 
       - name: Récupérer le fichier produit
         env:
@@ -116,7 +130,7 @@ jobs:
                 process.stdin.on('end', () => {
                   const donnees = JSON.parse(brut);
                   if (!Array.isArray(donnees) || donnees.length === 0) {
-                    console.error('Aucun IPA terminé trouvé.');
+                    console.error('Aucune compilation iOS terminée trouvée.');
                     process.exit(1);
                   }
                   const url = donnees[0].artifacts && donnees[0].artifacts.buildUrl;
@@ -128,11 +142,11 @@ jobs:
                 });
               ")
           echo "Fichier : $adresse"
-          # Ne JAMAIS forcer l'extension. Sans signature, Expo ne peut pas
-          # produire d'IPA — un IPA exige une signature — et livre une archive
-          # tar.gz de Quittances.app. La nommer « .ipa » ferait croire à un
-          # fichier installable, et les outils de re-signature refuseraient une
-          # archive qu'ils ne savent pas ouvrir.
+          # Ne JAMAIS forcer l'extension. Sans signature, Expo livre une archive
+          # tar.gz de Quittances.app, compilée pour le simulateur. La nommer
+          # « .ipa » ferait croire à un fichier installable : un IPA est une
+          # archive *signée*, et une compilation de simulateur ne s'installe sur
+          # aucun iPhone, même signée. Le nom doit dire ce que le fichier est.
           nom="${adresse##*/}"
           extension="${nom#*.}"
           fichier="app-release.${extension}"
@@ -143,18 +157,18 @@ jobs:
           # peuvent donc pas se tromper d'extension à leur tour.
           echo "FICHIER=${fichier}" >> "$GITHUB_ENV"
 
-      - name: Publier l'IPA
+      - name: Publier le fichier
         uses: actions/upload-artifact@v4
         with:
-          name: ipa-quittances
+          name: ios-quittances
           path: ${{ env.FICHIER }}
           retention-days: 90
           if-no-files-found: error
 
       - name: Attacher le fichier à la version
         # Seulement pour une étiquette `v*`, comme pour l'APK. Rappel : sans
-        # signature il n'y a pas d'IPA, seulement une archive — l'attacher sert
-        # à conserver une trace, pas à distribuer.
+        # identifiant Apple il n'y a pas d'IPA, seulement une archive de
+        # simulateur — l'attacher sert à conserver une trace, pas à distribuer.
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -182,11 +196,13 @@ jobs:
               echo "Cette compilation a été signée par Expo : elle peut être installée"
               echo "sur un iPhone via l'adresse de téléchargement fournie par Expo."
             else
-              echo "Cette compilation **n'est pas signée**. Expo ne peut alors pas produire"
-              echo "d'IPA — un IPA exige une signature — et livre une **archive tar.gz** de"
-              echo "Quittances.app. Elle **ne s'installe pas** sur un iPhone en l'état."
+              echo "Cette compilation est destinée au **simulateur**, et n'est pas signée."
+              echo "Ce n'est donc pas un IPA — un IPA est une archive signée — mais une"
+              echo "**archive tar.gz** de Quittances.app."
               echo ""
-              echo "Elle sert à archiver, à installer sur un simulateur, ou à être signée"
-              echo "ensuite avec vos propres certificats."
+              echo "Elle ne s'installe sur **aucun iPhone**, ni maintenant, ni après"
+              echo "signature : une application compilée pour le simulateur le reste."
+              echo "Elle s'installe dans le simulateur iOS d'un Mac (\`xcrun simctl install\`),"
+              echo "et sert à archiver ou à vérifier que le projet iOS compile."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

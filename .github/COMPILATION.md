@@ -7,9 +7,10 @@ Deux choses à savoir avant de commencer :
 
 - **Android est simple.** Vous obtiendrez un fichier `.apk` à installer
   directement. Aucun compte payant n'est nécessaire.
-- **iPhone demande un compte Apple.** Un fichier iOS non signé ne peut pas être
-  installé sur un iPhone. Ce n'est pas une limite de ce projet, c'est iOS.
-  Les explications sont plus bas, à la section « Pour un iPhone ».
+- **iPhone demande un compte Apple.** Sans lui, le flux iOS compile pour le
+  simulateur et ne produit **pas** d'IPA : le fichier obtenu ne s'installe sur
+  aucun iPhone. Ce n'est pas une limite de ce projet, c'est iOS. Les
+  explications sont plus bas, à la section « Pour un iPhone ».
 
 ---
 
@@ -157,15 +158,30 @@ hors du magasin Play. Vous pouvez désactiver l'autorisation après l'installati
 
 ## Pour un iPhone
 
-Soyons précis, car c'est le point où l'on perd du temps à tort.
+Soyons précis, car c'est le point où l'on perd du temps à tort — et où l'on
+croit souvent qu'il suffirait de faire signer le fichier.
 
-**Un fichier iOS produit sans signature ne s'installe pas sur un iPhone.** iOS
-vérifie la signature de chaque application avant de l'exécuter, et refuse tout
-ce qui ne correspond pas à un profil autorisé par Apple. Le fichier produit par
-le second chemin de compilation est donc utile pour archiver, ou pour un
-simulateur — pas pour votre téléphone.
+**Ce dépôt ne contient aucun identifiant Apple, et le flux de travail iOS n'en
+demande aucun.** Sans identifiant Apple, Expo n'a rien à signer : un IPA est une
+archive *signée*, donc il n'y a pas d'IPA. Ce qui est produit est une compilation
+pour le **simulateur**, livrée en `tar.gz` contenant `Quittances.app`.
 
-Pour installer réellement sur un iPhone, deux chemins existent :
+Nous avons mesuré ce fichier plutôt que de le supposer. Son `Info.plist` porte
+`DTPlatformName = iphonesimulator`, et ses deux tranches Mach-O (`x86_64`,
+`arm64`) déclarent `platform = 7`, c'est-à-dire iOSSimulator.
+
+La conséquence est plus sévère qu'un simple défaut de signature : **ce fichier ne
+s'installe sur aucun iPhone, ni maintenant, ni après signature.** Une application
+compilée pour le simulateur reste une application de simulateur, même signée. Il
+s'installe dans le simulateur iOS d'un Mac :
+
+```bash
+tar -xzf Quittances-1.0.0-ios-simulateur.tar.gz
+xcrun simctl install booted Quittances.app
+```
+
+Il sert donc à archiver, et à vérifier que le projet iOS compile. Pour un
+téléphone, il faut votre compte Apple, et l'un des deux chemins ci-dessous.
 
 ### Chemin A — confier la signature à Expo (le plus simple)
 
@@ -185,7 +201,7 @@ Expo vous guide : il vous demande vos identifiants Apple, crée le certificat et
 le profil, et produit un lien d'installation. Ce lien s'ouvre sur l'iPhone, et
 l'application s'installe.
 
-Si vous préférez passer par GitHub, lancez le workflow **IPA iOS** en cochant
+Si vous préférez passer par GitHub, lancez le flux **iOS** en cochant
 l'option `signer_avec_expo`. Les identifiants Apple devront alors être
 enregistrés chez Expo, pas dans GitHub.
 

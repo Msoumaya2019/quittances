@@ -9,7 +9,8 @@
  *    quote non fermée, bloc scalaire terminé par une ligne à la colonne 0 ;
  *  - une action non épinglée à une version ;
  *  - un `permissions` absent, ou insuffisant pour ce que le flux fait ;
- *  - `runs-on` absent, `on` absent ou renommé, étape qui ne fait rien.
+ *  - `runs-on` absent, `on` absent ou renommé, étape qui ne fait rien ;
+ *  - un `--profile` qui ne correspond à aucun profil de `eas.json`.
  *
  * PAS attrapé, et il faut le savoir :
  *  - une expansion fautive (`${CHEMIN}` mal orthographié) : `bash -n` analyse
@@ -46,7 +47,26 @@ const FLUX_ATTENDUS = ['android-apk.yml', 'ios-ipa.yml'];
  */
 const COMMANDES_EXIGEANT_ECRITURE = ['gh release create', 'gh release upload'];
 
+/**
+ * Profils de compilation déclarés dans `eas.json`. Lus une fois, et lus
+ * réellement : c'est la seule source de vérité. Un flux qui cite un profil
+ * inexistant ne s'en aperçoit qu'au démarrage de la compilation, une vingtaine
+ * de minutes plus tard — et encore, sur un exécuteur distant.
+ */
+let PROFILS_EAS;
+try {
+  PROFILS_EAS = Object.keys(JSON.parse(readFileSync('eas.json', 'utf8')).build ?? {});
+} catch (e) {
+  console.error(`[eas-illisible] eas.json — ${e.message.split('\n')[0]}`);
+  process.exit(1);
+}
+if (PROFILS_EAS.length === 0) {
+  console.error('[eas-sans-profil] eas.json — aucun profil dans `build`.');
+  process.exit(1);
+}
+
 let verifications = 0;
+let referencesDeProfil = 0;
 const defauts = [];
 
 function verifier(condition, message, marqueur, ou) {
@@ -202,9 +222,30 @@ for (const nom of fichiers) {
           ouEtape,
         );
       }
+
+      // Profil EAS cité : il doit exister dans `eas.json`, à la lettre.
+      for (const reference of script.matchAll(/--profile\s+([A-Za-z0-9._-]+)/g)) {
+        referencesDeProfil += 1;
+        verifier(
+          PROFILS_EAS.includes(reference[1]),
+          `profil EAS inconnu de eas.json : ${reference[1]}` +
+            ` (connus : ${PROFILS_EAS.join(', ')})`,
+          '[profil-eas-inconnu]',
+          ouEtape,
+        );
+      }
     }
   }
 }
+
+// Un contrôle qui ne s'exécute jamais est vert pour de mauvaises raisons :
+// si plus aucun flux ne cite de profil, la boucle ci-dessus n'a rien vérifié.
+verifier(
+  referencesDeProfil > 0,
+  'aucun flux ne cite de profil EAS : le contrôle des profils ne vérifie rien',
+  '[controle-vacue]',
+  `ensemble des flux (${PROFILS_EAS.length} profils connus)`,
+);
 
 // ---------------------------------------------------------------------------
 // Rapport

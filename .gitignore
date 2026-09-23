@@ -49,6 +49,7 @@ apk-final/
 ipa-final/
 *.apk
 *.ipa
-# une compilation iOS sans signature livre un tar.gz, pas un IPA : le nommer
-# autrement ne le rend pas plus léger, et 31 Mo n'ont rien à faire ici
+# une compilation iOS sans identifiant Apple compile pour le simulateur : Expo
+# livre alors un tar.gz, pas un IPA. Le nommer autrement ne le rendrait pas plus
+# léger, et 31 Mo n'ont rien à faire ici
 *.tar.gz

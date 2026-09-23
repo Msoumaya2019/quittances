@@ -221,8 +221,25 @@ npm ci --include=dev --dry-run
 
 ## Compilation et publication
 
-- `.github/workflows/android-apk.yml` produit un APK installable.
-- `.github/workflows/ios-ipa.yml` produit un IPA, signé ou non.
+- `.github/workflows/android-apk.yml` produit un APK installable, signé par Expo.
+- `.github/workflows/ios-ipa.yml` produit un fichier iOS, signé par Expo si
+  `signer_avec_expo` est coché. **Sans identifiant Apple, ce n'est pas un IPA** :
+  un IPA est une archive *signée*, et Expo n'a alors rien à signer. Le profil
+  `apercu-simulateur` (`ios.simulator: true`) compile donc pour le **simulateur**
+  et livre une archive `tar.gz` de `Quittances.app`. Mesuré sur le fichier livré :
+  `DTPlatformName = iphonesimulator`, et `platform = 7` dans les deux tranches
+  Mach-O. Un tel fichier ne s'installe sur **aucun iPhone, même après
+  signature** — une application de simulateur reste une application de
+  simulateur. Il s'installe dans le simulateur d'un Mac.
+  Le flux lit l'extension sur l'adresse fournie par Expo et la transmet aux
+  étapes suivantes, plutôt que de la forcer : un nom de fichier ne doit pas
+  mentir sur son contenu. Le nom du profil et celui de l'artefact obéissent à la
+  même règle — `apercu-simulateur`, `ios-quittances` — et `npm run verifier:flux`
+  refuse désormais un `--profile` absent de `eas.json`.
+- **Sur une étiquette `v*`**, les deux attachent leur fichier à la publication
+  du dépôt. C'est le canal qui compte : un artefact expire en 90 jours et son
+  téléchargement exige un compte GitHub, alors qu'une publication reste et se
+  télécharge sans compte.
 - `.github/COMPILATION.md` explique, pas à pas, comment récupérer les fichiers.
 
 Aucun certificat ni mot de passe n'est présent dans le dépôt : le seul élément
@@ -234,9 +251,9 @@ compilations refusent de produire une application dont les types ou les tests
 
 ```bash
 npm run verifier:tout   # les trois contrôles, dans l'ordre
-npm run verifier:flux   # 62 contrôles sur les flux de travail
+npm run verifier:flux   # contrôles sur les flux de travail
 npm run verifier        # types TypeScript
-npm run test:domaine    # 139 tests sur la couche domaine
+npm run test:domaine    # tests de la couche domaine
 ```
 
 Les tests portent sur le domaine pur — arithmétique monétaire, périodes,
