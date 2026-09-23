@@ -116,6 +116,39 @@ calculé par le domaine : la décision est prise ailleurs, et la transaction
 n'écrit que ce que le domaine a décidé. C'est ce qui permet de prouver la règle
 anti-rétroactivité par un test, sans monter une base.
 
+## Dépendances
+
+Deux contraintes non évidentes, écrites ici parce qu'elles ont déjà cassé une
+compilation.
+
+**`.npmrc` à la racine impose `legacy-peer-deps=true`.** Expo 57 épingle
+`react@19.2.3`, tandis que `react-dom` — pair *facultatif* d'`expo`, utile au
+seul rendu web — réclame `react@^19.3.0`. Sans ce réglage, npm tente
+d'installer `react-dom@19.3.0`, constate le conflit, puis déclare
+`package-lock.json` désynchronisé avec `package.json` :
+
+```
+npm error `npm ci` can only install packages when your package.json and
+npm error package-lock.json or npm-shrinkwrap.json are in sync.
+npm error Missing: react-dom@19.3.0 from lock file
+```
+
+EAS Build lance `npm ci --include=dev` sans drapeau : le fichier `.npmrc` est
+donc le **seul** endroit qui décide, et il vaut pour la machine locale comme
+pour les serveurs de compilation.
+
+**`react-native-worklets` est déclaré en dépendance explicite**, épinglé à la
+version qu'Expo SDK 57 recommande (`0.10.1`). `react-native-reanimated@4.5.1`
+le réclame en pair **obligatoire** — son greffon Babel le charge — mais un pair
+n'est pas installé automatiquement lorsqu'on ignore les pairs. Sans cette ligne,
+le greffon échoue et l'application ne démarre pas.
+
+Pour reproduire l'installation des serveurs Expo sans attendre une compilation :
+
+```bash
+npm ci --include=dev --dry-run
+```
+
 ## Compilation et publication
 
 - `.github/workflows/android-apk.yml` produit un APK installable.

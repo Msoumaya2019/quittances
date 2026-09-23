@@ -213,10 +213,24 @@ exactement `EXPO_TOKEN`.
 L'étape 3 n'a pas été poussée sur GitHub. Vérifiez que `app.json` contient bien
 `extra.eas.projectId` dans la version du dépôt en ligne.
 
-**La compilation échoue sur `npm ci`.**
-Le fichier `package-lock.json` n'est pas à jour dans le dépôt. Sur votre
-ordinateur, lancez `npm install --legacy-peer-deps`, committez le fichier
-`package-lock.json` modifié, et poussez.
+**La compilation échoue sur `npm ci` avec « Missing: … from lock file ».**
+Le fichier `package-lock.json` n'est plus d'accord avec `package.json` : une
+dépendance a été ajoutée ou retirée sans régénérer le verrouillage. Sur votre
+ordinateur, lancez `npm install`, committez le `package-lock.json` modifié, et
+poussez. Le fichier `.npmrc` du dépôt fait le reste : c'est lui qui indique à
+npm d'ignorer les pairs en conflit, aussi bien chez vous que sur les serveurs
+de compilation.
+
+Pour reproduire **exactement** l'installation faite par les serveurs Expo, sans
+attendre une compilation :
+
+```bash
+npm ci --include=dev --dry-run
+```
+
+Cette commande ne télécharge rien : elle vérifie seulement que le verrouillage
+et `package.json` sont d'accord. Si elle ne dit rien, la compilation passera
+cette étape.
 
 **La compilation échoue sur les types ou les tests.**
 C'est le comportement voulu : la compilation refuse de produire une application
@@ -238,14 +252,17 @@ différente. Désinstallez l'ancienne application, puis réinstallez.
 ## Rappel des commandes utiles, sur votre ordinateur
 
 ```bash
-npm install --legacy-peer-deps   # installer les dépendances
+npm ci                           # installer les dépendances
 npx tsc --noEmit                 # vérifier les types
 npm run test:domaine             # lancer les tests
+npm run verifier:tout            # tout d'un coup
 npx expo start                   # ouvrir l'application en développement
 ```
 
-L'option `--legacy-peer-deps` n'est pas un contournement de confort : Expo 57
-épingle `react` en 19.2.3 alors que `react-dom` réclame 19.3.0. Le conflit est
-connu et sans conséquence, car `react-dom` ne sert qu'au rendu dans un
-navigateur, pas sur un téléphone. Les workflows GitHub utilisent la même option,
-pour la même raison.
+Le fichier `.npmrc` à la racine n'est pas un détail : Expo 57 épingle `react`
+en 19.2.3 alors que `react-dom` réclame 19.3.0. `react-dom` ne sert qu'au rendu
+dans un navigateur, jamais sur un téléphone. Sans ce fichier, npm tente quand
+même d'installer `react-dom`, détecte le conflit, puis déclare le verrouillage
+désynchronisé — et la compilation s'arrête avant même de commencer. C'est
+exactement ce qui s'est produit une fois ; la cause exacte est consignée dans
+`ARCHITECTURE.md`, section « Dépendances ».
