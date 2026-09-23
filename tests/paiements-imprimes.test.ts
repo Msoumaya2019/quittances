@@ -29,6 +29,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { cumulerPaiementsPourCle, paiementsImprimes } from '../src/domain/payments.ts';
+import { formaterDateFr } from '../src/domain/period.ts';
 import type { ClePeriode, Paiement } from '../src/domain/types.ts';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
@@ -141,6 +142,30 @@ describe('Lignes de paiement imprimées', () => {
       [{ date: '5 septembre 2026', modes: ['Autre'] }],
       'un mode inconnu doit être nommé « Autre », et non faire disparaître '
         + 'l’encaissement de la quittance',
+    );
+  });
+
+  it('décrit les mêmes jours que le cumul enregistré', () => {
+    // Deux endroits calculent « les jours de paiement du mois » : `cumul.dates`,
+    // écrit tel quel dans la fiche du document, et `paiementsImprimes`, imprimé
+    // sur le papier. Ils ne peuvent pas se lire — l'un porte des dates civiles,
+    // l'autre des dates écrites — donc l'accord est tenu ici.
+    //
+    // S'ils divergeaient, l'aperçu de l'application et le PDF ne diraient pas la
+    // même chose, et rien ne le signalerait : les deux resteraient valides.
+    const simples = [
+      { montant: 30000, datePaiement: '2026-09-05', mode: 'virement' as const },
+      { montant: 20000, datePaiement: '2026-09-05', mode: 'especes' as const },
+      { montant: 80000, datePaiement: '2026-09-12', mode: 'cheque' as const },
+      { montant: 10000, datePaiement: '2026-09-20', mode: 'especes' as const },
+    ];
+    const cumul = cumulerPaiementsPourCle(simples.map(paiement), CLE);
+
+    assert.deepEqual(
+      paiementsImprimes(cumul).map((l) => l.date),
+      cumul.dates.map(formaterDateFr),
+      'les jours imprimés et les jours enregistrés doivent être les mêmes, dans '
+        + 'le même ordre : ce sont deux écritures d’une seule vérité',
     );
   });
 });
