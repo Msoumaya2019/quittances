@@ -166,7 +166,16 @@ jobs:
           # aucun iPhone, même signée. Le nom doit dire ce que le fichier est.
           nom="${adresse##*/}"
           extension="${nom#*.}"
-          fichier="app-release.${extension}"
+          # La version est LUE dans `app.json`, jamais recopiee : ecrite deux
+          # fois, elle finit par mentir. Et le nom dit TROIS choses — la
+          # version, le flux, et le fait que le fichier ne s'installe sur aucun
+          # iPhone. « app-release.tar.gz » n'en disait aucune : il ne disait ni
+          # quelle version, ni qu'il venait du simulateur, et il se confondait
+          # avec l'APK dans la meme publication — deux fichiers a telecharger,
+          # dont un seul sert. Le nom local des binaires conserves est deja
+          # celui-la ; le flux le rejoint.
+          version=$(node -p "require('./app.json').expo.version")
+          fichier="Quittances-${version}-ios-simulateur-non-installable.${extension}"
           curl --fail --location "$adresse" --output "$fichier"
           ls -lh "$fichier"
           echo "extension reelle : ${extension}"
