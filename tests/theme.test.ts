@@ -179,3 +179,29 @@ test('Palette : le mode nuit est réellement sombre, le mode clair réellement c
     );
   }
 });
+
+test('Palette : les quatre couleurs demandées sont proposées', () => {
+  // Le bailleur doit pouvoir choisir exactement bleu, vert, rose ou noir.
+  // Ce test dit lesquelles, pour qu'en ajouter ou en retirer une se voie.
+  assert.deepEqual(
+    COULEURS_THEME.map((c) => c.valeur).sort(),
+    ['bleu', 'noir', 'rose', 'vert'],
+  );
+  const libelles = COULEURS_THEME.map((c) => c.libelle);
+  assert.equal(new Set(libelles).size, libelles.length, 'deux couleurs portent le même nom');
+});
+
+test('Palette : la pastille annoncée est l’accent réellement appliqué', () => {
+  // L'écran des réglages montre une pastille de couleur ; le reste de
+  // l'application applique `accent`. Si les deux divergent, la pastille ment
+  // sur ce qu'on obtient — et rien d'autre ne le signale, puisque aucun des
+  // deux ne lit l'autre. C'est ce que ce test empêche.
+  for (const { valeur, libelle, apercu } of COULEURS_THEME) {
+    const { accent } = composerPalette(valeur, 'clair');
+    assert.equal(
+      apercu,
+      accent,
+      `${libelle} : la pastille annonce ${apercu}, or l'accent appliqué est ${accent}`,
+    );
+  }
+});

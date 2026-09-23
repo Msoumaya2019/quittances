@@ -20,9 +20,18 @@ export type CouleurTheme = 'bleu' | 'vert' | 'rose' | 'noir';
 
 export type ModeTheme = 'clair' | 'sombre';
 
+/**
+ * Les quatre couleurs proposées dans les réglages.
+ *
+ * `apercu` est la pastille montrée au bailleur. Elle doit être **exactement**
+ * l'accent que le choix applique, et non une teinte approchante : une pastille
+ * qui annonce autre chose que ce qu'on obtient fait douter du réglage. C'est
+ * pourquoi le vert vaut ici `#047857` — la teinte approfondie pour l'accessibilité
+ * — et non le vert émeraude d'origine. Un test le vérifie.
+ */
 export const COULEURS_THEME: { valeur: CouleurTheme; libelle: string; apercu: string }[] = [
   { valeur: 'bleu', libelle: 'Bleu', apercu: '#2563EB' },
-  { valeur: 'vert', libelle: 'Vert', apercu: '#059669' },
+  { valeur: 'vert', libelle: 'Vert', apercu: '#047857' },
   { valeur: 'rose', libelle: 'Rose', apercu: '#DB2777' },
   { valeur: 'noir', libelle: 'Noir', apercu: '#111827' },
 ];
