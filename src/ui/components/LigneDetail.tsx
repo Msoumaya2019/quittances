@@ -6,7 +6,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { couleurs, espaces, typographie } from '../tokens';
+import { espaces, typographie } from '../tokens';
+import { useStyles, type Couleurs } from '../theme';
 
 interface PropsLigneDetail {
   libelle: string;
@@ -26,6 +27,7 @@ export function LigneDetail({
   teinte,
   pointillee = false,
 }: PropsLigneDetail) {
+  const styles = useStyles(creerStyles);
   return (
     <View style={[styles.ligne, pointillee && styles.pointillee]}>
       <Text
@@ -48,7 +50,8 @@ export function LigneDetail({
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   ligne: {
     flexDirection: 'row',
     alignItems: 'flex-start',

@@ -10,8 +10,6 @@
  * moteur d'impression.
  */
 
-import { couleurs } from '../ui/tokens';
-
 /** Échappe le texte destiné à être inséré dans du HTML. */
 export function echapper(texte: string): string {
   return texte
@@ -252,15 +250,33 @@ export const STYLES_BASE = `
   }
 `;
 
-/** Couleurs de l'interface réutilisées pour les documents. */
+/**
+ * Couleurs des documents.
+ *
+ * Elles ne suivent **pas** le thème de l'application. Une quittance est un
+ * papier légal, remis au locataire et conservé des années : deux bailleurs qui
+ * impriment la même quittance doivent obtenir le même document, et changer de
+ * thème ne doit pas changer l'aspect des quittances déjà émises.
+ *
+ * Les valeurs viennent du modèle papier fourni, relevées au pixel sur le
+ * document de référence. `principaleFonce` est la seule qui soit dérivée :
+ * le modèle n'a pas de bleu foncé, il est calculé pour rester lisible sur
+ * `principaleTresClaire`.
+ */
 export const COULEURS_DOCUMENT = {
-  principale: couleurs.vert,
-  principaleFonce: couleurs.vertFonce,
-  principaleClaire: couleurs.vertClair,
-  principaleTresClaire: couleurs.vertTresClair,
-  orange: couleurs.orange,
-  orangeClair: couleurs.orangeClair,
-  orangeTresClair: couleurs.orangeTresClair,
+  /** Intitulés, titres, mentions légales — relevé sur le modèle. */
+  principale: '#005FA4',
+  /** Variante foncée, dérivée de `principale` pour le contraste. */
+  principaleFonce: '#00406E',
+  /** Filets et encadrés du talon — relevé sur le modèle. */
+  principaleClaire: '#DCEAF3',
+  /** Haut du dégradé du tableau — relevé sur le modèle. */
+  principaleTresClaire: '#ECF5FA',
+  /** Bandeaux « avis d'échéance » — dérivé de l'orange du modèle. */
+  orange: '#B45309',
+  orangeClair: '#FDE8CC',
+  /** Bas du dégradé du tableau, et fond du talon — relevé sur le modèle. */
+  orangeTresClair: '#FEF1DE',
   texte: '#1A1A1A',
   texteSecondaire: '#444444',
   texteTertiaire: '#777777',

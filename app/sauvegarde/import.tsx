@@ -21,14 +21,16 @@ import {
   EnTeteEcran,
   LigneDetail,
 } from '@/ui/components';
-import { couleurs, espaces, typographie } from '@/ui/tokens';
+import { espaces, typographie } from '@/ui/tokens';
 import { lireEnveloppe } from '@/backup/export';
 import { appliquerSauvegarde, lireSauvegarde, type BilanRestauration } from '@/backup/import';
 import type { ContenuSauvegarde } from '@/backup/export';
 import type { EnveloppeSauvegarde } from '@/backup/crypto';
 import { useApplication } from '@/state/ApplicationContext';
+import { useStyles, type Couleurs } from '@/ui/theme';
 
 export default function EcranImportSauvegarde() {
+  const styles = useStyles(creerStyles);
   const insets = useSafeAreaInsets();
   const { rafraichir } = useApplication();
 
@@ -250,7 +252,8 @@ export default function EcranImportSauvegarde() {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   contenu: {
     paddingHorizontal: espaces.lg,
     gap: espaces.lg,

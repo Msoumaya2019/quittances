@@ -27,7 +27,7 @@ import { Carte } from '@/ui/components/Carte';
 import { Champ, ChampMontant } from '@/ui/components/Champ';
 import { EnTeteEcran } from '@/ui/components/EnTeteEcran';
 import { LigneDetail } from '@/ui/components/LigneDetail';
-import { couleurs, espaces, typographie } from '@/ui/tokens';
+import { espaces, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import { aujourdHui, libelleLongCapitalise, depuisCle } from '@/domain/period';
 import { cumulerPaiementsPourCle, montantPropose } from '@/domain/payments';
@@ -47,8 +47,11 @@ import {
 } from '@/db/repositories/properties';
 import { enregistrerPaiement, paiementsDuBail } from '@/db/repositories/payments';
 import { useApplication } from '@/state/ApplicationContext';
+import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
 
 export default function EcranPaiement() {
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   const insets = useSafeAreaInsets();
   const { rafraichir } = useApplication();
 
@@ -199,7 +202,7 @@ export default function EcranPaiement() {
   if (chargement) {
     return (
       <View style={[styles.centreur, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={couleurs.vert} />
+        <ActivityIndicator size="large" color={couleurs.accent} />
       </View>
     );
   }
@@ -388,7 +391,8 @@ export default function EcranPaiement() {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   plein: {
     flex: 1,
     backgroundColor: couleurs.fond,
@@ -409,17 +413,17 @@ const styles = StyleSheet.create({
   carteMontant: {
     alignItems: 'center',
     gap: espaces.sm,
-    backgroundColor: couleurs.vertTresClair,
-    borderColor: couleurs.vertClair,
+    backgroundColor: couleurs.accentTresClair,
+    borderColor: couleurs.accentClair,
   },
   etiquetteMontant: {
     color: couleurs.texteSecondaire,
   },
   precisionMontant: {
-    color: couleurs.vertFonce,
+    color: couleurs.accentFonce,
   },
   texteSolde: {
-    color: couleurs.vertFonce,
+    color: couleurs.accentFonce,
     textAlign: 'center',
   },
   texteSoldePartiel: {

@@ -1,9 +1,12 @@
 /**
- * Onglet PLUS.
+ * Onglet RÉGLAGES.
  *
- * Tout ce qui ne se fait pas tous les jours : propriétaires, modèles de
- * document, signature, sauvegarde, verrouillage. L'écran est une liste de
+ * Tout ce qui ne se fait pas tous les jours : apparence, propriétaires, modèles
+ * de document, signature, sauvegarde, verrouillage. L'écran est une liste de
  * sections claires plutôt qu'un empilement de sous-menus.
+ *
+ * La section Apparence vient en premier : c'est le seul réglage qu'on modifie
+ * pour son plaisir, et il doit se voir tout de suite, sans faire défiler.
  */
 
 import { useCallback, useState } from 'react';
@@ -19,7 +22,7 @@ import {
   EnTeteEcran,
   LigneDetail,
 } from '@/ui/components';
-import { couleurs, espaces, rayons, typographie } from '@/ui/tokens';
+import { espaces, rayons, typographie } from '@/ui/tokens';
 import { LIBELLE_MODELE, type ModeleDocument } from '@/domain/types';
 import { useApplication } from '@/state/ApplicationContext';
 import { listerProprietaires } from '@/db/repositories/owners';
@@ -31,8 +34,11 @@ import {
   prochaineDateRappel,
   programmerRappel,
 } from '@/notifications/rappels';
+import { COULEURS_THEME, type CouleurTheme } from '@/ui/palette';
+import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
 
-export default function EcranPlus() {
+export default function EcranReglages() {
+  const styles = useStyles(creerStyles);
   const { reglages, majReglages, rafraichir } = useApplication();
   const insets = useSafeAreaInsets();
 
@@ -72,6 +78,29 @@ export default function EcranPlus() {
       await majReglages({ modeleParDefaut: modele });
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Le modèle n'a pas pu être enregistré.");
+    }
+  }
+
+  /**
+   * Change la couleur d'accent.
+   *
+   * Aucun écran n'est rechargé : la palette est recalculée dans le contexte, et
+   * tous les styles s'en déduisent. C'est précisément ce que garantit le fait
+   * qu'aucun composant ne garde une couleur en dur.
+   */
+  async function choisirCouleur(couleur: CouleurTheme) {
+    try {
+      await majReglages({ couleurTheme: couleur });
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Le thème n'a pas pu être enregistré.");
+    }
+  }
+
+  async function basculerModeNuit(valeur: boolean) {
+    try {
+      await majReglages({ modeTheme: valeur ? 'sombre' : 'clair' });
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Le thème n'a pas pu être enregistré.");
     }
   }
 
@@ -118,6 +147,8 @@ export default function EcranPlus() {
     }
   }
 
+  const modeNuit = reglages.modeTheme === 'sombre';
+
   return (
     <ScrollView
       contentContainerStyle={[
@@ -126,9 +157,55 @@ export default function EcranPlus() {
       ]}
       showsVerticalScrollIndicator={false}
     >
-      <EnTeteEcran titre="Plus" />
+      <EnTeteEcran titre="Réglages" />
 
       {erreur ? <BandeauMessage ton="erreur" message={erreur} /> : null}
+
+      {/* Apparence */}
+      <Carte>
+        <Text style={styles.section}>Apparence</Text>
+        <Text style={styles.aide}>
+          La couleur choisie habille les boutons, l’onglet actif et les titres. Les documents, eux,
+          gardent toujours la présentation officielle : une quittance ne change pas d’aspect parce
+          que vous avez changé de thème.
+        </Text>
+
+        <View style={styles.nuancier}>
+          {COULEURS_THEME.map((option) => {
+            const actif = reglages.couleurTheme === option.valeur;
+            return (
+              <Pressable
+                key={option.valeur}
+                onPress={() => choisirCouleur(option.valeur)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: actif }}
+                accessibilityLabel={`Couleur ${option.libelle}`}
+                style={styles.pastilleTheme}
+              >
+                <View style={[styles.anneau, actif && styles.anneauActif]}>
+                  <View style={[styles.rond, { backgroundColor: option.apercu }]}>
+                    {actif ? (
+                      <Text style={styles.cocheTheme} accessibilityElementsHidden>
+                        ✓
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+                <Text
+                  style={[
+                    typographie.petit,
+                    actif ? styles.libelleThemeActif : styles.libelleTheme,
+                  ]}
+                >
+                  {option.libelle}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <LigneReglage libelle="Thème nuit" valeur={modeNuit} onChange={basculerModeNuit} />
+      </Carte>
 
       {/* Ce que contient l'application */}
       <Carte>
@@ -305,12 +382,14 @@ export default function EcranPlus() {
       <DialogueConfirmation
         visible={confirmeReinit}
         titre="Réinitialiser les préférences ?"
-        message="Le modèle, la signature et les rappels reviennent aux valeurs d’origine. Vos logements, paiements et documents ne sont pas touchés."
+        message="Le thème, le modèle, la signature et les rappels reviennent aux valeurs d’origine. Vos logements, paiements et documents ne sont pas touchés."
         libelleConfirmer="Réinitialiser"
         danger
         onConfirmer={async () => {
           try {
             await majReglages({
+              couleurTheme: 'vert',
+              modeTheme: 'clair',
               modeleParDefaut: 'classique',
               signatureActive: false,
               rappelPaiements: false,
@@ -340,6 +419,8 @@ function LigneReglage({
   onChange: (valeur: boolean) => void;
   desactive?: boolean;
 }) {
+  const couleurs = useCouleurs();
+  const styles = useStyles(creerStyles);
   return (
     <View style={styles.ligneReglage}>
       <Text
@@ -351,15 +432,16 @@ function LigneReglage({
         value={valeur}
         onValueChange={onChange}
         disabled={desactive}
-        trackColor={{ false: couleurs.bordureForte, true: couleurs.vertClair }}
-        thumbColor={valeur ? couleurs.vert : '#FFFFFF'}
+        trackColor={{ false: couleurs.bordureForte, true: couleurs.accentClair }}
+        thumbColor={valeur ? couleurs.accent : couleurs.fondCarte}
         accessibilityLabel={libelle}
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   contenu: {
     paddingHorizontal: espaces.lg,
     gap: espaces.lg,
@@ -376,6 +458,50 @@ const styles = StyleSheet.create({
     color: couleurs.texteSecondaire,
     marginBottom: espaces.md,
   },
+  // --- Nuancier de thèmes -------------------------------------------------
+  nuancier: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: espaces.md,
+  },
+  pastilleTheme: {
+    alignItems: 'center',
+    gap: espaces.xs,
+    paddingVertical: espaces.xs,
+    minWidth: 64,
+  },
+  anneau: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  anneauActif: {
+    borderColor: couleurs.accent,
+  },
+  rond: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cocheTheme: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  libelleTheme: {
+    color: couleurs.texteSecondaire,
+  },
+  libelleThemeActif: {
+    color: couleurs.accent,
+    fontWeight: '700',
+  },
   ligneChoix: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -385,7 +511,7 @@ const styles = StyleSheet.create({
     borderRadius: rayons.md,
   },
   ligneChoixActive: {
-    backgroundColor: couleurs.vertTresClair,
+    backgroundColor: couleurs.accentTresClair,
   },
   ligneChoixTextes: {
     flex: 1,
@@ -407,13 +533,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radioActif: {
-    borderColor: couleurs.vert,
+    borderColor: couleurs.accent,
   },
   radioPoint: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: couleurs.vert,
+    backgroundColor: couleurs.accent,
   },
   ligneReglage: {
     flexDirection: 'row',

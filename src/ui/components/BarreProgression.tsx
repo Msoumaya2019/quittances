@@ -12,7 +12,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { animations, couleurs, espaces, rayons, typographie } from '../tokens';
+import { animations, espaces, rayons, typographie } from '../tokens';
+import { useStyles, type Couleurs } from '../theme';
 
 interface PropsProgression {
   /** Pourcentage de 0 à 100. */
@@ -24,6 +25,7 @@ interface PropsProgression {
 }
 
 export function BarreProgression({ pourcentage, regles, total }: PropsProgression) {
+  const styles = useStyles(creerStyles);
   const borne = Math.max(0, Math.min(100, pourcentage));
   const largeur = useSharedValue(0);
 
@@ -60,7 +62,8 @@ export function BarreProgression({ pourcentage, regles, total }: PropsProgressio
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   conteneur: {
     gap: espaces.sm,
   },
@@ -71,7 +74,7 @@ const styles = StyleSheet.create({
     gap: espaces.sm,
   },
   pourcentage: {
-    color: couleurs.vertFonce,
+    color: couleurs.accentFonce,
   },
   rail: {
     height: 10,
@@ -82,6 +85,6 @@ const styles = StyleSheet.create({
   remplissage: {
     height: '100%',
     borderRadius: rayons.rond,
-    backgroundColor: couleurs.vert,
+    backgroundColor: couleurs.accent,
   },
 });

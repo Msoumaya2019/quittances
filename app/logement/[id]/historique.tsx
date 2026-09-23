@@ -22,7 +22,7 @@ import {
   LigneDetail,
   PastilleStatut,
 } from '@/ui/components';
-import { couleurs, espaces, rayons, typographie } from '@/ui/tokens';
+import { espaces, rayons, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import { MOIS_FR, MOIS_FR_COURT, aujourdHui, libelleLongCapitalise, versCle } from '@/domain/period';
 import { contexteDuMois } from '@/domain/payments';
@@ -37,6 +37,7 @@ import {
 import { documentsDuLogement } from '@/db/repositories/documents';
 import { paiementsDuBail } from '@/db/repositories/payments';
 import { useApplication } from '@/state/ApplicationContext';
+import { useCouleurs, useStyles, type Couleurs } from '@/ui/theme';
 
 interface CaseMois {
   mois: number;
@@ -48,14 +49,21 @@ interface CaseMois {
   solde: number;
 }
 
-/** Couleur d'accent par statut, pour la pastille du calendrier. */
-const ACCENT: Record<StatutMois, string> = {
-  paye: couleurs.vert,
-  partiel: couleurs.orange,
-  retard: couleurs.rouge,
-  attente: couleurs.bordureForte,
-  hors_bail: couleurs.texteTertiaire,
-};
+/**
+ * Couleur de la pastille d'un mois, selon son statut.
+ *
+ * « Payé » est vert dans tous les thèmes : la pastille dit qu'un mois est réglé,
+ * elle ne reprend pas la couleur choisie par le bailleur.
+ */
+function couleursParStatut(couleurs: Couleurs): Record<StatutMois, string> {
+  return {
+    paye: couleurs.succes,
+    partiel: couleurs.orange,
+    retard: couleurs.rouge,
+    attente: couleurs.bordureForte,
+    hors_bail: couleurs.texteTertiaire,
+  };
+}
 
 const LIBELLE_STATUT: Record<StatutMois, string> = {
   paye: 'payé',
@@ -66,6 +74,7 @@ const LIBELLE_STATUT: Record<StatutMois, string> = {
 };
 
 export default function EcranHistorique() {
+  const styles = useStyles(creerStyles);
   const { id } = useLocalSearchParams<{ id: string }>();
   const { mois: moisAffiche, rafraichir } = useApplication();
   const insets = useSafeAreaInsets();
@@ -371,6 +380,9 @@ function CaseCalendrier({
   selectionnee: boolean;
   onPress: () => void;
 }) {
+  const couleurs = useCouleurs();
+  const styles = useStyles(creerStyles);
+  const couleurStatut = couleursParStatut(couleurs);
   const statut = kase.statut;
   const hors = statut === null || statut === 'hors_bail';
 
@@ -388,8 +400,8 @@ function CaseCalendrier({
       {hors ? (
         <Text style={styles.tiret}>—</Text>
       ) : (
-        <View style={[styles.pastille, { backgroundColor: ACCENT[statut] + '22' }]}>
-          <View style={[styles.puce, { backgroundColor: ACCENT[statut] }]} />
+        <View style={[styles.pastille, { backgroundColor: couleurStatut[statut] + '22' }]}>
+          <View style={[styles.puce, { backgroundColor: couleurStatut[statut] }]} />
         </View>
       )}
 
@@ -400,7 +412,8 @@ function CaseCalendrier({
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   conteneur: {
     paddingHorizontal: espaces.lg,
     gap: espaces.lg,
@@ -427,15 +440,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   anneeActive: {
-    backgroundColor: couleurs.vert,
-    borderColor: couleurs.vert,
+    backgroundColor: couleurs.accent,
+    borderColor: couleurs.accent,
   },
   anneeTexte: {
     ...typographie.petitAppuye,
     color: couleurs.texteSecondaire,
   },
   anneeTexteActif: {
-    color: couleurs.texteSurFonce,
+    color: couleurs.surAccent,
   },
   grille: {
     flexDirection: 'row',
@@ -454,7 +467,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   caseSelectionnee: {
-    borderColor: couleurs.vert,
+    borderColor: couleurs.accent,
     borderWidth: 2,
   },
   caseHors: {
@@ -493,7 +506,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: couleurs.vert,
+    backgroundColor: couleurs.accent,
   },
   ligneTitre: {
     flexDirection: 'row',
@@ -530,7 +543,7 @@ const styles = StyleSheet.create({
     borderRadius: rayons.md,
   },
   ligneBailActive: {
-    backgroundColor: couleurs.vertTresClair,
+    backgroundColor: couleurs.accentTresClair,
   },
   ligneBailTexte: {
     flex: 1,
@@ -545,6 +558,6 @@ const styles = StyleSheet.create({
   },
   coche: {
     ...typographie.titreSection,
-    color: couleurs.vert,
+    color: couleurs.accent,
   },
 });

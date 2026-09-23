@@ -8,7 +8,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { couleurs, espaces, rayons, typographie } from '../tokens';
+import { espaces, rayons, typographie } from '../tokens';
+import { useCouleurs, useStyles, type Couleurs } from '../theme';
 
 export type TonBandeau = 'information' | 'avertissement' | 'erreur' | 'succes';
 
@@ -21,32 +22,42 @@ interface PropsBandeau {
   onFermer?: () => void;
 }
 
-const PALETTE: Record<TonBandeau, { fond: string; bord: string; texte: string; symbole: string }> = {
-  information: {
-    fond: couleurs.bleuTresClair,
-    bord: couleurs.bleuClair,
-    texte: couleurs.bleu,
-    symbole: 'ℹ️',
-  },
-  avertissement: {
-    fond: couleurs.orangeTresClair,
-    bord: couleurs.orangeClair,
-    texte: couleurs.orange,
-    symbole: '⚠️',
-  },
-  erreur: {
-    fond: couleurs.rougeTresClair,
-    bord: couleurs.rougeClair,
-    texte: couleurs.rouge,
-    symbole: '⛔',
-  },
-  succes: {
-    fond: couleurs.vertTresClair,
-    bord: couleurs.vertClair,
-    texte: couleurs.vertFonce,
-    symbole: '✅',
-  },
-};
+/**
+ * Teintes d'un bandeau, selon son ton.
+ *
+ * « Succès » reste vert quel que soit le thème : le bandeau annonce un fait
+ * — c'est réglé — et non la couleur choisie par le bailleur.
+ */
+function teintesDe(
+  couleurs: Couleurs,
+): Record<TonBandeau, { fond: string; bord: string; texte: string; symbole: string }> {
+  return {
+    information: {
+      fond: couleurs.bleuTresClair,
+      bord: couleurs.bleuClair,
+      texte: couleurs.bleu,
+      symbole: 'ℹ️',
+    },
+    avertissement: {
+      fond: couleurs.orangeTresClair,
+      bord: couleurs.orangeClair,
+      texte: couleurs.orange,
+      symbole: '⚠️',
+    },
+    erreur: {
+      fond: couleurs.rougeTresClair,
+      bord: couleurs.rougeClair,
+      texte: couleurs.rouge,
+      symbole: '⛔',
+    },
+    succes: {
+      fond: couleurs.succesTresClair,
+      bord: couleurs.succesClair,
+      texte: couleurs.succesFonce,
+      symbole: '✅',
+    },
+  };
+}
 
 export function BandeauMessage({
   message,
@@ -55,7 +66,9 @@ export function BandeauMessage({
   actionOnPress,
   onFermer,
 }: PropsBandeau) {
-  const palette = PALETTE[ton];
+  const couleurs = useCouleurs();
+  const styles = useStyles(creerStyles);
+  const palette = teintesDe(couleurs)[ton];
 
   return (
     <View
@@ -85,7 +98,8 @@ export function BandeauMessage({
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   bandeau: {
     flexDirection: 'row',
     alignItems: 'flex-start',

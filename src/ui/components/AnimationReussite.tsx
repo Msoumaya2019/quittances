@@ -18,7 +18,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
 
-import { animations, couleurs, espaces, typographie } from '../tokens';
+import { animations, espaces, typographie } from '../tokens';
+import { useCouleurs, useStyles, type Couleurs } from '../theme';
 
 const CercleAnime = Animated.createAnimatedComponent(Circle);
 
@@ -33,9 +34,13 @@ interface PropsAnimationReussite {
 export function AnimationReussite({
   titre,
   sousTitre,
-  teinte = couleurs.vert,
+  teinte,
   taille = 96,
 }: PropsAnimationReussite) {
+  const couleurs = useCouleurs();
+  const styles = useStyles(creerStyles);
+  // Un appelant qui ne précise pas la teinte obtient l'accent du thème.
+  const teinteFinale = teinte ?? couleurs.accent;
   const progression = useSharedValue(0);
   const opaciteCoche = useSharedValue(0);
 
@@ -69,12 +74,19 @@ export function AnimationReussite({
     <View style={styles.conteneur}>
       <View style={[styles.cercle, { width: taille, height: taille }]}>
         <Svg width={taille} height={taille} viewBox="0 0 96 96">
-          <Circle cx={48} cy={48} r={44} stroke={teinte + '22'} strokeWidth={6} fill={teinte + '12'} />
+          <Circle
+            cx={48}
+            cy={48}
+            r={44}
+            stroke={teinteFinale + '22'}
+            strokeWidth={6}
+            fill={teinteFinale + '12'}
+          />
           <CercleAnime
             cx={48}
             cy={48}
             r={44}
-            stroke={teinte}
+            stroke={teinteFinale}
             strokeWidth={6}
             strokeLinecap="round"
             fill="none"
@@ -108,7 +120,8 @@ export function AnimationReussite({
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   conteneur: {
     alignItems: 'center',
     gap: espaces.lg,

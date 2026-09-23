@@ -18,8 +18,9 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { couleurs, espaces, ombres, rayons, typographie } from '../tokens';
+import { espaces, ombres, rayons, typographie } from '../tokens';
 import { Bouton } from './Bouton';
+import { useStyles, type Couleurs } from '../theme';
 
 export interface OptionFeuille<T extends string> {
   valeur: T;
@@ -52,6 +53,7 @@ export function FeuilleAction<T extends string>({
   onFermer,
   libelleAnnuler = 'Annuler',
 }: PropsFeuille<T>) {
+  const styles = useStyles(creerStyles);
   return (
     <Modal
       visible={visible}
@@ -133,6 +135,7 @@ export function FeuilleAction<T extends string>({
 }
 
 function Coche() {
+  const styles = useStyles(creerStyles);
   return (
     <Text style={styles.cocheTexte}>✓</Text>
   );
@@ -164,6 +167,7 @@ export function DialogueConfirmation({
   danger = false,
   occupe = false,
 }: PropsConfirmation) {
+  const styles = useStyles(creerStyles);
   return (
     <Modal
       visible={visible}
@@ -199,7 +203,8 @@ export function DialogueConfirmation({
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   fond: {
     flex: 1,
     backgroundColor: couleurs.transparence,
@@ -252,8 +257,8 @@ const styles = StyleSheet.create({
     borderColor: couleurs.bordure,
   },
   optionSelectionnee: {
-    backgroundColor: couleurs.vertTresClair,
-    borderColor: couleurs.vert,
+    backgroundColor: couleurs.accentTresClair,
+    borderColor: couleurs.accent,
   },
   optionDesactivee: {
     opacity: 0.45,
@@ -269,7 +274,7 @@ const styles = StyleSheet.create({
     color: couleurs.texte,
   },
   optionLibelleSelectionnee: {
-    color: couleurs.vertFonce,
+    color: couleurs.accentFonce,
   },
   optionDetail: {
     color: couleurs.texteSecondaire,
@@ -278,12 +283,12 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: couleurs.vert,
+    backgroundColor: couleurs.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cocheTexte: {
-    color: couleurs.texteSurFonce,
+    color: couleurs.surAccent,
     fontSize: 15,
     fontWeight: '800',
     lineHeight: 18,

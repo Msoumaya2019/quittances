@@ -19,15 +19,17 @@ import {
   Champ,
   EnTeteEcran,
 } from '@/ui/components';
-import { couleurs, espaces, typographie } from '@/ui/tokens';
+import { espaces, typographie } from '@/ui/tokens';
 import {
   creerProprietaire,
   modifierProprietaire,
   trouverProprietaire,
 } from '@/db/repositories/owners';
 import { useApplication } from '@/state/ApplicationContext';
+import { useStyles, type Couleurs } from '@/ui/theme';
 
 export default function EcranProprietaire() {
+  const styles = useStyles(creerStyles);
   const { id } = useLocalSearchParams<{ id?: string }>();
   const insets = useSafeAreaInsets();
   const { rafraichir } = useApplication();
@@ -258,7 +260,8 @@ export default function EcranProprietaire() {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   plein: {
     flex: 1,
     backgroundColor: couleurs.fond,

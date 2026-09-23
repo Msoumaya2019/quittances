@@ -16,7 +16,8 @@ import {
   type TextInputProps,
 } from 'react-native';
 
-import { couleurs, espaces, rayons, tailles, typographie } from '../tokens';
+import { espaces, rayons, tailles, typographie } from '../tokens';
+import { useStyles, useCouleurs, type Couleurs } from '../theme';
 
 interface PropsChamp {
   libelle: string;
@@ -60,6 +61,8 @@ export const Champ = forwardRef<TextInput, PropsChamp>(function Champ(
   },
   ref,
 ) {
+  const couleurs = useCouleurs();
+  const styles = useStyles(creerStyles);
   const [focus, setFocus] = useState(false);
 
   return (
@@ -129,6 +132,8 @@ export function ChampMontant({
   erreur,
   obligatoire = false,
 }: PropsChampMontant) {
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   // On garde une représentation textuelle locale pour ne pas reformater la
   // saisie pendant que l'utilisateur tape.
   const [texte, setTexte] = useState(
@@ -178,7 +183,8 @@ export function ChampMontant({
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   conteneur: {
     gap: espaces.sm,
   },
@@ -207,8 +213,8 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   champFocus: {
-    borderColor: couleurs.vert,
-    backgroundColor: couleurs.vertTresClair,
+    borderColor: couleurs.accent,
+    backgroundColor: couleurs.accentTresClair,
   },
   champErreur: {
     borderColor: couleurs.rouge,

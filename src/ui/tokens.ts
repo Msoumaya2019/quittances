@@ -1,75 +1,41 @@
 /**
  * Jetons de design.
  *
- * Toute couleur, tout espacement et tout rayon utilisés dans l'application
- * viennent d'ici. Changer l'identité visuelle se fait donc à un seul endroit.
+ * Les **mesures** — espacements, rayons, tailles, typographie — sont des
+ * constantes : elles ne dépendent ni de la couleur choisie ni du mode.
  *
- * Direction artistique :
- *  - fond clair et lumineux, blanc cassé et gris très clair ;
- *  - vert émeraude comme couleur principale ;
- *  - touches de bleu et de pastels pour les statuts ;
- *  - cartes aux coins arrondis, beaucoup d'air entre les éléments.
+ * Les **couleurs**, elles, dépendent de deux choix du bailleur : la couleur
+ * d'accent et le mode clair ou nuit. Elles ne sont donc plus des constantes
+ * figées, mais la `Palette` composée par `src/ui/palette.ts` et distribuée par
+ * le contexte applicatif.
+ *
+ * Conséquence pratique : aucun écran n'écrit une couleur en dur. Un composant
+ * reçoit la palette par `useCouleurs()` et fabrique ses styles par
+ * `useStyles((couleurs) => StyleSheet.create({...}))`. C'est ce qui garantit
+ * qu'un changement de thème ne laisse aucun écran vert.
  */
 
-export const couleurs = {
-  // Fonds
-  fond: '#F7F9F8',
-  fondCarte: '#FFFFFF',
-  fondSourdine: '#EEF2F0',
-  fondSurvol: '#F1F5F3',
+import type { Palette } from './palette';
 
-  // Vert émeraude, couleur principale
-  vert: '#059669',
-  vertFonce: '#047857',
-  vertClair: '#D1FAE5',
-  vertTresClair: '#ECFDF5',
-
-  // Bleu, pour les informations neutres
-  bleu: '#2563EB',
-  bleuClair: '#DBEAFE',
-  bleuTresClair: '#EFF6FF',
-
-  // Orange, paiement partiel
-  orange: '#EA580C',
-  orangeClair: '#FFEDD5',
-  orangeTresClair: '#FFF7ED',
-
-  // Rouge, retard et erreurs
-  rouge: '#DC2626',
-  rougeClair: '#FEE2E2',
-  rougeTresClair: '#FEF2F2',
-
-  // Pastels d'accompagnement
-  violet: '#7C3AED',
-  violetClair: '#EDE9FE',
-  rose: '#DB2777',
-  roseClair: '#FCE7F3',
-  turquoise: '#0D9488',
-  turquoiseClair: '#CCFBF1',
-  ambre: '#D97706',
-  ambreClair: '#FEF3C7',
-
-  // Textes
-  texte: '#111827',
-  texteSecondaire: '#4B5563',
-  texteTertiaire: '#9CA3AF',
-  texteSurFonce: '#FFFFFF',
-
-  // Trait et séparateurs
-  bordure: '#E5E7EB',
-  bordureForte: '#D1D5DB',
-
-  transparence: 'rgba(17, 24, 39, 0.45)',
-} as const;
-
-/** Couleurs d'un statut, avec le fond associé. */
-export const couleursStatut = {
-  vert: { fond: couleurs.vertTresClair, texte: couleurs.vertFonce, puce: couleurs.vert },
-  orange: { fond: couleurs.orangeTresClair, texte: couleurs.orange, puce: couleurs.orange },
-  rouge: { fond: couleurs.rougeTresClair, texte: couleurs.rouge, puce: couleurs.rouge },
-  gris: { fond: couleurs.fondSourdine, texte: couleurs.texteSecondaire, puce: couleurs.texteTertiaire },
-  bleu: { fond: couleurs.bleuTresClair, texte: couleurs.bleu, puce: couleurs.bleu },
-} as const;
+/**
+ * Couleurs d'un statut de paiement, avec le fond et la puce associés.
+ *
+ * Le vert reste vert dans les huit combinaisons : « payé » ne change pas de
+ * sens parce que le bailleur a choisi un thème rose.
+ */
+export function couleursStatutDe(couleurs: Palette) {
+  return {
+    vert: { fond: couleurs.succesTresClair, texte: couleurs.succesFonce, puce: couleurs.succes },
+    orange: { fond: couleurs.orangeTresClair, texte: couleurs.orange, puce: couleurs.orange },
+    rouge: { fond: couleurs.rougeTresClair, texte: couleurs.rouge, puce: couleurs.rouge },
+    gris: {
+      fond: couleurs.fondSourdine,
+      texte: couleurs.texteSecondaire,
+      puce: couleurs.texteTertiaire,
+    },
+    bleu: { fond: couleurs.bleuTresClair, texte: couleurs.bleu, puce: couleurs.bleu },
+  } as const;
+}
 
 /**
  * Échelle d'espacement, en points.
@@ -130,6 +96,9 @@ export const typographie = {
  * Ombres douces, adaptées à un fond clair.
  * Sur Android, `elevation` prend le relais ; on garde les deux pour un rendu
  * cohérent sur les deux plateformes.
+ *
+ * L'ombre du bouton est à part : elle est teintée de l'accent, donc recalculée
+ * à chaque thème par `ombreBouton`.
  */
 export const ombres = {
   carte: {
@@ -146,13 +115,6 @@ export const ombres = {
     shadowRadius: 14,
     elevation: 4,
   },
-  bouton: {
-    shadowColor: '#047857',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
-    shadowRadius: 8,
-    elevation: 3,
-  },
   barre: {
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: -2 },
@@ -161,6 +123,23 @@ export const ombres = {
     elevation: 8,
   },
 } as const;
+
+/**
+ * Ombre portée sous un bouton plein.
+ *
+ * Elle reprend la teinte de l'accent pour que le relief reste cohérent quand le
+ * bailleur choisit le rose ou le noir. En mode nuit, l'accent étant clair,
+ * l'ombre devient une lueur douce — ce qui est le rendu attendu sur fond sombre.
+ */
+export function ombreBouton(couleurs: Palette) {
+  return {
+    shadowColor: couleurs.accentFonce,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 3,
+  } as const;
+}
 
 /** Durées d'animation, en millisecondes. Discrètes et rapides. */
 export const animations = {

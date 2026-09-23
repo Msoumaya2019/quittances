@@ -9,8 +9,9 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { couleursStatut, espaces, rayons, typographie } from '../tokens';
+import { couleursStatutDe, espaces, rayons, typographie } from '../tokens';
 import { PRESENTATION_STATUT, type StatutMois } from '../../domain/types';
+import { useCouleurs, useStyles, type Couleurs } from '../theme';
 
 interface PropsPastille {
   statut: StatutMois;
@@ -19,8 +20,10 @@ interface PropsPastille {
 }
 
 export function PastilleStatut({ statut, compacte = false }: PropsPastille) {
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   const presentation = PRESENTATION_STATUT[statut];
-  const palette = couleursStatut[presentation.couleur];
+  const palette = couleursStatutDe(couleurs)[presentation.couleur];
 
   return (
     <View
@@ -47,6 +50,7 @@ export function PastilleStatut({ statut, compacte = false }: PropsPastille) {
 
 /** Pastille neutre, pour annoncer un état sans statut de paiement. */
 export function PastilleNeutre({ libelle, couleur }: { libelle: string; couleur?: string }) {
+  const styles = useStyles(creerStyles);
   const teinte = couleur ?? '#6B7280';
   return (
     <View
@@ -63,7 +67,8 @@ export function PastilleNeutre({ libelle, couleur }: { libelle: string; couleur?
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   pastille: {
     flexDirection: 'row',
     alignItems: 'center',

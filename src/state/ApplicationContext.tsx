@@ -19,6 +19,7 @@ import { ouvrirBase } from '../db/database';
 import { lireReglages, ecrireReglages, type Reglages } from '../db/repositories/settings';
 import { REGLAGES_PAR_DEFAUT } from '../db/repositories/settings';
 import { periodeActuelle, type Periode } from '../domain/period';
+import { composerPalette, type Palette } from '../ui/palette';
 
 interface ValeurApplication {
   /** Mois affiché par l'accueil et les listes. */
@@ -31,6 +32,12 @@ interface ValeurApplication {
 
   reglages: Reglages;
   majReglages: (partiel: Partial<Reglages>) => Promise<void>;
+
+  /**
+   * Couleurs du thème choisi, recalculées quand la couleur d'accent ou le mode
+   * change. C'est la seule source de couleur de l'application.
+   */
+  palette: Palette;
 
   /** Compteur incrémenté après chaque écriture, pour forcer un rechargement. */
   cleRafraichissement: number;
@@ -109,6 +116,14 @@ export function FournisseurApplication({ children }: { children: React.ReactNode
     return mois.annee === courant.annee && mois.mois === courant.mois;
   }, [mois]);
 
+  // La palette ne dépend que de deux réglages. La mémoïser sur ces deux
+  // valeurs — et non sur l'objet `reglages` entier — évite de recalculer tous
+  // les styles de l'application quand le bailleur change un jour de rappel.
+  const palette = useMemo(
+    () => composerPalette(reglages.couleurTheme, reglages.modeTheme),
+    [reglages.couleurTheme, reglages.modeTheme],
+  );
+
   const valeur = useMemo<ValeurApplication>(
     () => ({
       mois,
@@ -119,6 +134,7 @@ export function FournisseurApplication({ children }: { children: React.ReactNode
       estMoisCourant,
       reglages,
       majReglages,
+      palette,
       cleRafraichissement,
       rafraichir,
       pret,
@@ -133,6 +149,7 @@ export function FournisseurApplication({ children }: { children: React.ReactNode
       estMoisCourant,
       reglages,
       majReglages,
+      palette,
       cleRafraichissement,
       rafraichir,
       pret,

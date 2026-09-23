@@ -14,11 +14,12 @@ import Svg, { Path } from 'react-native-svg';
 import { Bouton } from './Bouton';
 import { Carte } from './Carte';
 import { PastilleStatut } from './PastilleStatut';
-import { couleurs, espaces, rayons, typographie } from '../tokens';
+import { espaces, rayons, typographie } from '../tokens';
 import { formatMontant } from '../../domain/money';
 import { libelleCourt, libelleLongCapitalise, type Periode } from '../../domain/period';
 import { nomComplet } from '../../domain/types';
 import type { CarteLogement } from '../../hooks/useAccueil';
+import { useStyles, useCouleurs, type Couleurs } from '../theme';
 
 interface PropsCarteLogement {
   donnees: CarteLogement;
@@ -35,6 +36,7 @@ export function CarteLogementItem({
   onOuvrirLogement,
   onGenererMoisPrecedent,
 }: PropsCarteLogement) {
+  const styles = useStyles(creerStyles);
   const {
     logement,
     titulaires,
@@ -48,7 +50,8 @@ export function CarteLogementItem({
   const locataire = titulaires.length > 0 ? nomComplet(titulaires[0]) : null;
   const autresTitulaires = titulaires.length > 1 ? ` +${titulaires.length - 1}` : '';
 
-  const couleurAccent = COULEUR_ACCENT[statut];
+  const couleurs = useCouleurs();
+  const couleurAccent = couleurParStatut(couleurs)[statut];
 
   // Une carte sans locataire ne propose pas de paiement : il n'y a rien à régler.
   const actionDesactivee = action.type === 'aucune' || !donnees.bail;
@@ -165,6 +168,7 @@ function LigneMontant({
   valeur: string;
   accentuee?: boolean;
 }) {
+  const styles = useStyles(creerStyles);
   return (
     <View style={styles.ligneMontant}>
       <Text style={[typographie.petit, styles.libelleMontant]}>{libelle}</Text>
@@ -182,6 +186,7 @@ function LigneMontant({
 }
 
 function IconePersonne() {
+  const couleurs = useCouleurs();
   return (
     <Svg width={16} height={16} viewBox="0 0 24 24">
       <Path
@@ -196,11 +201,12 @@ function IconePersonne() {
 }
 
 function IconeCalendrier() {
+  const couleurs = useCouleurs();
   return (
     <Svg width={14} height={14} viewBox="0 0 24 24">
       <Path
         d="M4 6 h16 v14 h-16 z M4 10 h16 M8 3 v4 M16 3 v4"
-        stroke={couleurs.vert}
+        stroke={couleurs.accent}
         strokeWidth={2}
         strokeLinecap="round"
         fill="none"
@@ -209,15 +215,24 @@ function IconeCalendrier() {
   );
 }
 
-const COULEUR_ACCENT: Record<string, string> = {
-  paye: couleurs.vert,
-  partiel: couleurs.orange,
-  retard: couleurs.rouge,
-  attente: couleurs.bordureForte,
-  hors_bail: couleurs.bordureForte,
-};
+/**
+ * Couleur du liseré d'une carte, selon le statut du mois.
+ *
+ * « Payé » reste vert dans tous les thèmes : le liseré dit qu'un mois est réglé,
+ * il ne reprend pas la couleur choisie par le bailleur.
+ */
+function couleurParStatut(couleurs: Couleurs): Record<string, string> {
+  return {
+    paye: couleurs.succes,
+    partiel: couleurs.orange,
+    retard: couleurs.rouge,
+    attente: couleurs.bordureForte,
+    hors_bail: couleurs.bordureForte,
+  };
+}
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   carte: {
     gap: espaces.md,
     paddingLeft: espaces.lg - 2,
@@ -266,7 +281,7 @@ const styles = StyleSheet.create({
     color: couleurs.texte,
   },
   valeurAccentuee: {
-    color: couleurs.vertFonce,
+    color: couleurs.accentFonce,
   },
   separateur: {
     height: StyleSheet.hairlineWidth,
@@ -314,6 +329,6 @@ const styles = StyleSheet.create({
     paddingVertical: espaces.xs,
   },
   texteLien: {
-    color: couleurs.vert,
+    color: couleurs.accent,
   },
 });

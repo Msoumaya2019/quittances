@@ -31,7 +31,7 @@ import { Carte } from '@/ui/components/Carte';
 import { Champ, ChampMontant } from '@/ui/components/Champ';
 import { EnTeteEcran } from '@/ui/components/EnTeteEcran';
 import { LigneDetail } from '@/ui/components/LigneDetail';
-import { couleurs, espaces, rayons, typographie } from '@/ui/tokens';
+import { espaces, rayons, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import { aujourdHui, libelleLongCapitalise, periodeActuelle, versCle } from '@/domain/period';
 import {
@@ -45,6 +45,7 @@ import {
   type SaisieTitulaire,
 } from '@/db/repositories/properties';
 import { useApplication } from '@/state/ApplicationContext';
+import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
 
 const NOMBRE_ETAPES = 4;
 
@@ -59,6 +60,8 @@ interface ProprietaireNouveau {
 }
 
 export default function EcranNouveauLogement() {
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   const insets = useSafeAreaInsets();
   const { rafraichir, definirMois } = useApplication();
 
@@ -708,7 +711,7 @@ export default function EcranNouveauLogement() {
                 libelle="Total mensuel"
                 valeur={formatMontant(totalMensuel, { decimales: 'auto' })}
                 accentuee
-                teinte={couleurs.vertFonce}
+                teinte={couleurs.accentFonce}
               />
               <LigneDetail libelle="Premier mois facturé" valeur={libelleLongCapitalise({
                 annee: Number(periodeDebut.slice(0, 4)),
@@ -750,6 +753,7 @@ export default function EcranNouveauLogement() {
 
 /** Indicateur de progression du parcours. */
 function EtapeCourante({ etape }: { etape: number }) {
+  const styles = useStyles(creerStyles);
   const libelles = ['Propriétaire', 'Logement', 'Locataire', 'Finances'];
 
   return (
@@ -777,7 +781,8 @@ function EtapeCourante({ etape }: { etape: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   plein: {
     flex: 1,
     backgroundColor: couleurs.fond,
@@ -807,25 +812,25 @@ const styles = StyleSheet.create({
     borderColor: couleurs.bordure,
   },
   puceAtteinte: {
-    backgroundColor: couleurs.vert,
-    borderColor: couleurs.vert,
+    backgroundColor: couleurs.accent,
+    borderColor: couleurs.accent,
   },
   puceTexteAtteinte: {
-    color: couleurs.texteSurFonce,
+    color: couleurs.surAccent,
   },
   libelleEtape: {
     color: couleurs.texteTertiaire,
   },
   libelleAtteinte: {
-    color: couleurs.vertFonce,
+    color: couleurs.accentFonce,
   },
   carteEtape: {
     gap: espaces.lg,
   },
   carteRecap: {
     gap: espaces.xs,
-    backgroundColor: couleurs.vertTresClair,
-    borderColor: couleurs.vertClair,
+    backgroundColor: couleurs.accentTresClair,
+    borderColor: couleurs.accentClair,
   },
   rangee: {
     flexDirection: 'row',
@@ -857,8 +862,8 @@ const styles = StyleSheet.create({
     backgroundColor: couleurs.fond,
   },
   optionActive: {
-    borderColor: couleurs.vert,
-    backgroundColor: couleurs.vertTresClair,
+    borderColor: couleurs.accent,
+    backgroundColor: couleurs.accentTresClair,
   },
   optionTextes: {
     flex: 1,
@@ -871,7 +876,7 @@ const styles = StyleSheet.create({
     color: couleurs.texteSecondaire,
   },
   coche: {
-    color: couleurs.vert,
+    color: couleurs.accent,
     fontSize: 17,
     fontWeight: '800',
   },
@@ -890,13 +895,13 @@ const styles = StyleSheet.create({
     gap: espaces.xs,
     paddingVertical: espaces.md,
     borderRadius: rayons.md,
-    backgroundColor: couleurs.vertTresClair,
+    backgroundColor: couleurs.accentTresClair,
   },
   etiquetteTotal: {
     color: couleurs.texteSecondaire,
   },
   montantTotal: {
-    color: couleurs.vertFonce,
+    color: couleurs.accentFonce,
   },
   actions: {
     gap: espaces.sm,

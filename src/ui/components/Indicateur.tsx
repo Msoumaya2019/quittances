@@ -10,7 +10,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
-import { couleurs, espaces, rayons, typographie } from '../tokens';
+import { espaces, rayons, typographie } from '../tokens';
+import { useCouleurs, useStyles, type Couleurs } from '../theme';
 
 export type IconeIndicateur = 'attendu' | 'encaisse' | 'reste' | 'logements';
 
@@ -25,7 +26,9 @@ interface PropsIndicateur {
 }
 
 export function Indicateur({ libelle, valeur, icone, teinte, compact = false }: PropsIndicateur) {
-  const couleur = teinte ?? couleurParIcone[icone];
+  const couleurs = useCouleurs();
+  const styles = useStyles(creerStyles);
+  const couleur = teinte ?? couleurParIcone(couleurs)[icone];
 
   return (
     <View style={[styles.conteneur, compact && styles.compact]}>
@@ -96,14 +99,24 @@ function DessinIcone({
   );
 }
 
-const couleurParIcone: Record<IconeIndicateur, string> = {
-  attendu: couleurs.bleu,
-  encaisse: couleurs.vert,
-  reste: couleurs.orange,
-  logements: couleurs.violet,
-};
+/**
+ * Couleur de chaque indicateur du tableau de bord.
+ *
+ * Trois teintes sont fixes : elles servent à distinguer les indicateurs entre
+ * eux. Celle de l'encaissé suit l'accent, parce que c'est le chiffre principal
+ * de l'écran.
+ */
+function couleurParIcone(couleurs: Couleurs): Record<IconeIndicateur, string> {
+  return {
+    attendu: couleurs.bleu,
+    encaisse: couleurs.accent,
+    reste: couleurs.orange,
+    logements: couleurs.violet,
+  };
+}
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   conteneur: {
     flex: 1,
     gap: espaces.sm,

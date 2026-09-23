@@ -7,7 +7,8 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
-import { couleurs, espaces, rayons, ombres, typographie } from '../tokens';
+import { espaces, ombreBouton, rayons, typographie } from '../tokens';
+import { useStyles, type Couleurs } from '../theme';
 
 export interface Segment<T extends string> {
   valeur: T;
@@ -30,6 +31,7 @@ export function Segments<T extends string>({
   onChanger,
   defilable = false,
 }: PropsSegments<T>) {
+  const styles = useStyles(creerStyles);
   const contenu = (
     <View style={styles.ligne}>
       {segments.map((segment) => {
@@ -83,7 +85,8 @@ export function Segments<T extends string>({
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   defilement: {
     paddingHorizontal: espaces.lg,
   },
@@ -104,15 +107,15 @@ const styles = StyleSheet.create({
     borderColor: couleurs.bordure,
   },
   segmentActif: {
-    backgroundColor: couleurs.vert,
-    borderColor: couleurs.vert,
-    ...ombres.bouton,
+    backgroundColor: couleurs.accent,
+    borderColor: couleurs.accent,
+    ...ombreBouton(couleurs),
   },
   libelle: {
     color: couleurs.texteSecondaire,
   },
   libelleActif: {
-    color: couleurs.texteSurFonce,
+    color: couleurs.surAccent,
   },
   compteur: {
     minWidth: 20,
@@ -127,6 +130,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.28)',
   },
   compteurTexteActif: {
-    color: couleurs.texteSurFonce,
+    color: couleurs.surAccent,
   },
 });

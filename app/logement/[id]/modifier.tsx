@@ -26,7 +26,7 @@ import {
   LigneDetail,
   Segments,
 } from '@/ui/components';
-import { couleurs, espaces, typographie } from '@/ui/tokens';
+import { espaces, typographie } from '@/ui/tokens';
 import { formatMontant, parseMontant } from '@/domain/money';
 import { depuisCle, libelleLongCapitalise, versCle } from '@/domain/period';
 import { TYPES_LOGEMENT } from '@/domain/types';
@@ -40,8 +40,10 @@ import {
   trouverLogement,
 } from '@/db/repositories/properties';
 import { useApplication } from '@/state/ApplicationContext';
+import { useStyles, type Couleurs } from '@/ui/theme';
 
 export default function EcranModifierLogement() {
+  const styles = useStyles(creerStyles);
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { mois, rafraichir } = useApplication();
@@ -395,7 +397,8 @@ export default function EcranModifierLogement() {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   plein: {
     flex: 1,
     backgroundColor: couleurs.fond,

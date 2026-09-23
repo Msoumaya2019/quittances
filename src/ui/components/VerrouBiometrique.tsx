@@ -15,11 +15,14 @@ import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import Svg, { Circle, Path } from 'react-native-svg';
 
-import { couleurs, espaces, rayons, typographie } from '../tokens';
+import { espaces, rayons, typographie } from '../tokens';
 import { Bouton } from './Bouton';
 import { useApplication } from '../../state/ApplicationContext';
+import { useStyles, useCouleurs, type Couleurs } from '../theme';
 
 export function VerrouBiometrique({ children }: { children: React.ReactNode }) {
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   const { reglages, pret } = useApplication();
   const [verrouille, setVerrouille] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -98,10 +101,10 @@ export function VerrouBiometrique({ children }: { children: React.ReactNode }) {
       <View style={styles.centre}>
         <View style={styles.pastilleIcone}>
           <Svg width={40} height={40} viewBox="0 0 24 24">
-            <Circle cx={12} cy={12} r={9} stroke={couleurs.vert} strokeWidth={1.8} fill="none" />
+            <Circle cx={12} cy={12} r={9} stroke={couleurs.accent} strokeWidth={1.8} fill="none" />
             <Path
               d="M12 7.5 v4 M12 7.5 c-2.4 0 -4 1.4 -4 3.4 M12 7.5 c2.4 0 4 1.4 4 3.4 M8.5 14 c0.6 1.6 2 2.6 3.5 2.6"
-              stroke={couleurs.vert}
+              stroke={couleurs.accent}
               strokeWidth={1.8}
               strokeLinecap="round"
               fill="none"
@@ -142,7 +145,8 @@ export function VerrouBiometrique({ children }: { children: React.ReactNode }) {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   plein: {
     flex: 1,
     backgroundColor: couleurs.fond,
@@ -159,7 +163,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: couleurs.vertTresClair,
+    backgroundColor: couleurs.accentTresClair,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: espaces.sm,

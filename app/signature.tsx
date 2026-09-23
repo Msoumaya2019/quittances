@@ -18,12 +18,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useApplication } from '@/state/ApplicationContext';
 import { BandeauMessage, Bouton, Carte, EnTeteEcran } from '@/ui/components';
-import { couleurs, espaces, rayons } from '@/ui/tokens';
+import { espaces, rayons } from '@/ui/tokens';
+import { useStyles, type Couleurs } from '@/ui/theme';
 
 /** Taille maximale acceptée : au-delà, le PDF devient lourd pour rien. */
 const TAILLE_MAXIMALE = 900_000;
 
 export default function EcranSignature() {
+  const styles = useStyles(creerStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { reglages, majReglages } = useApplication();
@@ -191,7 +193,8 @@ export default function EcranSignature() {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   ecran: { flex: 1, backgroundColor: couleurs.fond },
   contenu: { padding: espaces.lg, gap: espaces.lg },
   apercu: {

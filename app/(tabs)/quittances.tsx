@@ -26,7 +26,7 @@ import {
   SelecteurMois,
   Segments,
 } from '@/ui/components';
-import { couleurs, espaces, rayons, typographie } from '@/ui/tokens';
+import { espaces, rayons, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import { formaterDateFr, libelleLongCapitalise, versCle } from '@/domain/period';
 import { LIBELLE_DOCUMENT } from '@/domain/types';
@@ -40,10 +40,12 @@ import {
   nomArchivePourMois,
   partagerArchive,
 } from '@/pdf/groupee';
+import { useStyles, type Couleurs } from '@/ui/theme';
 
 type Vue = 'mois' | 'tous';
 
 export default function EcranQuittances() {
+  const styles = useStyles(creerStyles);
   const {
     mois,
     cleRafraichissement,
@@ -416,7 +418,8 @@ function libelleLongCapitaliseCourte(cle: string): string {
   return libelleLongCapitalise({ annee, mois });
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   plein: {
     flex: 1,
     backgroundColor: couleurs.fond,
@@ -460,11 +463,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   caseCochee: {
-    backgroundColor: couleurs.vert,
-    borderColor: couleurs.vert,
+    backgroundColor: couleurs.accent,
+    borderColor: couleurs.accent,
   },
   coche: {
-    color: couleurs.texteSurFonce,
+    color: couleurs.surAccent,
     fontSize: 15,
     fontWeight: '700',
   },

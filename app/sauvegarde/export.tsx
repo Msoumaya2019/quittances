@@ -22,10 +22,12 @@ import {
   EnTeteEcran,
   LigneDetail,
 } from '@/ui/components';
-import { couleurs, espaces, typographie } from '@/ui/tokens';
+import { espaces, typographie } from '@/ui/tokens';
 import { creerSauvegarde, tailleSauvegarde } from '@/backup/export';
+import { useStyles, type Couleurs } from '@/ui/theme';
 
 export default function EcranExportSauvegarde() {
+  const styles = useStyles(creerStyles);
   const insets = useSafeAreaInsets();
 
   const [motDePasse, setMotDePasse] = useState('');
@@ -206,7 +208,8 @@ function formaterTaille(octets: number): string {
   return `${(octets / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo`;
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   contenu: {
     paddingHorizontal: espaces.lg,
     gap: espaces.lg,

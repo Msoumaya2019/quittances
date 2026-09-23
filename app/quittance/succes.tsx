@@ -22,15 +22,18 @@ import { BandeauMessage } from '@/ui/components/BandeauMessage';
 import { Bouton } from '@/ui/components/Bouton';
 import { Carte } from '@/ui/components/Carte';
 import { LigneDetail } from '@/ui/components/LigneDetail';
-import { couleurs, espaces, typographie } from '@/ui/tokens';
+import { espaces, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import { libelleLongCapitalise, depuisCle, formaterDateFr } from '@/domain/period';
 import { LIBELLE_DOCUMENT, type Document } from '@/domain/types';
 import { trouverDocument } from '@/db/repositories/documents';
 import { ouvrirDocument, partagerDocument } from '@/pdf/partage';
 import { useApplication } from '@/state/ApplicationContext';
+import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
 
 export default function EcranSucces() {
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   const insets = useSafeAreaInsets();
   const { reglages } = useApplication();
   const { documentId } = useLocalSearchParams<{ documentId: string }>();
@@ -109,7 +112,7 @@ export default function EcranSucces() {
   if (!document && !erreur) {
     return (
       <View style={[styles.centreur, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={couleurs.vert} />
+        <ActivityIndicator size="large" color={couleurs.accent} />
       </View>
     );
   }
@@ -140,7 +143,7 @@ export default function EcranSucces() {
                   : `${LIBELLE_DOCUMENT[document!.type]} généré avec succès !`
               }
               sousTitre={document!.logementNom}
-              teinte={estQuittance ? couleurs.vert : couleurs.orange}
+              teinte={estQuittance ? couleurs.accent : couleurs.orange}
             />
 
             <Carte style={styles.carte}>
@@ -167,7 +170,7 @@ export default function EcranSucces() {
                 libelle={estQuittance ? 'Total réglé' : 'Montant'}
                 valeur={formatMontant(document!.total, { decimales: 'auto' })}
                 accentuee
-                teinte={estQuittance ? couleurs.vertFonce : couleurs.orange}
+                teinte={estQuittance ? couleurs.accentFonce : couleurs.orange}
               />
               <LigneDetail
                 libelle="Émis le"
@@ -219,7 +222,8 @@ export default function EcranSucces() {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   plein: {
     flex: 1,
     backgroundColor: couleurs.fond,

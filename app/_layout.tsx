@@ -36,12 +36,46 @@ function RappelsDeLoyers() {
 }
 
 /**
+ * Intérieur de l'application.
+ *
+ * Ce composant existe pour une seule raison : il vit **sous** le fournisseur,
+ * donc il peut lire le thème. La racine, elle, ne le peut pas — elle est ce qui
+ * installe le fournisseur. Sans cette séparation, le fond des écrans et la barre
+ * d'état resteraient figés sur le thème clair.
+ */
+function Coquille() {
+  const { palette, reglages } = useApplication();
+
+  return (
+    <>
+      {/* Sur fond sombre, une barre d'état à texte sombre devient illisible. */}
+      <StatusBar style={reglages.modeTheme === 'sombre' ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: palette.fond },
+          animation: 'slide_from_right',
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="logement/nouveau"
+          options={{ presentation: 'card', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen name="paiement/[propertyId]" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="quittance/succes" options={{ presentation: 'modal' }} />
+      </Stack>
+    </>
+  );
+}
+
+/**
  * Racine de l'application.
  *
  * Ordre des enveloppes, de l'extérieur vers l'intérieur :
  *  1. `GestureHandlerRootView` : nécessaire aux gestes dans toute l'application ;
  *  2. `SafeAreaProvider` : encoches et barres système ;
- *  3. `FournisseurApplication` : base de données, réglages, mois affiché ;
+ *  3. `FournisseurApplication` : base de données, réglages, mois affiché, thème ;
  *  4. `VerrouBiometrique` : bloque l'affichage tant que l'identité n'est pas
  *     confirmée, si l'utilisateur a activé cette protection.
  */
@@ -51,23 +85,8 @@ export default function RacineLayout() {
       <SafeAreaProvider>
         <FournisseurApplication>
           <RappelsDeLoyers />
-          <StatusBar style="dark" />
           <VerrouBiometrique>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: '#F7F9F8' },
-                animation: 'slide_from_right',
-              }}
-            >
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen
-                name="logement/nouveau"
-                options={{ presentation: 'card', animation: 'slide_from_bottom' }}
-              />
-              <Stack.Screen name="paiement/[propertyId]" options={{ presentation: 'modal' }} />
-              <Stack.Screen name="quittance/succes" options={{ presentation: 'modal' }} />
-            </Stack>
+            <Coquille />
           </VerrouBiometrique>
         </FournisseurApplication>
       </SafeAreaProvider>

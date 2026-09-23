@@ -24,7 +24,7 @@ import { Carte } from '@/ui/components/Carte';
 import { EnTeteEcran } from '@/ui/components/EnTeteEcran';
 import { LigneDetail } from '@/ui/components/LigneDetail';
 import { PastilleStatut } from '@/ui/components/PastilleStatut';
-import { couleurs, espaces, typographie } from '@/ui/tokens';
+import { espaces, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import { libelleLongCapitalise, depuisCle, formaterDateFr } from '@/domain/period';
 import { LIBELLE_DOCUMENT, type Document, type TypeDocument } from '@/domain/types';
@@ -32,10 +32,13 @@ import { emettreDocument, diagnostiquerMois, ErreurEmission } from '@/pdf/render
 import { ouvrirDocument, partagerDocument } from '@/pdf/partage';
 import { trouverDocument } from '@/db/repositories/documents';
 import { useApplication } from '@/state/ApplicationContext';
+import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
 
 type TypeDemande = TypeDocument | 'auto';
 
 export default function EcranApercuQuittance() {
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   const insets = useSafeAreaInsets();
   const { rafraichir, reglages } = useApplication();
 
@@ -177,7 +180,7 @@ export default function EcranApercuQuittance() {
   if (chargement) {
     return (
       <View style={[styles.centreur, { paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={couleurs.vert} />
+        <ActivityIndicator size="large" color={couleurs.accent} />
         <Text style={[typographie.corps, styles.texteChargement]}>
           Vérification du mois…
         </Text>
@@ -358,7 +361,8 @@ function libellePeriode(cle: string): string {
   return p ? libelleLongCapitalise(p) : cle;
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   plein: {
     flex: 1,
     backgroundColor: couleurs.fond,

@@ -1,32 +1,48 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ColorValue } from 'react-native';
 
-import { couleurs, typographie } from '@/ui/tokens';
+import { typographie } from '@/ui/tokens';
+import { useCouleurs } from '@/ui/theme';
 
 /**
  * Barre d'onglets inférieure, avec quatre entrées :
- * Accueil, Logements, Quittances, Plus.
+ * Accueil, Quittance, Logement, Réglages.
+ *
+ * L'ordre des `Tabs.Screen` est l'ordre affiché : on le lit de haut en bas.
+ *
+ * Les noms de fichiers, eux, n'ont pas suivi le renommage — `logements.tsx`,
+ * `quittances.tsx` et `plus.tsx` — parce qu'un fichier `logement.tsx` entrerait
+ * en collision avec le dossier `app/logement/`, qui porte les écrans de détail.
+ * Seuls les libellés sont visibles du bailleur.
  *
  * Les icônes sont dessinées en SVG : elles restent nettes à toutes les tailles
  * et suivent la couleur de l'onglet actif, y compris en mode contraste élevé.
  */
 export default function OngletsLayout() {
+  const couleurs = useCouleurs();
+  // Sans cette marge, la barre passe sous la barre d'accueil de l'iPhone et les
+  // libellés deviennent difficiles à toucher. Sur Android, `insets.bottom` vaut
+  // souvent 0 : on garde alors les 8 points d'origine.
+  const insets = useSafeAreaInsets();
+  const margeBasse = Math.max(insets.bottom, 8);
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: couleurs.vert,
+        tabBarActiveTintColor: couleurs.accent,
         tabBarInactiveTintColor: couleurs.texteTertiaire,
         tabBarStyle: {
           backgroundColor: couleurs.fondCarte,
           borderTopColor: couleurs.bordure,
           borderTopWidth: 1,
-          height: 64,
+          height: 64 + insets.bottom,
           paddingTop: 6,
-          paddingBottom: 8,
+          paddingBottom: margeBasse,
         },
         tabBarLabelStyle: {
           ...typographie.minuscule,
@@ -48,27 +64,27 @@ export default function OngletsLayout() {
         }}
       />
       <Tabs.Screen
-        name="logements"
+        name="quittances"
         options={{
-          title: 'Logements',
-          tabBarIcon: ({ color, focused }) => <IconeLogements couleur={color} actif={focused} />,
-          tabBarAccessibilityLabel: 'Logements',
+          title: 'Quittance',
+          tabBarIcon: ({ color, focused }) => <IconeQuittances couleur={color} actif={focused} />,
+          tabBarAccessibilityLabel: 'Quittance, choisir un logement et générer',
         }}
       />
       <Tabs.Screen
-        name="quittances"
+        name="logements"
         options={{
-          title: 'Quittances',
-          tabBarIcon: ({ color, focused }) => <IconeQuittances couleur={color} actif={focused} />,
-          tabBarAccessibilityLabel: 'Quittances',
+          title: 'Logement',
+          tabBarIcon: ({ color, focused }) => <IconeLogements couleur={color} actif={focused} />,
+          tabBarAccessibilityLabel: 'Logement, ajouter ou modifier un logement et ses locataires',
         }}
       />
       <Tabs.Screen
         name="plus"
         options={{
-          title: 'Plus',
+          title: 'Réglages',
           tabBarIcon: ({ color, focused }) => <IconePlus couleur={color} actif={focused} />,
-          tabBarAccessibilityLabel: 'Plus',
+          tabBarAccessibilityLabel: 'Réglages, thème et préférences',
         }}
       />
     </Tabs>

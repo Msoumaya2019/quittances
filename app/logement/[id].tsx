@@ -22,7 +22,7 @@ import {
   LigneDetail,
   PastilleStatut,
 } from '@/ui/components';
-import { couleurs, espaces, rayons, typographie } from '@/ui/tokens';
+import { espaces, rayons, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import {
   aujourdHui,
@@ -53,6 +53,7 @@ import {
 import { trouverProprietaire } from '@/db/repositories/owners';
 import { documentsDuLogement } from '@/db/repositories/documents';
 import { paiementsDuBail } from '@/db/repositories/payments';
+import { useStyles, type Couleurs } from '@/ui/theme';
 
 interface Etat {
   logement: Logement;
@@ -65,6 +66,7 @@ interface Etat {
 }
 
 export default function EcranLogement() {
+  const styles = useStyles(creerStyles);
   const { id } = useLocalSearchParams<{ id: string }>();
   const { mois, rafraichir } = useApplication();
   const insets = useSafeAreaInsets();
@@ -398,7 +400,8 @@ export default function EcranLogement() {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   conteneur: {
     paddingHorizontal: espaces.lg,
     gap: espaces.lg,

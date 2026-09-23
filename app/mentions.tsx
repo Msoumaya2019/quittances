@@ -24,7 +24,8 @@ import {
   EnTeteEcran,
   LigneDetail,
 } from '@/ui/components';
-import { couleurs, espaces, typographie } from '@/ui/tokens';
+import { espaces, typographie } from '@/ui/tokens';
+import { useStyles, type Couleurs } from '@/ui/theme';
 
 const REGLES = [
   {
@@ -50,6 +51,7 @@ const REGLES = [
 ];
 
 export default function EcranMentions() {
+  const styles = useStyles(creerStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { reglages, majReglages } = useApplication();
@@ -177,7 +179,8 @@ export default function EcranMentions() {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   ecran: { flex: 1, backgroundColor: couleurs.fond },
   contenu: { padding: espaces.lg, gap: espaces.lg },
   section: { ...typographie.titreSection, color: couleurs.texte, marginBottom: espaces.xs },

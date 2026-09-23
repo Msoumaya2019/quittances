@@ -10,8 +10,9 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
-import { couleurs, espaces, typographie } from '../tokens';
+import { espaces, typographie } from '../tokens';
 import { Bouton } from './Bouton';
+import { useStyles, useCouleurs, type Couleurs } from '../theme';
 
 interface PropsEcranVide {
   titre: string;
@@ -30,6 +31,7 @@ export function EcranVide({
   actionOnPress,
   illustration = 'maison',
 }: PropsEcranVide) {
+  const styles = useStyles(creerStyles);
   return (
     <View style={styles.conteneur}>
       <Illustration type={illustration} />
@@ -52,13 +54,15 @@ export function EcranVide({
 }
 
 function Illustration({ type }: { type: NonNullable<PropsEcranVide['illustration']> }) {
-  const trait = couleurs.vert;
-  const pale = couleurs.vertClair;
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
+  const trait = couleurs.accent;
+  const pale = couleurs.accentClair;
 
   return (
     <View style={styles.illustration}>
       <Svg width={148} height={148} viewBox="0 0 148 148">
-        <Circle cx={74} cy={74} r={70} fill={couleurs.vertTresClair} />
+        <Circle cx={74} cy={74} r={70} fill={couleurs.accentTresClair} />
 
         {type === 'maison' && (
           <>
@@ -123,7 +127,8 @@ function Illustration({ type }: { type: NonNullable<PropsEcranVide['illustration
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   conteneur: {
     flex: 1,
     alignItems: 'center',

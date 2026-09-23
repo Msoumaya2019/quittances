@@ -21,7 +21,8 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
-import { couleurs, espaces, ombres, rayons, tailles, typographie } from '../tokens';
+import { espaces, ombreBouton, rayons, tailles, typographie } from '../tokens';
+import { useCouleurs, useStyles, type Couleurs } from '../theme';
 
 export type VarianteBouton = 'principal' | 'secondaire' | 'discret' | 'danger';
 
@@ -57,6 +58,8 @@ export function Bouton({
   retourHaptique = true,
   accessibilite,
 }: PropsBouton) {
+  const couleurs = useCouleurs();
+  const styles = useStyles(creerStyles);
   const inactif = desactive || occupe;
 
   const appuyer = () => {
@@ -73,7 +76,7 @@ export function Bouton({
     onPress();
   };
 
-  const styleVariante = STYLES_VARIANTE[variante];
+  const styleVariante = stylesVarianteDe(couleurs)[variante];
 
   return (
     <Pressable
@@ -113,40 +116,48 @@ export function Bouton({
   );
 }
 
-const STYLES_VARIANTE: Record<
-  VarianteBouton,
-  { conteneur: ViewStyle; texte: { color: string } }
-> = {
-  principal: {
-    conteneur: {
-      backgroundColor: couleurs.vert,
-      ...ombres.bouton,
+/**
+ * Habillage de chaque variante, pour le thème courant.
+ *
+ * Une fonction plutôt qu'une constante : les couleurs changent avec le thème, et
+ * une constante figée garderait le vert du premier lancement.
+ */
+function stylesVarianteDe(
+  couleurs: Couleurs,
+): Record<VarianteBouton, { conteneur: ViewStyle; texte: { color: string } }> {
+  return {
+    principal: {
+      conteneur: {
+        backgroundColor: couleurs.accent,
+        ...ombreBouton(couleurs),
+      },
+      texte: { color: couleurs.surAccent },
     },
-    texte: { color: couleurs.texteSurFonce },
-  },
-  secondaire: {
-    conteneur: {
-      backgroundColor: couleurs.vertTresClair,
-      borderWidth: 1,
-      borderColor: couleurs.vertClair,
+    secondaire: {
+      conteneur: {
+        backgroundColor: couleurs.accentTresClair,
+        borderWidth: 1,
+        borderColor: couleurs.accentClair,
+      },
+      texte: { color: couleurs.accentFonce },
     },
-    texte: { color: couleurs.vertFonce },
-  },
-  discret: {
-    conteneur: { backgroundColor: couleurs.fondSourdine },
-    texte: { color: couleurs.texteSecondaire },
-  },
-  danger: {
-    conteneur: {
-      backgroundColor: couleurs.rougeTresClair,
-      borderWidth: 1,
-      borderColor: couleurs.rougeClair,
+    discret: {
+      conteneur: { backgroundColor: couleurs.fondSourdine },
+      texte: { color: couleurs.texteSecondaire },
     },
-    texte: { color: couleurs.rouge },
-  },
-};
+    danger: {
+      conteneur: {
+        backgroundColor: couleurs.rougeTresClair,
+        borderWidth: 1,
+        borderColor: couleurs.rougeClair,
+      },
+      texte: { color: couleurs.rouge },
+    },
+  };
+}
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   base: {
     borderRadius: rayons.lg,
     alignItems: 'center',

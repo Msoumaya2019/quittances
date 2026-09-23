@@ -11,8 +11,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path } from 'react-native-svg';
 
-import { couleurs, espaces, rayons, tailles, typographie } from '../tokens';
+import { espaces, rayons, tailles, typographie } from '../tokens';
 import { libelleLongCapitalise, type Periode } from '../../domain/period';
+import { useStyles, useCouleurs, type Couleurs } from '../theme';
 
 interface PropsSelecteurMois {
   periode: Periode;
@@ -31,6 +32,7 @@ export function SelecteurMois({
   onAujourdhui,
   estMoisCourant,
 }: PropsSelecteurMois) {
+  const styles = useStyles(creerStyles);
   const appuyer = (action: () => void) => {
     void Haptics.selectionAsync().catch(() => {
       // Sans moteur haptique, on continue simplement.
@@ -72,6 +74,8 @@ function Fleche({
   onPress: () => void;
   libelle: string;
 }) {
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   return (
     <Pressable
       onPress={onPress}
@@ -83,7 +87,7 @@ function Fleche({
       <Svg width={22} height={22} viewBox="0 0 24 24">
         <Path
           d={direction === 'gauche' ? 'M14.5 5 L7.5 12 L14.5 19' : 'M9.5 5 L16.5 12 L9.5 19'}
-          stroke={couleurs.vertFonce}
+          stroke={couleurs.accentFonce}
           strokeWidth={2.4}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -94,7 +98,8 @@ function Fleche({
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   conteneur: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -111,20 +116,20 @@ const styles = StyleSheet.create({
     color: couleurs.texte,
   },
   retour: {
-    color: couleurs.vert,
+    color: couleurs.accent,
   },
   fleche: {
     width: tailles.boutonPetit,
     height: tailles.boutonPetit,
     borderRadius: rayons.rond,
-    backgroundColor: couleurs.vertTresClair,
+    backgroundColor: couleurs.accentTresClair,
     borderWidth: 1,
-    borderColor: couleurs.vertClair,
+    borderColor: couleurs.accentClair,
     alignItems: 'center',
     justifyContent: 'center',
   },
   flecheAppuyee: {
-    backgroundColor: couleurs.vertClair,
+    backgroundColor: couleurs.accentClair,
     transform: [{ scale: 0.94 }],
   },
 });

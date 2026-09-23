@@ -11,7 +11,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path } from 'react-native-svg';
 
-import { couleurs, espaces, ombres, rayons, typographie } from '../tokens';
+import { espaces, ombreBouton, rayons, typographie } from '../tokens';
+import { useStyles, useCouleurs, type Couleurs } from '../theme';
 
 interface PropsBoutonFlottant {
   onPress: () => void;
@@ -28,6 +29,8 @@ export function BoutonFlottant({
   bas = 24,
   compact = false,
 }: PropsBoutonFlottant) {
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   const appuyer = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
       // Sans moteur haptique, on continue simplement.
@@ -47,7 +50,7 @@ export function BoutonFlottant({
           pressed && styles.appuye,
         ]}
       >
-        <Plus couleur={couleurs.texteSurFonce} taille={26} />
+        <Plus couleur={couleurs.surAccent} taille={26} />
       </Pressable>
     );
   }
@@ -60,7 +63,7 @@ export function BoutonFlottant({
         accessibilityLabel={libelle}
         style={({ pressed }) => [styles.pilule, pressed && styles.appuye]}
       >
-        <Plus couleur={couleurs.texteSurFonce} taille={20} />
+        <Plus couleur={couleurs.surAccent} taille={20} />
         <Text style={[typographie.bouton, styles.texte]} numberOfLines={1}>
           {libelle}
         </Text>
@@ -82,7 +85,8 @@ function Plus({ couleur, taille }: { couleur: string; taille: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   conteneur: {
     position: 'absolute',
     left: 0,
@@ -93,12 +97,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: espaces.sm,
-    backgroundColor: couleurs.vert,
+    backgroundColor: couleurs.accent,
     paddingHorizontal: espaces.xl,
     paddingVertical: espaces.md + 2,
     borderRadius: rayons.rond,
     minHeight: 54,
-    ...ombres.bouton,
+    ...ombreBouton(couleurs),
   },
   cercle: {
     position: 'absolute',
@@ -106,13 +110,13 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: couleurs.vert,
+    backgroundColor: couleurs.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    ...ombres.bouton,
+    ...ombreBouton(couleurs),
   },
   texte: {
-    color: couleurs.texteSurFonce,
+    color: couleurs.surAccent,
   },
   appuye: {
     opacity: 0.9,

@@ -20,7 +20,7 @@ import {
   EcranVide,
   EnTeteEcran,
 } from '@/ui/components';
-import { couleurs, espaces, typographie } from '@/ui/tokens';
+import { espaces, typographie } from '@/ui/tokens';
 import {
   adresseProprietaireSurUneLigne,
   compterLogementsDuProprietaire,
@@ -29,6 +29,7 @@ import {
 } from '@/db/repositories/owners';
 import type { Proprietaire } from '@/domain/types';
 import { useApplication } from '@/state/ApplicationContext';
+import { useStyles, type Couleurs } from '@/ui/theme';
 
 interface LigneProprietaire {
   proprietaire: Proprietaire;
@@ -37,6 +38,7 @@ interface LigneProprietaire {
 }
 
 export default function EcranProprietaires() {
+  const styles = useStyles(creerStyles);
   const insets = useSafeAreaInsets();
   const { rafraichir } = useApplication();
 
@@ -192,7 +194,8 @@ export default function EcranProprietaires() {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   plein: {
     flex: 1,
     backgroundColor: couleurs.fond,

@@ -21,14 +21,17 @@ import {
   PastilleNeutre,
   PastilleStatut,
 } from '@/ui/components';
-import { couleurs, espaces, rayons, typographie } from '@/ui/tokens';
+import { espaces, rayons, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import { libelleLongCapitalise } from '@/domain/period';
 import { nomComplet } from '@/domain/types';
 import { useApplication } from '@/state/ApplicationContext';
 import { useDonneesAccueil, type CarteLogement } from '@/hooks/useAccueil';
+import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
 
 export default function EcranLogements() {
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   const { mois, cleRafraichissement, rafraichir } = useApplication();
   const insets = useSafeAreaInsets();
   const donnees = useDonneesAccueil(mois, cleRafraichissement);
@@ -80,8 +83,8 @@ export default function EcranLogements() {
           <RefreshControl
             refreshing={rafraichissement}
             onRefresh={tirerPourRafraichir}
-            tintColor={couleurs.vert}
-            colors={[couleurs.vert]}
+            tintColor={couleurs.accent}
+            colors={[couleurs.accent]}
           />
         }
         ListHeaderComponent={
@@ -145,6 +148,8 @@ export default function EcranLogements() {
 
 /** Une ligne compacte : nom, locataire, montant du mois, statut. */
 function LigneLogement({ donnees }: { donnees: CarteLogement }) {
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   const { logement, titulaires, montantDu, statut, bail } = donnees;
   const locataire = titulaires[0] ? nomComplet(titulaires[0]) : null;
 
@@ -180,7 +185,8 @@ function LigneLogement({ donnees }: { donnees: CarteLogement }) {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   plein: {
     flex: 1,
     backgroundColor: couleurs.fond,

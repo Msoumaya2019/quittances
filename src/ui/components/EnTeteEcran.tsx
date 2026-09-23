@@ -7,7 +7,8 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
-import { couleurs, espaces, rayons, typographie } from '../tokens';
+import { espaces, rayons, typographie } from '../tokens';
+import { useStyles, useCouleurs, type Couleurs } from '../theme';
 
 interface PropsEnTete {
   titre: string;
@@ -26,6 +27,7 @@ export function EnTeteEcran({
   actionOnPress,
   actionOccupee = false,
 }: PropsEnTete) {
+  const styles = useStyles(creerStyles);
   return (
     <View style={styles.conteneur}>
       <View style={styles.textes}>
@@ -59,11 +61,12 @@ export function EnTeteEcran({
 }
 
 function Plus() {
+  const couleurs = useCouleurs();
   return (
     <Svg width={16} height={16} viewBox="0 0 24 24">
       <Path
         d="M12 5 L12 19 M5 12 L19 12"
-        stroke={couleurs.texteSurFonce}
+        stroke={couleurs.surAccent}
         strokeWidth={2.6}
         strokeLinecap="round"
       />
@@ -71,7 +74,8 @@ function Plus() {
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   conteneur: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -95,13 +99,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: espaces.xs,
-    backgroundColor: couleurs.vert,
+    backgroundColor: couleurs.accent,
     paddingHorizontal: espaces.md,
     paddingVertical: espaces.sm,
     borderRadius: rayons.rond,
   },
   texteAction: {
-    color: couleurs.texteSurFonce,
+    color: couleurs.surAccent,
   },
   actionAppuyee: {
     opacity: 0.85,

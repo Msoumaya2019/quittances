@@ -28,16 +28,19 @@ import { Segments } from '@/ui/components/Segments';
 import { BarreProgression } from '@/ui/components/BarreProgression';
 import { FeuilleAction, type OptionFeuille } from '@/ui/components/FeuilleAction';
 import { BoutonFlottant } from '@/ui/components/BoutonFlottant';
-import { couleurs, espaces, typographie } from '@/ui/tokens';
+import { espaces, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import { libelleLongCapitalise, decaler, versCle, depuisCle } from '@/domain/period';
 import { useApplication } from '@/state/ApplicationContext';
 import { useDonneesAccueil, type CarteLogement } from '@/hooks/useAccueil';
 import type { StatutMois } from '@/domain/types';
+import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
 
 type Filtre = 'tous' | 'payes' | 'attente' | 'impayes';
 
 export default function EcranAccueil() {
+  const styles = useStyles(creerStyles);
+  const couleurs = useCouleurs();
   const insets = useSafeAreaInsets();
   const {
     mois,
@@ -154,7 +157,7 @@ export default function EcranAccueil() {
   if (!pret && chargement) {
     return (
       <View style={styles.centreur}>
-        <ActivityIndicator size="large" color={couleurs.vert} />
+        <ActivityIndicator size="large" color={couleurs.accent} />
         <Text style={[typographie.corps, styles.texteChargement]}>
           Préparation de vos données…
         </Text>
@@ -204,8 +207,8 @@ export default function EcranAccueil() {
           <RefreshControl
             refreshing={enRafraichissement}
             onRefresh={() => void rafraichirManuel()}
-            tintColor={couleurs.vert}
-            colors={[couleurs.vert]}
+            tintColor={couleurs.accent}
+            colors={[couleurs.accent]}
           />
         }
         ListHeaderComponent={
@@ -323,6 +326,7 @@ function EnTete({
   onSuivant,
   onAujourdhui,
 }: PropsEnTete) {
+  const styles = useStyles(creerStyles);
   return (
     <View style={styles.entete}>
       <View style={styles.ligneTitre}>
@@ -410,6 +414,7 @@ function EnTete({
 }
 
 function Fleche({ direction, onPress }: { direction: 'gauche' | 'droite'; onPress: () => void }) {
+  const styles = useStyles(creerStyles);
   return (
     <Bouton
       libelle={direction === 'gauche' ? '‹' : '›'}
@@ -423,7 +428,8 @@ function Fleche({ direction, onPress }: { direction: 'gauche' | 'droite'; onPres
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   plein: {
     flex: 1,
     backgroundColor: couleurs.fond,

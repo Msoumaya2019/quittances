@@ -6,7 +6,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { couleurs, espaces, ombres, rayons } from '../tokens';
+import { espaces, ombres, rayons } from '../tokens';
+import { useStyles, type Couleurs } from '../theme';
 
 interface PropsCarte {
   children: React.ReactNode;
@@ -30,6 +31,7 @@ export function Carte({
   style,
   accessibilite,
 }: PropsCarte) {
+  const styles = useStyles(creerStyles);
   const styleConteneur: StyleProp<ViewStyle> = [
     styles.carte,
     appuyee ? ombres.carteAppuyee : ombres.carte,
@@ -54,7 +56,8 @@ export function Carte({
   );
 }
 
-const styles = StyleSheet.create({
+const creerStyles = (couleurs: Couleurs) =>
+  StyleSheet.create({
   carte: {
     backgroundColor: couleurs.fondCarte,
     borderRadius: rayons.xl,

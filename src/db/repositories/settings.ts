@@ -7,10 +7,18 @@
 
 import { executer, lireToutes } from '../database';
 import type { ModeleDocument } from '../../domain/types';
+// Import de type uniquement : `palette.ts` ne contient que des données, et rien
+// n'est embarqué à l'exécution. Les réglages ont besoin de connaître les valeurs
+// admises, pas de dessiner.
+import type { CouleurTheme, ModeTheme } from '../../ui/palette';
 
 export interface Reglages {
   /** Modèle de document utilisé par défaut. */
   modeleParDefaut: ModeleDocument;
+  /** Couleur d'accent choisie par le bailleur. */
+  couleurTheme: CouleurTheme;
+  /** Mode clair ou nuit. */
+  modeTheme: ModeTheme;
   /** Signature du bailleur, en base64 (image) ou `null`. */
   signatureBase64: string | null;
   /** Faut-il apposer la signature sur les documents émis ? */
@@ -33,6 +41,8 @@ export interface Reglages {
 
 export const REGLAGES_PAR_DEFAUT: Reglages = {
   modeleParDefaut: 'classique',
+  couleurTheme: 'vert',
+  modeTheme: 'clair',
   signatureBase64: null,
   signatureActive: false,
   lieuEmission: '',
@@ -47,6 +57,8 @@ export const REGLAGES_PAR_DEFAUT: Reglages = {
 /** Traduction entre les clés de la table et les champs typés. */
 const CLES: Record<keyof Reglages, string> = {
   modeleParDefaut: 'modele_par_defaut',
+  couleurTheme: 'couleur_theme',
+  modeTheme: 'mode_theme',
   signatureBase64: 'signature_base64',
   signatureActive: 'signature_active',
   lieuEmission: 'lieu_emission',
@@ -57,6 +69,12 @@ const CLES: Record<keyof Reglages, string> = {
   rappelPaiements: 'rappel_paiements',
   jourRappel: 'jour_rappel',
 };
+
+/** Couleurs d'accent admises, dans l'ordre d'affichage des réglages. */
+const COULEURS_ADMISES: CouleurTheme[] = ['bleu', 'vert', 'rose', 'noir'];
+
+/** Modes admis. */
+const MODES_ADMIS: ModeTheme[] = ['clair', 'sombre'];
 
 function serialiser(valeur: unknown): string {
   return JSON.stringify(valeur);
@@ -91,6 +109,14 @@ export async function lireReglages(): Promise<Reglages> {
   // Contrôles de forme : une valeur corrompue ne doit pas casser l'application.
   if (resultat.modeleParDefaut !== 'classique' && resultat.modeleParDefaut !== 'moderne') {
     resultat.modeleParDefaut = REGLAGES_PAR_DEFAUT.modeleParDefaut;
+  }
+  // Une couleur ou un mode inconnu — réglage écrit par une version antérieure,
+  // ou valeur abîmée — ramène l'application à un thème qui existe.
+  if (!COULEURS_ADMISES.includes(resultat.couleurTheme)) {
+    resultat.couleurTheme = REGLAGES_PAR_DEFAUT.couleurTheme;
+  }
+  if (!MODES_ADMIS.includes(resultat.modeTheme)) {
+    resultat.modeTheme = REGLAGES_PAR_DEFAUT.modeTheme;
   }
   if (
     !Number.isInteger(resultat.jourRappel) ||
