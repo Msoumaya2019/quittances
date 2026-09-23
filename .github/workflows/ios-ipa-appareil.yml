@@ -28,7 +28,10 @@
 #    plutôt que d'être livré.
 #
 #  - Un exécuteur macOS est nécessaire : la compilation iOS ne se fait pas
-#    ailleurs. Il est gratuit sur un dépôt public.
+#    ailleurs. Il est gratuit sur un dépôt public. Il doit fournir **Xcode 26**,
+#    donc macOS 26 : Expo SDK 57 embarque deux paquets Swift qui déclarent
+#    `swift-tools-version: 6.2`, et Swift 6.1 ne sait pas les lire. Le flux
+#    vérifie cette exigence avant de compiler, pour que l'échec soit lisible.
 
 name: IPA appareil
 
@@ -43,12 +46,45 @@ permissions:
 jobs:
   construire-ipa-appareil:
     name: Compiler pour un iPhone, sans signature
-    runs-on: macos-15
+    # macOS 26, et non macOS 15 : Expo SDK 57 embarque deux paquets Swift qui
+    # déclarent `swift-tools-version: 6.2` — `expo-modules-jsi/apple` et
+    # `@expo/expo-modules-macros-plugin/apple`. Swift 6.2 n'arrive qu'avec
+    # Xcode 26. Sur un exécuteur plus ancien, la résolution des paquets échoue
+    # sur un message qui ne nomme pas la cause — « package 'apple' is using
+    # Swift tools version 6.2.0 but the installed version is 6.1.0 ».
+    runs-on: macos-26
     timeout-minutes: 90
 
     steps:
       - name: Récupérer le code
         uses: actions/checkout@v4
+
+      - name: Vérifier que Xcode fournit bien Swift 6.2
+        # Le contrôle qui transforme un échec obscur en phrase lisible. Il ne
+        # coûte que quelques secondes, et il passe avant tout le reste : mieux
+        # vaut le dire ici que dix minutes plus tard, au milieu des paquets.
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          brut=$(swift --version 2>&1)
+          version=$(printf '%s\n' "$brut" | awk 'NR==1')
+          echo "Swift : $version"
+
+          majeur=$(printf '%s\n' "$brut" | awk '{ for (i = 1; i <= NF; i++) if ($i == "version") { print $(i + 1); exit } }')
+          echo "version d'outils : $majeur"
+
+          if [ -z "$majeur" ]; then
+            echo "::error::Impossible de lire la version de Swift depuis « $version »."
+            exit 1
+          fi
+
+          # Comparaison de versions : `sort -V` place la plus petite en tete.
+          plus_petite=$(printf '%s\n6.2\n' "$majeur" | sort -V | head -1)
+          if [ "$plus_petite" != "6.2" ]; then
+            echo "::error::Swift 6.2 ou plus est requis (Xcode 26+), or l'exécuteur fournit $majeur."
+            exit 1
+          fi
+          echo "Swift $majeur convient."
 
       - name: Installer Node
         uses: actions/setup-node@v4

@@ -71,25 +71,59 @@ PLUS si vous voulez les conserver.
 
 ### Et sur iPhone ?
 
-Pas par ce chemin, et ce n'est pas un oubli : **aucun fichier iOS obtenable ici ne
-s'installe sur un iPhone.**
+Oui — et **sans aucun compte Apple**. Le flux **« IPA appareil »**
+(`.github/workflows/ios-ipa-appareil.yml`) produit un fichier que **eSign**
+sait signer puis installer.
 
-La raison est plus précise qu'on ne le croit d'ordinaire. Ce dépôt ne contient
-aucun identifiant Apple. Sans identifiant Apple, Expo n'a **rien à signer** — et
-un IPA est par définition une archive *signée*. Le flux `ios-ipa.yml` compile
+La confusion à lever tient en une phrase : **« signé » et « compilé pour un
+appareil » sont deux questions distinctes.** Ce dépôt ne contient aucun
+identifiant Apple, donc rien ne peut y être *signé*. Mais on peut parfaitement
+*compiler pour un iPhone* sans rien signer : `xcodebuild -sdk iphoneos` avec
+`CODE_SIGNING_ALLOWED=NO` produit un binaire qui vise le matériel, et que
+personne n'a signé.
+
+C'est exactement ce qu'attend un outil de signature sur l'appareil — eSign,
+AltStore, Sideloadly. Ces outils **re-signent** une application avec *votre*
+certificat ; ils ne la recompilent pas. Il leur faut donc un binaire qui vise
+déjà le bon processeur et la bonne plateforme, et c'est ce que ce flux fournit.
+
+1. Lancez le flux **IPA appareil** (onglet *Actions*, puis *Run workflow*).
+2. Téléchargez l'artefact `ipa-appareil-non-signe` :
+   `Quittances-1.0.0-appareil-non-signe.ipa`.
+3. Ouvrez-le dans **eSign**, signez-le avec votre certificat, installez.
+
+Ce que le flux contrôle **sur le fichier produit**, et refuse de livrer sinon :
+`DTPlatformName = iphoneos`, `CFBundleSupportedPlatforms` contient `iPhoneOS`,
+binaire `arm64`, aucun `embedded.mobileprovision`, aucune `_CodeSignature`,
+`main.jsbundle` présent.
+
+Deux points à savoir avant de vous y fier :
+
+- **La durée de vie dépend de votre certificat.** Un identifiant Apple gratuit
+  donne sept jours et trois applications à la fois ; un compte Apple Developer
+  donne un an. Un certificat partagé peut être révoqué sans préavis, et
+  l'application cesse alors de s'ouvrir : il faut re-signer.
+- **Exportez une sauvegarde avant de compter sur l'installation.** Re-signer
+  change l'identité de signature de l'application, et iOS peut alors lui donner
+  un conteneur neuf. Tout est stocké localement : gardez le fichier de
+  sauvegarde **et son mot de passe**.
+
+#### L'autre flux iOS, à ne pas confondre
+
+`ios-ipa.yml` ne produit pas cela. Sans identifiant Apple, Expo n'a **rien à
+signer** — et un IPA est par définition une archive *signée*. Ce flux-là compile
 donc pour le **simulateur**, et livre une archive `tar.gz` contenant
 `Quittances.app`. Mesuré sur le fichier réellement produit : son `Info.plist`
-porte `DTPlatformName = iphonesimulator`, et ses deux tranches Mach-O déclarent
+porte `DTPlatformName = iphonesimulator`, et ses tranches Mach-O déclarent
 `platform = 7` (iOSSimulator).
 
-Conséquence, et c'est le point qui trompe : ce fichier ne s'installe sur **aucun
-iPhone**, ni maintenant, **ni après signature**. Une application compilée pour le
-simulateur reste une application de simulateur, même signée. Il s'installe dans
-le simulateur iOS d'un Mac (`xcrun simctl install`), et sert à archiver ou à
-vérifier que le projet iOS compile.
+Conséquence : ce fichier-là ne s'installe sur **aucun iPhone**, ni maintenant,
+**ni après signature**. Une application compilée pour le simulateur reste une
+application de simulateur, même signée. Il s'installe dans le simulateur iOS
+d'un Mac (`xcrun simctl install`), et sert à archiver ou à vérifier que le
+projet iOS compile.
 
-Pour installer réellement sur un iPhone, il faut donc votre compte Apple, et
-l'un de ces deux chemins :
+Si vous préférez passer par votre compte Apple :
 
 - **faire signer par Expo** — cochez `signer_avec_expo` au lancement du flux, ou
   lancez `npx eas-cli build --platform ios --profile apercu`. Expo gère le
