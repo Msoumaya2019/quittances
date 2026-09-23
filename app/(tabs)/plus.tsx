@@ -26,6 +26,11 @@ import { listerProprietaires } from '@/db/repositories/owners';
 import { listerLogements } from '@/db/repositories/properties';
 import { tousLesDocuments } from '@/db/repositories/documents';
 import { tousLesPaiements } from '@/db/repositories/payments';
+import {
+  annulerRappel,
+  prochaineDateRappel,
+  programmerRappel,
+} from '@/notifications/rappels';
 
 export default function EcranPlus() {
   const { reglages, majReglages, rafraichir } = useApplication();
@@ -88,7 +93,26 @@ export default function EcranPlus() {
 
   async function basculerRappels(valeur: boolean) {
     try {
-      await majReglages({ rappelPaiements: valeur });
+      if (!valeur) {
+        await annulerRappel();
+        await majReglages({ rappelPaiements: false });
+        setErreur(null);
+        return;
+      }
+
+      // On programme d'abord, on enregistre ensuite : si le téléphone refuse
+      // les notifications, l'interrupteur doit rester éteint plutôt que
+      // d'annoncer un rappel qui ne viendra jamais.
+      const resultat = await programmerRappel(reglages.jourRappel);
+      if (!resultat.ok) {
+        await annulerRappel();
+        await majReglages({ rappelPaiements: false });
+        setErreur(resultat.message);
+        return;
+      }
+
+      await majReglages({ rappelPaiements: true });
+      setErreur(null);
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Les rappels n'ont pas pu être modifiés.");
     }
@@ -221,7 +245,13 @@ export default function EcranPlus() {
           onChange={basculerRappels}
         />
         {reglages.rappelPaiements ? (
-          <LigneDetail libelle="Jour du rappel" valeur={`Le ${reglages.jourRappel} du mois`} />
+          <>
+            <LigneDetail libelle="Jour du rappel" valeur={`Le ${reglages.jourRappel} du mois`} />
+            <LigneDetail
+              libelle="Prochain rappel"
+              valeur={prochaineDateRappel(reglages.jourRappel)}
+            />
+          </>
         ) : null}
       </Carte>
 

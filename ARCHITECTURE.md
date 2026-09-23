@@ -110,11 +110,81 @@ fonction pure**, pour être éprouvable sans base de données et sans téléphon
 | Jamais de quittance sans paiement intégral enregistré | `documentAutorise` et `peutEmettreQuittance` dans `src/domain/payments.ts`, doublées du garde-fou de `emettreDocument` dans `src/pdf/render.ts` | `tests/coherence.test.ts` |
 | Un changement de loyer ne modifie aucun mois passé | `planifierChangementLoyer` dans `src/domain/rent.ts` | `tests/rent.test.ts` |
 | Aucune règle de calcul n'est dupliquée entre l'écran et le document | `contexteDuMois` dans `src/domain/payments.ts`, seul point d'assemblage | `tests/payments.test.ts` |
+| Le rappel de loyers ne peut pas annoncer un mois faux | `texteRappel` dans `src/domain/rappels.ts` — le message ne nomme jamais de mois, parce qu'il est figé une fois pour toutes | `tests/rappels.test.ts` |
 
 Le dépôt en base de `ajouterPeriodeLoyer` ne fait qu'**appliquer** le plan
 calculé par le domaine : la décision est prise ailleurs, et la transaction
 n'écrit que ce que le domaine a décidé. C'est ce qui permet de prouver la règle
 anti-rétroactivité par un test, sans monter une base.
+
+## Les rappels de loyers
+
+Le rappel est une notification **locale** : elle est programmée par le système du
+téléphone, sans serveur ni connexion. Elle survit aux redémarrages.
+
+- `src/domain/rappels.ts` décide **quand** (`prochainRappel`) et **quoi dire**
+  (`texteRappel`). Rien d'autre.
+- `src/notifications/rappels.ts` est le **seul** fichier qui parle au système.
+  Il crée le canal Android, demande l'autorisation, programme un déclencheur
+  **mensuel répétitif**, et annule l'ancien avant d'en poser un nouveau.
+
+Deux décisions qui méritent d'être dites :
+
+- **Le texte ne nomme jamais le mois.** Un déclencheur répétitif fige son contenu
+  au moment où il est programmé : « les loyers de septembre » deviendrait faux
+  dès octobre. Le rappel renvoie donc vers l'application, qui seule sait ce qui
+  reste dû. Un test le vérifie, mois par mois et année comprise.
+- **Le jour est borné à 28.** C'est le seul jour présent dans tous les mois : la
+  borne ne demande alors aucun cas particulier pour février.
+
+L'interrupteur de l'écran PLUS **programme avant d'enregistrer** : si le
+téléphone refuse les notifications, le réglage reste éteint et le motif est
+affiché. Un interrupteur allumé qui ne déclenche rien serait pire qu'un
+interrupteur absent.
+
+Au lancement, `RappelsDeLoyers` dans `app/_layout.tsx` reprogramme le rappel si
+le réglage est actif : une réinstallation efface la programmation sans prévenir,
+et ce réarmement rend l'état auto-réparateur.
+
+## Le point d'entrée
+
+`package.json` porte `"main": "expo-router/entry"`. **Ce n'est pas un détail de
+configuration : c'est ce qui fait exister l'application.**
+
+Le projet a été créé depuis le modèle vide d'Expo, qui laisse à la racine un
+`index.ts` montant un `App.tsx` — « Open up App.tsx to start working on your
+app! ». Les écrans ont été ajoutés ensuite dans `app/`, mais le point d'entrée
+est resté celui du modèle : **le routeur n'était jamais chargé, et tout le
+dossier `app/` était du code mort.**
+
+Le défaut était silencieux de bout en bout : les types passaient, les tests du
+domaine passaient, la compilation réussissait, l'APK était signé et installable.
+Il aurait affiché le message du modèle vide, et rien d'autre.
+
+Deux choses le rendaient invisible :
+
+- `App.tsx` **existait**, donc l'import `./App` se résolvait sans erreur — un
+  point d'entrée fautif ne peut pas se signaler quand sa cible existe ;
+- `expo export` **ne valide pas le source** : une faute de syntaxe volontaire
+  dans `app/_layout.tsx` ne fait pas échouer l'empaquetage. Le seul symptôme
+  était un compte de modules trop bas — **580 au lieu de 1946**.
+
+Les fichiers `App.tsx` et `index.ts` ont donc été **supprimés**, et non laissés
+inertes : leur seule présence suffirait à rendre le même défaut muet une seconde
+fois. `tests/entree-application.test.ts` les refuse, refuse un `main` différent,
+et exige la présence de `app/_layout.tsx`.
+
+### Le contrôle qui voit vraiment ce qui est empaqueté
+
+Le compte de modules ne dit pas **lesquels**. La carte des sources, si :
+
+```bash
+npx expo export --platform android --output-dir .verif/export --dump-sourcemap --clear
+```
+
+Le fichier `.hbc.map` produit contient un tableau `sources` : y chercher
+`/app/_layout.tsx` et les modules de `src/`. Avant correction, ce tableau ne
+contenait **aucun** fichier du projet — 576 entrées, toutes dans `node_modules`.
 
 ## Dépendances
 
@@ -166,7 +236,7 @@ compilations refusent de produire une application dont les types ou les tests
 npm run verifier:tout   # les trois contrôles, dans l'ordre
 npm run verifier:flux   # 62 contrôles sur les flux de travail
 npm run verifier        # types TypeScript
-npm run test:domaine    # 116 tests sur la couche domaine
+npm run test:domaine    # 139 tests sur la couche domaine
 ```
 
 Les tests portent sur le domaine pur — arithmétique monétaire, périodes,

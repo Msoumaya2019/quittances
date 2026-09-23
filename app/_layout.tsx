@@ -4,8 +4,36 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack } from 'expo-router';
 
-import { FournisseurApplication } from '@/state/ApplicationContext';
+import { FournisseurApplication, useApplication } from '@/state/ApplicationContext';
 import { VerrouBiometrique } from '@/ui/components/VerrouBiometrique';
+import { configurerAffichageRappels, programmerRappel } from '@/notifications/rappels';
+
+/**
+ * Réarme le rappel de loyers au lancement. N'affiche rien.
+ *
+ * Le rappel est une notification répétitive confiée au système : elle survit
+ * aux redémarrages du téléphone. Mais une réinstallation, ou un effacement des
+ * données de l'application, l'efface sans prévenir. Reprogrammer au lancement
+ * rend l'état auto-réparateur et ne coûte rien.
+ *
+ * La reprogrammation n'a lieu que si le rappel est déjà activé : elle ne
+ * demande donc jamais l'autorisation à l'improviste, puisque l'utilisateur l'a
+ * forcément accordée en activant l'interrupteur.
+ */
+function RappelsDeLoyers() {
+  const { reglages } = useApplication();
+
+  React.useEffect(() => {
+    void configurerAffichageRappels();
+  }, []);
+
+  React.useEffect(() => {
+    if (!reglages.rappelPaiements) return;
+    void programmerRappel(reglages.jourRappel);
+  }, [reglages.rappelPaiements, reglages.jourRappel]);
+
+  return null;
+}
 
 /**
  * Racine de l'application.
@@ -22,6 +50,7 @@ export default function RacineLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <FournisseurApplication>
+          <RappelsDeLoyers />
           <StatusBar style="dark" />
           <VerrouBiometrique>
             <Stack

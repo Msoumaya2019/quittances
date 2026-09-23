@@ -42,3 +42,8 @@ yarn-error.*
 
 # dossiers de vérification locale
 .verif/
+
+# binaires récupérés des compilations : à ne jamais versionner
+apk-livre/
+*.apk
+*.ipa

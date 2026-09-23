@@ -61,6 +61,7 @@
         "expo-image-picker",
         {
           "photosPermission": "L'application accède à vos photos uniquement pour y choisir l'image de votre signature. Aucune photo n'est transmise : tout reste sur votre téléphone.",
+          "cameraPermission": false,
           "microphonePermission": false
         }
       ],
