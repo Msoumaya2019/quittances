@@ -1,0 +1,115 @@
+# Compilation d'un APK Android installable, sans aucun secret dans ce dépôt.
+#
+# Cet APK est signé automatiquement par Expo avec une clé qu'Expo génère pour
+# vous lors de la première compilation. Il n'y a donc rien à préparer pour le
+# construire, et rien à confier à GitHub : la clé reste chez Expo.
+#
+# Le fichier produit se récupère dans l'onglet « Actions » de la page GitHub,
+# sur la ligne de la compilation terminée, section « Artifacts ».
+
+name: APK Android
+
+on:
+  # À la demande, depuis l'onglet « Actions ».
+  workflow_dispatch:
+
+  # À chaque version étiquetée, pour garder une trace.
+  push:
+    tags:
+      - 'v*'
+
+# Lecture seule : ce flux ne fait que récupérer le code et publier un artefact.
+# Le jeton n'a besoin d'aucun droit d'écriture, et l'écrire ainsi limite les
+# dégâts si une action compromise tentait quelque chose.
+permissions:
+  contents: read
+
+jobs:
+  construire-apk:
+    name: Construire l'APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Installer les dépendances
+        # `--legacy-peer-deps` est nécessaire : Expo 57 épingle react 19.2.3
+        # alors que react-dom réclame 19.3.0. Le conflit est connu et sans effet
+        # ici, car react-dom ne sert qu'au rendu web.
+        run: npm ci --legacy-peer-deps
+
+      - name: Vérifier les flux de travail
+        # Quelques secondes, contre vingt minutes de compilation : ce contrôle
+        # passe donc en premier.
+        run: node scripts/check-workflows.mjs
+
+      - name: Vérifier les types
+        run: npx tsc --noEmit
+
+      - name: Lancer les tests
+        run: npm run test:domaine
+
+      - name: Installer EAS
+        run: npm install --global eas-cli
+
+      - name: Se connecter à Expo
+        # Le jeton est un secret de ce dépôt uniquement : il n'apparaît jamais
+        # dans le code. Voir la documentation pour le créer en trois minutes.
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas whoami
+
+      - name: Lancer la compilation Android
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        # `--wait` attend la fin côté Expo et rapatrie le fichier dans ce job.
+        run: eas build --platform android --profile apercu --non-interactive --wait
+
+      - name: Récupérer l'APK
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        # On ne se fie pas au nom du fichier : on interroge Expo sur l'adresse
+        # du dernier APK terminé, et on la télécharge.
+        run: |
+          set -euo pipefail
+          adresse=$(eas build:list \
+            --platform android \
+            --limit 1 \
+            --status finished \
+            --non-interactive \
+            --json \
+            | node -e "
+                let brut = '';
+                process.stdin.on('data', (bloc) => { brut += bloc; });
+                process.stdin.on('end', () => {
+                  const donnees = JSON.parse(brut);
+                  if (!Array.isArray(donnees) || donnees.length === 0) {
+                    console.error('Aucun APK terminé trouvé.');
+                    process.exit(1);
+                  }
+                  const url = donnees[0].artifacts && donnees[0].artifacts.buildUrl;
+                  if (!url) {
+                    console.error('La compilation n a pas produit de fichier.');
+                    process.exit(1);
+                  }
+                  process.stdout.write(url);
+                });
+              ")
+          echo "APK : $adresse"
+          curl --fail --location "$adresse" --output app-release.apk
+          ls -lh app-release.apk
+
+      - name: Publier l'APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-quittances
+          path: app-release.apk
+          retention-days: 90
+          if-no-files-found: error

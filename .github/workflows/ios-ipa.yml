@@ -1,0 +1,154 @@
+# Compilation d'un IPA iOS, sans certificat ni profil dans ce dépôt.
+#
+# À lire avant de lancer quoi que ce soit, car c'est ici que les attentes
+# doivent être justes :
+#
+#  - Un IPA **non signé ne s'installe pas** sur un iPhone en usage normal.
+#    iOS refuse d'exécuter une application dont la signature ne correspond pas
+#    à un profil autorisé par Apple. Le fichier produit ici sert donc à
+#    archiver la compilation, à l'installer sur un simulateur, ou à la signer
+#    ensuite — pas à être posé sur un téléphone tel quel.
+#
+#  - Pour installer sur un vrai iPhone, deux chemins existent, tous deux
+#    demandant votre compte Apple :
+#      1. faire signer la compilation par Expo, qui gère le certificat et le
+#         profil à votre place (nécessite un compte Apple Developer pour une
+#         durée de vie au-delà de sept jours) ;
+#      2. compiler hors ligne sur un Mac avec Xcode, où vous êtes déjà
+#         propriétaire de vos certificats.
+#
+#  - Aucun certificat, aucun mot de passe et aucun profil de signature ne doit
+#    être déposé dans ce dépôt public. Si vous choisissez la signature par
+#    Expo, les éléments sensibles restent dans les secrets GitHub et chez Expo.
+
+name: IPA iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      signer_avec_expo:
+        description: 'Confier la signature à Expo (nécessite un compte Apple déclaré chez Expo)'
+        type: boolean
+        default: false
+
+  push:
+    tags:
+      - 'v*'
+
+# Lecture seule : le flux récupère le code et publie un artefact, rien de plus.
+# Les identifiants Apple, s'ils servent, sont enregistrés chez Expo et dans les
+# secrets GitHub — jamais utilisés pour écrire dans ce dépôt.
+permissions:
+  contents: read
+
+jobs:
+  construire-ipa:
+    name: Construire l'IPA
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Installer les dépendances
+        run: npm ci --legacy-peer-deps
+
+      - name: Vérifier les flux de travail
+        # Quelques secondes, contre une heure de compilation iOS.
+        run: node scripts/check-workflows.mjs
+
+      - name: Vérifier les types
+        run: npx tsc --noEmit
+
+      - name: Lancer les tests
+        run: npm run test:domaine
+
+      - name: Installer EAS
+        run: npm install --global eas-cli
+
+      - name: Vérifier le jeton Expo
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo "::error::Le secret EXPO_TOKEN n'est pas défini sur ce dépôt."
+            echo "Sans lui, aucune compilation iOS n'est possible."
+            exit 1
+          fi
+          eas whoami
+
+      # Chemin 1 : Expo signe et produit un IPA installable.
+      - name: Compilation iOS signée par Expo
+        if: inputs.signer_avec_expo
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --platform ios --profile apercu --non-interactive --wait
+
+      # Chemin 2 : compilation sans signature, pour archive ou simulateur.
+      # Une compilation iOS exige un Mac ; Expo en fournit un.
+      - name: Compilation iOS sans signature
+        if: ${{ !inputs.signer_avec_expo }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --platform ios --profile apercu-non-signe --non-interactive --wait
+
+      - name: Récupérer l'IPA
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          adresse=$(eas build:list \
+            --platform ios \
+            --limit 1 \
+            --status finished \
+            --non-interactive \
+            --json \
+            | node -e "
+                let brut = '';
+                process.stdin.on('data', (bloc) => { brut += bloc; });
+                process.stdin.on('end', () => {
+                  const donnees = JSON.parse(brut);
+                  if (!Array.isArray(donnees) || donnees.length === 0) {
+                    console.error('Aucun IPA terminé trouvé.');
+                    process.exit(1);
+                  }
+                  const url = donnees[0].artifacts && donnees[0].artifacts.buildUrl;
+                  if (!url) {
+                    console.error('La compilation n a pas produit de fichier.');
+                    process.exit(1);
+                  }
+                  process.stdout.write(url);
+                });
+              ")
+          echo "IPA : $adresse"
+          curl --fail --location "$adresse" --output app-release.ipa
+          ls -lh app-release.ipa
+
+      - name: Publier l'IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa-quittances
+          path: app-release.ipa
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Rappeler ce que ce fichier permet
+        run: |
+          {
+            echo "## IPA produit"
+            echo ""
+            if [ "${{ inputs.signer_avec_expo }}" = "true" ]; then
+              echo "Cette compilation a été signée par Expo : elle peut être installée"
+              echo "sur un iPhone via l'adresse de téléchargement fournie par Expo."
+            else
+              echo "Cette compilation **n'est pas signée** : iOS refusera de l'installer"
+              echo "directement sur un iPhone. Elle sert à archiver, à installer sur un"
+              echo "simulateur, ou à être signée ensuite avec vos propres certificats."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
