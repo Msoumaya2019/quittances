@@ -151,7 +151,9 @@ test('Palette : composer est pur — deux appels rendent le même objet', () => 
 test('Palette : toutes les clés sont renseignées, aucune valeur vide', () => {
   const attendues = Object.keys(PALETTE_PAR_DEFAUT);
   for (const { couleur, mode, nom } of COMBINAISONS) {
-    const palette = composerPalette(couleur, mode) as Record<string, unknown>;
+    // Double conversion assumée : on veut parcourir la palette comme un
+    // dictionnaire, sans prétendre que `Palette` en porte la signature.
+    const palette = composerPalette(couleur, mode) as unknown as Record<string, unknown>;
     assert.deepEqual(Object.keys(palette).sort(), [...attendues].sort(), `${nom} : clés différentes`);
     for (const [cle, valeur] of Object.entries(palette)) {
       assert.equal(typeof valeur, 'string', `${nom} : ${cle} n'est pas une chaîne`);

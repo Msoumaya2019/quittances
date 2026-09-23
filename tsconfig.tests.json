@@ -1,16 +1,37 @@
+// Contrôle de types des TESTS et des bancs, séparé de `tsconfig.json`.
+//
+// POURQUOI CE FICHIER EXISTE. `tsconfig.json` ne couvre que `app/` et `src/` :
+// il EXCLUT `tests/` et `.verif/`. `node --test` se contente d'effacer les
+// types sans les vérifier. Un changement de forme dans `src/` n'était donc vu
+// par personne : les fixtures des tests restaient fausses en silence, et
+// `npx tsc --noEmit` restait vert. C'est arrivé — `datesPaiement` remplacé par
+// `paiements` a laissé quatre bancs périmés sans qu'un seul contrôle rougisse.
+// Ce fichier referme ce trou. Il est branché sur `npm run verifier:tests`.
+//
+// Les réglages ne sont pas ceux de l'application, et c'est voulu : les tests
+// importent en chemin relatif AVEC l'extension `.ts` (Node ne résout pas
+// l'alias `@/`), ce qui exige `allowImportingTsExtensions` et `module: ESNext`.
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "lib": ["ES2022"],
     "strict": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    // `@types/node` n'est pas une dépendance déclarée : il remonte de la chaîne
+    // d'Expo. S'il disparaissait, ce contrôle échouerait bruyamment sur
+    // « Cannot find type definition file for 'node' » — c'est préférable à un
+    // silence. Le corriger alors en l'ajoutant à `devDependencies`.
     "types": ["node"]
   },
-  "include": ["src/domain/**/*.ts", "tests/**/*.ts"],
+  // `.verif/` n'est pas versionné : sur une machine fraîche, ce motif ne
+  // désigne rien et le contrôle porte sur `tests/`, ce qui suffit. En local, il
+  // vérifie en plus les bancs de rendu.
+  "include": ["src/domain/**/*.ts", "tests/**/*.ts", ".verif/rendre-*.ts"],
   "exclude": ["node_modules"]
 }

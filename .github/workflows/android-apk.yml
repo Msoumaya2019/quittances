@@ -57,6 +57,12 @@ jobs:
       - name: Vérifier les types
         run: npx tsc --noEmit
 
+      - name: Vérifier les types des tests
+        # `tsconfig.json` exclut `tests/` et `.verif/`. Sans cette étape, une
+        # erreur de type écrite dans un test traverse toute la chaîne sans être
+        # vue : `npx tsc --noEmit` reste vert, et Node efface les types.
+        run: npm run verifier:tests
+
       - name: Lancer les tests
         run: npm run test:domaine
 

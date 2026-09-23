@@ -29,8 +29,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { cumulerPaiementsPourCle, paiementsImprimes } from '../src/domain/payments.ts';
-import { formaterDateFr } from '../src/domain/period.ts';
-import type { ClePeriode, Paiement } from '../src/domain/types.ts';
+import { formaterDateFr, type ClePeriode } from '../src/domain/period.ts';
+import type { Paiement } from '../src/domain/types.ts';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const MODELES = join(ICI, '..', 'src', 'pdf', 'models.ts');

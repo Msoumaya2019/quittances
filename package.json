@@ -41,10 +41,11 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "verifier": "tsc --noEmit",
+    "verifier:tests": "tsc --noEmit -p tsconfig.tests.json",
     "test:domaine": "node --test tests/*.test.ts",
     "verifier:flux": "node scripts/check-workflows.mjs",
     "verifier:resume": "node scripts/verifier-resume-ios.mjs && node scripts/verifier-resume-ipa-appareil.mjs",
-    "verifier:tout": "npm run verifier:flux && npm run verifier:resume && npm run verifier && npm run test:domaine"
+    "verifier:tout": "npm run verifier:flux && npm run verifier:resume && npm run verifier && npm run verifier:tests && npm run test:domaine"
   },
   "private": true
 }

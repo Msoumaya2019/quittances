@@ -280,10 +280,17 @@ dont le code ne passe pas ses propres contrôles. Sur votre ordinateur, lancez :
 
 ```bash
 npx tsc --noEmit
+npm run verifier:tests
 npm run test:domaine
 ```
 
 Les messages indiquent le fichier et la ligne à corriger.
+
+`npx tsc --noEmit` ne regarde que `app/` et `src/` : le fichier `tsconfig.json`
+exclut `tests/` et `.verif/`. Une erreur de type écrite dans un test y échappe
+donc complètement, et `npm run test:domaine` ne la voit pas non plus — Node
+efface les types au passage. C'est le rôle de `npm run verifier:tests`, qui
+relit les tests avec `tsconfig.tests.json`. Les deux commandes sont nécessaires.
 
 **Le téléphone refuse d'installer l'APK.**
 Vous avez probablement une version antérieure installée avec une signature
@@ -295,7 +302,8 @@ différente. Désinstallez l'ancienne application, puis réinstallez.
 
 ```bash
 npm ci                           # installer les dépendances
-npx tsc --noEmit                 # vérifier les types
+npx tsc --noEmit                 # vérifier les types de l'application
+npm run verifier:tests           # vérifier les types des tests et des bancs
 npm run test:domaine             # lancer les tests
 npm run verifier:tout            # tout d'un coup
 npx expo start                   # ouvrir l'application en développement
