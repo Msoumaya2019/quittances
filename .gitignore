@@ -45,5 +45,10 @@ yarn-error.*
 
 # binaires récupérés des compilations : à ne jamais versionner
 apk-livre/
+apk-final/
+ipa-final/
 *.apk
 *.ipa
+# une compilation iOS sans signature livre un tar.gz, pas un IPA : le nommer
+# autrement ne le rend pas plus léger, et 31 Mo n'ont rien à faire ici
+*.tar.gz
