@@ -1,6 +1,15 @@
+Ce fichier couvre le code de ce dépôt — l'application « Quittances ».
+Il ne couvre pas le cadre de travail Expo, qui reste sous sa propre licence.
+
+Le projet a démarré d'un gabarit fourni par Expo. Ce gabarit est distribué
+sous MIT par 650 Industries, Inc. (aka Expo), et cette attribution est
+conservée ci-dessous pour la part de code qui en provient. Le reste du code,
+écrit pour cette application, appartient à son auteur.
+
 The MIT License (MIT)
 
-Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)
+Copyright (c) 2026 Msoumaya2019 — application « Quittances »
+Copyright (c) 2015-present 650 Industries, Inc. (aka Expo) — gabarit initial
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
