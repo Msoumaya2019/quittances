@@ -20,12 +20,17 @@
 #    (`xcrun simctl install`), et sert à archiver ou à vérifier que le projet
 #    iOS compile.
 #
-#  - Pour installer sur un vrai iPhone, deux chemins existent, tous deux
-#    demandant votre compte Apple :
-#      1. faire signer la compilation par Expo, qui gère le certificat et le
+#  - Pour installer sur un vrai iPhone, trois chemins existent :
+#      1. le flux **`ios-ipa-appareil.yml`**, dans ce même dépôt. Il compile
+#         pour un appareil réel en désactivant la signature, et le fichier
+#         obtenu se signe sur le téléphone avec eSign. C'est le seul chemin qui
+#         ne demande **aucun compte Apple**, ni ici ni chez Expo. « Signé » et
+#         « compilé pour un appareil » sont deux questions distinctes : ce flux
+#         répond à la seconde, et laisse la première à votre téléphone ;
+#      2. faire signer la compilation par Expo, qui gère le certificat et le
 #         profil à votre place (nécessite un compte Apple Developer pour une
 #         durée de vie au-delà de sept jours) ;
-#      2. compiler sur un Mac avec Xcode, où vous êtes déjà propriétaire de
+#      3. compiler sur un Mac avec Xcode, où vous êtes déjà propriétaire de
 #         vos certificats.
 #
 #  - Aucun certificat, aucun mot de passe et aucun profil de signature ne doit
@@ -210,5 +215,9 @@ jobs:
               echo "signature : une application compilée pour le simulateur le reste."
               echo "Elle s'installe dans le simulateur iOS d'un Mac (\`xcrun simctl install\`),"
               echo "et sert à archiver ou à vérifier que le projet iOS compile."
+              echo ""
+              echo "Pour un fichier **installable sur votre iPhone**, lancez le flux"
+              echo "**« IPA appareil »** : il compile pour un appareil réel, sans rien"
+              echo "signer, et le fichier obtenu se signe sur le téléphone avec eSign."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

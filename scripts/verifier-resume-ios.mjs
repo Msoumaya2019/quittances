@@ -52,6 +52,10 @@ const attendus = {
       'signature',
       'xcrun simctl install',
       'archive tar.gz',
+      // Le renvoi vers le flux qui, lui, produit un fichier installable. Sans
+      // lui, ce resume laisse l'utilisateur sans issue alors qu'une existe,
+      // dans le meme depot.
+      'IPA appareil',
     ],
     interdits: ['être signée ensuite', 're-sign', 'à être signée'],
   },

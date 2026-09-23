@@ -1,0 +1,212 @@
+# Compilation d'un IPA pour un iPhone RÉEL, et non signé.
+#
+# C'est le seul fichier iOS de ce dépôt qu'un outil de signature sur l'appareil
+# — eSign, AltStore, Sideloadly — peut installer. Le flux `ios-ipa.yml`, lui,
+# compile pour le simulateur.
+#
+#  - Pourquoi l'autre flux livre un binaire de simulateur : EAS refuse de
+#    produire pour un appareil sans identifiant Apple, parce qu'un IPA est une
+#    archive *signée* et que, sans certificat, il n'y a rien à signer. C'est
+#    vrai d'EAS, et faux en général.
+#
+#  - **Signé** n'est pas **compilé pour un appareil** : ce sont deux questions
+#    distinctes. Ce flux compile pour `iphoneos` en désactivant la signature
+#    (`CODE_SIGNING_ALLOWED=NO`). Le binaire vise donc le matériel ; il n'est
+#    simplement signé par personne. Un outil comme eSign re-signe une
+#    application, il ne la recompile pas — d'où l'exigence, ici, que le binaire
+#    vise déjà le bon processeur et la bonne plateforme.
+#
+#  - Aucun certificat, aucun profil et aucun mot de passe n'entre dans ce
+#    dépôt, qui est public. Ce n'est pas une limite subie : c'est le principe.
+#    La signature se fait sur votre téléphone, avec votre certificat, hors de
+#    GitHub.
+#
+#  - Ce que le fichier produit est vérifié **sur le fichier**, jamais supposé :
+#    `DTPlatformName` vaut `iphoneos`, `CFBundleSupportedPlatforms` contient
+#    `iPhoneOS`, le binaire est `arm64`, et il n'y a ni `embedded.mobileprovision`
+#    ni `_CodeSignature`. Un fichier non conforme fait échouer la compilation
+#    plutôt que d'être livré.
+#
+#  - Un exécuteur macOS est nécessaire : la compilation iOS ne se fait pas
+#    ailleurs. Il est gratuit sur un dépôt public.
+
+name: IPA appareil
+
+on:
+  workflow_dispatch:
+
+# Lecture seule. Ce flux publie un artefact, pas une version : il n'écrit rien
+# dans le dépôt.
+permissions:
+  contents: read
+
+jobs:
+  construire-ipa-appareil:
+    name: Compiler pour un iPhone, sans signature
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Installer les dépendances
+        run: npm ci --legacy-peer-deps
+
+      - name: Vérifier les flux de travail
+        # Quelques secondes, contre une quarantaine de minutes de compilation.
+        run: node scripts/check-workflows.mjs
+
+      - name: Vérifier ce que le flux dira à la fin
+        run: npm run verifier:resume
+
+      - name: Vérifier les types
+        run: npx tsc --noEmit
+
+      - name: Lancer les tests
+        run: npm run test:domaine
+
+      - name: Générer le projet iOS
+        # `--no-install` : les dépendances Node sont déjà là, et CocoaPods est
+        # lancé séparément pour que son échec soit attribuable.
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Donner à Xcode le chemin de Node
+        # Une phase de compilation Xcode n'hérite pas du PATH du shell : elle
+        # lit `ios/.xcode.env`, puis `.xcode.env.local` qui a le dernier mot.
+        # C'est le seul endroit où Node est réellement installé.
+        run: echo "export NODE_BINARY=$(command -v node)" > ios/.xcode.env.local
+
+      - name: Installer CocoaPods
+        run: pod install --project-directory=ios
+
+      - name: Compiler pour l'appareil, sans signature
+        run: |
+          set -euo pipefail
+          espace=$(ls -d ios/*.xcworkspace | head -1)
+          schema=$(basename "$espace" .xcworkspace)
+          echo "espace de travail : $espace"
+          echo "schéma : $schema"
+          # CODE_SIGNING_ALLOWED=NO : Xcode compile et lie, sans jamais chercher
+          # de certificat. C'est ce qui rend la compilation possible sans compte
+          # Apple, tout en produisant un binaire pour le matériel.
+          xcodebuild \
+            -workspace "$espace" \
+            -scheme "$schema" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath ios/build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build
+
+      - name: Empaqueter l'IPA
+        run: |
+          set -euo pipefail
+          produit=$(ls -d ios/build/Build/Products/Release-iphoneos/*.app | head -1)
+          echo "application compilée : $produit"
+          nom=$(basename "$produit" .app)
+          # Un IPA est une archive dont la racine porte un dossier `Payload`.
+          # C'est la forme qu'attendent eSign et les outils de signature.
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$produit" "Payload/$nom.app"
+          rm -f Quittances-1.0.0-appareil-non-signe.ipa
+          zip -qry Quittances-1.0.0-appareil-non-signe.ipa Payload
+          ls -lh Quittances-1.0.0-appareil-non-signe.ipa
+          # Le nom est transmis aux étapes suivantes : aucune ne peut se tromper
+          # de fichier.
+          echo "FICHIER=Quittances-1.0.0-appareil-non-signe.ipa" >> "$GITHUB_ENV"
+
+      - name: Vérifier sur le fichier que le binaire vise bien l'appareil
+        # Le contrôle décisif. Une compilation de simulateur porte
+        # `DTPlatformName = iphonesimulator` et ne s'installerait sur aucun
+        # iPhone, même signée : on refuse de livrer dans ce cas.
+        run: |
+          set -euo pipefail
+          rm -rf verif
+          mkdir -p verif
+          unzip -q "$FICHIER" -d verif
+          paquet=$(ls -d verif/Payload/*.app | head -1)
+          echo "paquet : $paquet"
+
+          echecs=0
+
+          platforme=$(/usr/libexec/PlistBuddy -c 'Print :DTPlatformName' "$paquet/Info.plist")
+          echo "DTPlatformName : $platforme"
+          if [ "$platforme" != "iphoneos" ]; then
+            echo "::error::DTPlatformName vaut « $platforme » et non « iphoneos » : ce fichier ne s'installerait sur aucun iPhone."
+            echecs=$((echecs + 1))
+          fi
+
+          supportees=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleSupportedPlatforms' "$paquet/Info.plist")
+          echo "CFBundleSupportedPlatforms : $supportees"
+          if ! printf '%s' "$supportees" | grep -q 'iPhoneOS'; then
+            echo "::error::CFBundleSupportedPlatforms ne contient pas iPhoneOS."
+            echecs=$((echecs + 1))
+          fi
+
+          if [ -e "$paquet/embedded.mobileprovision" ]; then
+            echo "::error::Un profil de signature est présent, or ce fichier doit être non signé."
+            echecs=$((echecs + 1))
+          fi
+
+          if [ -d "$paquet/_CodeSignature" ]; then
+            echo "::error::Une signature est présente, or ce fichier doit être non signé."
+            echecs=$((echecs + 1))
+          fi
+
+          executeur=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$paquet/Info.plist")
+          architectures=$(lipo -archs "$paquet/$executeur")
+          echo "architectures : $architectures"
+          if ! printf '%s' "$architectures" | grep -q 'arm64'; then
+            echo "::error::Le binaire n'est pas arm64 : il ne s'exécuterait pas sur un iPhone."
+            echecs=$((echecs + 1))
+          fi
+
+          if [ ! -f "$paquet/main.jsbundle" ]; then
+            echo "::error::main.jsbundle est absent : le code JavaScript n'a pas été embarqué, l'application s'ouvrirait sur un écran vide."
+            echecs=$((echecs + 1))
+          else
+            echo "main.jsbundle : $(wc -c < "$paquet/main.jsbundle") octets"
+          fi
+
+          if [ "$echecs" -ne 0 ]; then
+            echo "::error::$echecs contrôle(s) en échec : le fichier n'est pas livrable."
+            exit 1
+          fi
+          echo "Tous les contrôles passent : ce binaire vise un iPhone."
+
+      - name: Publier l'IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa-appareil-non-signe
+          path: ${{ env.FICHIER }}
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Rappeler ce que ce fichier permet
+        run: |
+          {
+            echo "## IPA pour appareil, non signé"
+            echo ""
+            echo "Fichier : \`${FICHIER}\`"
+            echo ""
+            echo "Ce fichier est compilé pour un **iPhone**, et il n'est **pas signé**."
+            echo "Il ne s'installe donc pas tel quel : c'est un outil de signature sur"
+            echo "l'appareil — eSign, AltStore, Sideloadly — qui le signera avec **votre**"
+            echo "certificat, puis l'installera."
+            echo ""
+            echo "Vérifié sur le fichier : \`DTPlatformName = iphoneos\`,"
+            echo "\`CFBundleSupportedPlatforms\` contient \`iPhoneOS\`, binaire \`arm64\`,"
+            echo "aucun \`embedded.mobileprovision\`, aucune \`_CodeSignature\`."
+            echo ""
+            echo "Aucun certificat et aucun mot de passe ne sont passés par ce dépôt."
+          } >> "$GITHUB_STEP_SUMMARY"

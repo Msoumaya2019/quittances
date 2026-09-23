@@ -38,8 +38,13 @@ const DOSSIER = '.github/workflows';
 /**
  * Liste fermée. Ajouter un flux oblige à l'inscrire ici — ce qui force à se
  * demander s'il doit tourner à chaque poussée ou seulement à la demande.
+ *
+ * `ios-ipa-appareil.yml` est le seul flux qui produise un fichier installable
+ * sur un iPhone : il compile pour `iphoneos` sans rien signer. Il est donc
+ * réservé au déclenchement manuel, comme `ios-ipa.yml` — une compilation iOS
+ * coûte une quarantaine de minutes d'exécuteur.
  */
-const FLUX_ATTENDUS = ['android-apk.yml', 'ios-ipa.yml'];
+const FLUX_ATTENDUS = ['android-apk.yml', 'ios-ipa-appareil.yml', 'ios-ipa.yml'];
 
 /**
  * Étape à partir de laquelle un ARTEFACT est publié : elle exige des droits
