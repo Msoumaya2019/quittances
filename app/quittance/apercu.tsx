@@ -1,10 +1,15 @@
 /**
- * Aperçu et émission d'un document.
+ * Aperçu et émission d'une quittance.
  *
- * Cet écran applique la promesse du « un clic » : quand toutes les informations
- * sont connues et que le loyer est réglé, la génération démarre d'elle-même et
- * l'utilisateur n'a plus qu'à confirmer. S'il manque quelque chose, l'écran
- * explique quoi, en français, et propose l'action adaptée.
+ * Deux entrées mènent ici :
+ *  - par la liste des documents, avec `documentId` : l'écran **consulte** un
+ *    document déjà émis, sans rien produire de nouveau ;
+ *  - par la liste des logements, avec `logementId` et `periode` : l'écran
+ *    **diagnostique** le mois. Si le loyer est intégralement réglé, il propose
+ *    la génération ; sinon il dit ce qui manque et propose de l'enregistrer.
+ *
+ * La génération en un appui vit dans l'onglet Quittance : cet écran est le
+ * chemin de rattrapage, celui où l'on vérifie avant d'émettre.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -27,19 +32,17 @@ import { PastilleStatut } from '@/ui/components/PastilleStatut';
 import { espaces, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import { libelleLongCapitalise, depuisCle, formaterDateFr } from '@/domain/period';
+import { LIBELLE_DOCUMENT, LIBELLE_MODELE, type Document } from '@/domain/types';
 import {
-  LIBELLE_DOCUMENT,
-  LIBELLE_MODELE,
-  type Document,
-  type TypeDocument,
-} from '@/domain/types';
-import { emettreDocument, diagnostiquerMois, ErreurEmission } from '@/pdf/render';
+  emettreDocument,
+  diagnostiquerMois,
+  ErreurEmission,
+  type DiagnosticMois,
+} from '@/pdf/render';
 import { ouvrirDocument, partagerDocument } from '@/pdf/partage';
 import { trouverDocument } from '@/db/repositories/documents';
 import { useApplication } from '@/state/ApplicationContext';
 import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
-
-type TypeDemande = TypeDocument | 'auto';
 
 export default function EcranApercuQuittance() {
   const styles = useStyles(creerStyles);
@@ -50,24 +53,17 @@ export default function EcranApercuQuittance() {
   const parametres = useLocalSearchParams<{
     logementId?: string;
     periode?: string;
-    type?: TypeDemande;
     documentId?: string;
   }>();
 
   const [chargement, setChargement] = useState(true);
   const [emission, setEmission] = useState(false);
-  const [diagnostic, setDiagnostic] = useState<{
-    peutQuittance: boolean;
-    peutRecu: boolean;
-    peutAvis: boolean;
-    explication: string;
-  } | null>(null);
+  const [diagnostic, setDiagnostic] = useState<DiagnosticMois | null>(null);
   const [document, setDocument] = useState<Document | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
   const periode = parametres.periode ?? '';
   const mois = depuisCle(periode);
-  const typeDemande: TypeDemande = parametres.type ?? 'auto';
 
   // --- Consultation d'un document existant ------------------------------
   useEffect(() => {
@@ -96,7 +92,7 @@ export default function EcranApercuQuittance() {
     };
   }, [parametres.documentId]);
 
-  // --- Diagnostic du mois, pour proposer le bon document ----------------
+  // --- Diagnostic du mois ------------------------------------------------
   useEffect(() => {
     if (!parametres.logementId || !periode || parametres.documentId) return;
 
@@ -123,33 +119,8 @@ export default function EcranApercuQuittance() {
     };
   }, [parametres.logementId, parametres.documentId, periode]);
 
-  /** Type de document retenu, selon la demande et l'état réel du mois. */
-  const typeRetenu: TypeDocument | null = (() => {
-    if (!diagnostic) return null;
-    if (typeDemande !== 'auto') {
-      if (typeDemande === 'quittance' && !diagnostic.peutQuittance) {
-        // La demande ne peut pas être satisfaite : on retombe sur ce qui est
-        // légitime, sans jamais produire une quittance infondée.
-        if (diagnostic.peutRecu) return 'recu';
-        if (diagnostic.peutAvis) return 'avis_echeance';
-        return null;
-      }
-      if (typeDemande === 'recu' && !diagnostic.peutRecu) {
-        if (diagnostic.peutQuittance) return 'quittance';
-        return null;
-      }
-      if (typeDemande === 'avis_echeance' && !diagnostic.peutAvis) return null;
-      return typeDemande;
-    }
-
-    if (diagnostic.peutQuittance) return 'quittance';
-    if (diagnostic.peutRecu) return 'recu';
-    if (diagnostic.peutAvis) return 'avis_echeance';
-    return null;
-  })();
-
   const generer = useCallback(async () => {
-    if (!parametres.logementId || !periode || !typeRetenu) return;
+    if (!parametres.logementId || !periode) return;
 
     setEmission(true);
     setErreur(null);
@@ -158,7 +129,7 @@ export default function EcranApercuQuittance() {
       const produit = await emettreDocument({
         logementId: parametres.logementId,
         periode,
-        type: typeRetenu,
+        type: 'quittance',
       });
 
       setDocument(produit);
@@ -173,12 +144,20 @@ export default function EcranApercuQuittance() {
       setErreur(
         e instanceof ErreurEmission
           ? e.message
-          : "Le document n'a pas pu être généré. Réessayez dans un instant.",
+          : "La quittance n'a pas pu être générée. Réessayez dans un instant.",
       );
     } finally {
       setEmission(false);
     }
-  }, [parametres.logementId, periode, rafraichir, typeRetenu]);
+  }, [parametres.logementId, periode, rafraichir]);
+
+  const enregistrerLePaiement = useCallback(() => {
+    if (!parametres.logementId || !periode) return;
+    router.push({
+      pathname: '/paiement/[propertyId]',
+      params: { propertyId: parametres.logementId, periode },
+    });
+  }, [parametres.logementId, periode]);
 
   // --- Affichage --------------------------------------------------------
 
@@ -258,31 +237,50 @@ export default function EcranApercuQuittance() {
     );
   }
 
-  // Le mois ne donne lieu à aucun document
-  if (!typeRetenu) {
+  // Le mois ne peut pas encore donner lieu à une quittance
+  if (!diagnostic?.peutQuittance) {
     return (
-      <View style={[styles.plein, { paddingTop: insets.top + espaces.sm }]}>
-        <EnTeteEcran titre="Aucun document possible" />
-        <View style={styles.contenu}>
+      <View style={styles.plein}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.contenu,
+            { paddingTop: insets.top + espaces.sm, paddingBottom: insets.bottom + espaces.xxl },
+          ]}
+        >
+          <EnTeteEcran
+            titre="Pas encore de quittance"
+            sousTitre={mois ? libelleLongCapitalise(mois) : undefined}
+          />
+
+          {erreur ? <BandeauMessage ton="erreur" message={erreur} /> : null}
+
           <BandeauMessage
             ton="information"
             message={
               diagnostic?.explication ??
-              "Ce mois ne donne lieu à aucun document pour le moment."
+              "Ce mois ne donne lieu à aucune quittance pour le moment."
             }
           />
-          <Bouton
-            libelle="Revenir à l’accueil"
-            variante="secondaire"
-            onPress={() => router.back()}
-          />
-        </View>
+
+          <View style={styles.actions}>
+            {parametres.logementId && periode ? (
+              <Bouton
+                libelle="Enregistrer le paiement"
+                onPress={enregistrerLePaiement}
+              />
+            ) : null}
+            <Bouton libelle="Retour" variante="discret" onPress={() => router.back()} />
+          </View>
+
+          <Text style={[typographie.petit, styles.note]}>
+            Une quittance atteste un règlement intégral. Tant qu’il manque un
+            encaissement, l’application ne peut pas en produire : c’est la règle
+            qui protège le bailleur comme le locataire.
+          </Text>
+        </ScrollView>
       </View>
     );
   }
-
-  const libelleDocument = LIBELLE_DOCUMENT[typeRetenu];
-  const estDegrade = typeDemande !== 'auto' && typeDemande !== typeRetenu;
 
   return (
     <View style={styles.plein}>
@@ -293,32 +291,20 @@ export default function EcranApercuQuittance() {
         ]}
       >
         <EnTeteEcran
-          titre={`Générer ${libelleDocument.toLowerCase()}`}
+          titre="Générer la quittance"
           sousTitre={mois ? libelleLongCapitalise(mois) : undefined}
         />
 
         {erreur ? <BandeauMessage ton="erreur" message={erreur} /> : null}
 
-        {estDegrade ? (
-          <BandeauMessage
-            ton="avertissement"
-            message={`${diagnostic?.explication ?? ''} Un ${libelleDocument.toLowerCase()} vous est donc proposé à la place.`}
-          />
-        ) : (
-          <BandeauMessage
-            ton={typeRetenu === 'quittance' ? 'succes' : 'information'}
-            message={diagnostic?.explication ?? ''}
-          />
-        )}
+        <BandeauMessage ton="succes" message={diagnostic.explication} />
 
         <Carte style={styles.carteRecap}>
           <View style={styles.ligneEntete}>
             <Text style={[typographie.titreCarte, styles.titreCarte]}>
-              {dossierNomDocument(typeRetenu)}
+              {LIBELLE_DOCUMENT.quittance}
             </Text>
-            <PastilleStatut
-              statut={typeRetenu === 'quittance' ? 'paye' : typeRetenu === 'recu' ? 'partiel' : 'attente'}
-            />
+            <PastilleStatut statut="paye" />
           </View>
 
           <Text style={[typographie.petit, styles.sousTitreCarte]}>
@@ -336,7 +322,7 @@ export default function EcranApercuQuittance() {
 
         <View style={styles.actions}>
           <Bouton
-            libelle={`Générer ${libelleDocument.toLowerCase()}`}
+            libelle="Générer la quittance"
             onPress={() => void generer()}
             occupe={emission}
           />
@@ -355,10 +341,6 @@ export default function EcranApercuQuittance() {
       </ScrollView>
     </View>
   );
-}
-
-function dossierNomDocument(type: TypeDocument): string {
-  return LIBELLE_DOCUMENT[type];
 }
 
 function libellePeriode(cle: string): string {

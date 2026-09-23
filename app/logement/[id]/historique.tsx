@@ -304,12 +304,12 @@ export default function EcranHistorique() {
           ) : detail.statut && detail.statut !== 'hors_bail' && detail.statut !== 'attente' ? (
             <View style={styles.actionDetail}>
               <Bouton
-                libelle="Générer le document"
+                libelle="Générer la quittance"
                 variante="secondaire"
                 onPress={() =>
                   router.push({
                     pathname: '/quittance/apercu',
-                    params: { logementId: id!, periode: detail.cle, type: 'auto' },
+                    params: { logementId: id!, periode: detail.cle },
                   })
                 }
               />

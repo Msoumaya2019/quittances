@@ -7,7 +7,15 @@
  */
 
 import { ZERO, type Centimes } from './money.ts';
-import { formaterDateFr, versCle, type ClePeriode, type Periode } from './period.ts';
+import {
+  decaler,
+  depuisCle,
+  estAvant,
+  formaterDateFr,
+  versCle,
+  type ClePeriode,
+  type Periode,
+} from './period.ts';
 import { montantDuPourMois } from './rent.ts';
 import {
   MODES_PAIEMENT,
@@ -245,13 +253,16 @@ export function contexteDuMois(params: {
  *
  * C'est la promesse « un seul bouton » : l'utilisateur n'a jamais à se demander
  * quoi faire, le bouton porte toujours l'action utile du moment.
+ *
+ * L'application ne produit que des quittances. Un mois partiellement payé ne
+ * mène donc pas à un document mais au geste qui débloque la quittance :
+ * compléter le règlement.
  */
 export type ActionPrincipale =
   | { type: 'enregistrer_paiement'; libelle: string }
   | { type: 'completer_paiement'; libelle: string; montantSuggere: Centimes }
   | { type: 'generer_quittance'; libelle: string }
   | { type: 'voir_quittance'; libelle: string; documentId: string }
-  | { type: 'voir_recu'; libelle: string; documentId: string }
   | { type: 'aucune'; libelle: string };
 
 export function actionPrincipale(params: {
@@ -279,14 +290,10 @@ export function actionPrincipale(params: {
   }
 
   if (statut === 'partiel') {
-    // Un reçu a été émis : on le consulte ; sinon on complète le paiement.
-    if (documentExistant && documentExistant.type === 'recu') {
-      return {
-        type: 'voir_recu',
-        libelle: 'Voir le reçu',
-        documentId: documentExistant.id,
-      };
-    }
+    // Un mois partiellement payé ne donne **aucun** document : la seule action
+    // utile est de compléter le règlement, et c'est elle qui ouvrira le droit à
+    // une quittance. Un reçu émis par une version antérieure reste lisible
+    // depuis la liste des documents, mais il ne s'en crée plus.
     return {
       type: 'completer_paiement',
       libelle: 'Compléter le paiement',
@@ -298,29 +305,131 @@ export function actionPrincipale(params: {
 }
 
 /**
- * Type de document que l'application a le droit d'émettre pour ce mois.
+ * Les documents que l'application a le droit de **créer**.
+ *
+ * Ce n'est pas `TypeDocument`, et l'écart est voulu. `TypeDocument` reste
+ * l'union **complète** des types lisibles : des reçus et des avis d'échéance
+ * ont été émis par le passé, dorment dans des sauvegardes chez l'utilisateur,
+ * et doivent rester affichables — restreindre la lecture rendrait illisibles
+ * des documents qu'il a déjà. Seule la **création** est retirée.
+ *
+ * `Extract<…, 'quittance'>` plutôt qu'une chaîne recopiée : si `'quittance'`
+ * quittait un jour `TypeDocument`, ce type deviendrait `never` et chaque
+ * `return 'quittance'` cesserait de compiler. L'accord entre les deux sources
+ * se tient donc tout seul, sans test à maintenir.
+ */
+export type DocumentEmissible = Extract<TypeDocument, 'quittance'>;
+
+/**
+ * Document que l'application a le droit d'émettre pour ce mois, ou `null` si
+ * aucun ne l'est.
  *
  * C'est le garde-fou central : on ne produit une **quittance** que si le
- * règlement est intégral et enregistré. Un paiement partiel donne un **reçu**.
- * Un défaut de paiement donne un **avis d'échéance**.
- *
- * Le type de retour est `TypeDocument`, jamais l'union recopiée : recopier
- * l'union ferait une seconde vérité, qui ne suivrait pas l'ajout d'un type.
+ * règlement est intégral et enregistré. Un mois partiellement payé, impayé, en
+ * attente, ou hors bail ne donne **aucun document**. L'application explique
+ * alors pourquoi et propose d'enregistrer le paiement manquant — c'est la seule
+ * façon d'ouvrir le droit à une quittance.
  */
-export function documentAutorise(contexte: ContexteMois): TypeDocument {
-  if (contexte.statut === 'paye') return 'quittance';
-  if (contexte.statut === 'partiel') return 'recu';
-  return 'avis_echeance';
+export function documentAutorise(contexte: ContexteMois): DocumentEmissible | null {
+  return contexte.statut === 'paye' ? 'quittance' : null;
 }
 
-/** Contrôle : ce mois peut-il donner lieu à une quittance ? */
+/**
+ * Contrôle : ce mois peut-il donner lieu à une quittance ?
+ *
+ * Dérivé de `documentAutorise`, jamais réécrit : deux fonctions qui décident
+ * séparément de la même chose finissent par diverger, et c'est celle qu'on ne
+ * regarde pas qui ment.
+ */
 export function peutEmettreQuittance(contexte: ContexteMois): boolean {
-  return contexte.statut === 'paye';
+  return documentAutorise(contexte) === 'quittance';
 }
 
-/** Contrôle : ce mois peut-il donner lieu à un document en règle ? */
-export function peutEmettreDocument(contexte: ContexteMois): boolean {
-  return contexte.statut !== 'hors_bail';
+// ---------------------------------------------------------------------------
+// Rattrapage : les mois réglés qui attendent encore leur quittance
+// ---------------------------------------------------------------------------
+
+/** Un mois intégralement réglé pour lequel aucune quittance n'existe. */
+export interface MoisARattraper {
+  periode: Periode;
+  montantDu: MontantDu;
+  cumul: CumulPaiements;
+  /** Nombre de mois écoulés depuis ce mois : 0 pour le mois courant. */
+  ancienneteMois: number;
+}
+
+/**
+ * Les mois que le bailleur peut encore quittancer, du plus récent au plus ancien.
+ *
+ * C'est ce qui rend une quittance oubliée récupérable. Faire défiler les mois un
+ * par un demandait sept appuis pour remonter sept mois — et rien ne disait
+ * lesquels manquaient. On parcourt donc le bail entier et on nomme ce qui
+ * manque.
+ *
+ * Trois bornes, chacune pour une raison différente :
+ *  - on ne remonte pas avant l'entrée dans les lieux : il n'y avait rien à louer ;
+ *  - on ne descend pas sous le mois courant : un mois futur n'a rien à rattraper ;
+ *  - `profondeurMois` arrête le parcours même sur un bail très ancien, pour que
+ *    l'écran reste rapide.
+ *
+ * Un mois n'est retenu que si le domaine autorise une quittance **et** qu'aucune
+ * n'a déjà été émise. C'est `documentAutorise` qui tranche, la même fonction
+ * qu'à l'émission : la liste ne peut donc pas proposer un document que
+ * `emettreDocument` refuserait ensuite.
+ */
+export function quittancesARattraper(params: {
+  bail: Bail;
+  periodesLoyer: readonly PeriodeLoyer[];
+  paiements: readonly Paiement[];
+  /** Documents déjà émis, toutes natures confondues. */
+  documents: readonly { periode: ClePeriode; type: TypeDocument }[];
+  /** Date du jour, au format `AAAA-MM-JJ`. */
+  dateDuJour: string;
+  /** Nombre de mois examinés vers le passé, mois courant compris. */
+  profondeurMois?: number;
+}): MoisARattraper[] {
+  const { bail, periodesLoyer, paiements, documents, dateDuJour } = params;
+  const profondeur = params.profondeurMois ?? 60;
+
+  const moisDuJour = depuisCle(dateDuJour.slice(0, 7));
+  if (!moisDuJour) return [];
+
+  const jourLu = Number(dateDuJour.slice(8, 10));
+  const entree = depuisCle(bail.dateEntree.slice(0, 7));
+
+  // Seules les quittances comptent : un reçu ou un avis d'échéance émis pour ce
+  // mois ne tient pas lieu de la quittance qui manque.
+  const dejaQuittance = new Set(
+    documents.filter((d) => d.type === 'quittance').map((d) => d.periode),
+  );
+
+  const trouves: MoisARattraper[] = [];
+
+  for (let recul = 0; recul < profondeur; recul += 1) {
+    const mois = decaler(moisDuJour, -recul);
+
+    if (entree && estAvant(mois, entree)) break;
+
+    const cle = versCle(mois);
+    if (dejaQuittance.has(cle)) continue;
+
+    const montantDu = montantDuPourMois(bail, periodesLoyer, mois);
+    const cumul = cumulerPaiementsPourCle(paiements, cle);
+    const statut = determinerStatut({
+      montantDu,
+      cumul,
+      periode: mois,
+      bail,
+      periodeDuJour: moisDuJour,
+      jourDuJour: Number.isFinite(jourLu) ? jourLu : 1,
+    });
+
+    if (statut !== 'paye') continue;
+
+    trouves.push({ periode: mois, montantDu, cumul, ancienneteMois: recul });
+  }
+
+  return trouves;
 }
 
 // ---------------------------------------------------------------------------
@@ -373,7 +482,7 @@ export function preparerGenerationGroupee(params: {
     if (statut === 'hors_bail') motif = 'Hors période de location';
     else if (statut === 'attente') motif = 'Paiement non enregistré';
     else if (statut === 'retard') motif = 'Impayé';
-    else if (statut === 'partiel') motif = 'Paiement partiel — un reçu peut être émis';
+    else if (statut === 'partiel') motif = 'Paiement partiel — quittance impossible';
 
     return {
       logementId: logement.id,

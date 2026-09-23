@@ -17,7 +17,13 @@ import {
   titulairesDuBail,
 } from '../db/repositories/properties';
 import { trouverProprietaire } from '../db/repositories/owners';
-import { cumulerPaiementsPourCle, determinerStatut, paiementsImprimes, soldeRestant } from '../domain/payments';
+import {
+  cumulerPaiementsPourCle,
+  determinerStatut,
+  paiementsImprimes,
+  soldeRestant,
+  type DocumentEmissible,
+} from '../domain/payments';
 import { mentionPourDocument } from '../domain/mentions';
 import { montantDuPourCle } from '../domain/rent';
 import { paiementsPourBail } from './chargement';
@@ -54,17 +60,27 @@ export interface DemandeEmission {
   logementId: string;
   /** Mois concerné, clé `AAAA-MM`. */
   periode: string;
-  /** Type souhaité. Une quittance est refusée si le mois n'est pas soldé. */
-  type: TypeDocument;
+  /**
+   * Type souhaité. Le type est `DocumentEmissible`, pas `TypeDocument` : le
+   * domaine a restreint la **création** à la seule quittance, alors que la
+   * lecture continue d'accepter les reçus et avis d'échéance déjà émis. Le
+   * compilateur refuse donc ici un reçu, ce qu'aucun test n'aurait pu garantir
+   * aussi tôt.
+   */
+  type: DocumentEmissible;
 }
 
 /**
  * Émet un document et renvoie sa fiche, une fois le PDF écrit sur l'appareil.
  *
+ * L'application ne **crée** qu'une quittance. Les reçus et les avis d'échéance
+ * émis par une version antérieure restent lisibles — la base et les sauvegardes
+ * les portent — mais ils ne s'émettent plus.
+ *
  * Contrôles appliqués avant toute écriture :
  *  1. le logement et son bail existent ;
  *  2. le mois est couvert par le bail ;
- *  3. une **quittance** n'est émise que si le règlement est intégral ;
+ *  3. la **quittance** n'est émise que si le règlement est intégral ;
  *  4. le montant attesté correspond exactement à la somme des paiements.
  */
 export async function emettreDocument(demande: DemandeEmission): Promise<Document> {
@@ -109,26 +125,15 @@ export async function emettreDocument(demande: DemandeEmission): Promise<Documen
   const solde = soldeRestant(montantDu, cumul);
 
   // Garde-fou central : jamais de quittance sans paiement intégral.
-  if (demande.type === 'quittance' && solde > 0) {
+  //
+  // C'est le dernier verrou avant l'écriture du fichier. Il double celui du
+  // domaine — `documentAutorise` — parce qu'ici le mois est relu de la base, et
+  // qu'un écran ne peut pas le contourner.
+  if (solde > 0) {
     throw new ErreurEmission(
       `Le règlement de ${libelleLongCapitalise(mois)} n'est pas complet : ` +
         `il reste ${(solde / 100).toFixed(2).replace('.', ',')} € à percevoir. ` +
-        'Un reçu peut être émis à la place.',
-    );
-  }
-
-  // Un reçu suppose un paiement, même partiel.
-  if (demande.type === 'recu' && cumul.encaisse <= 0) {
-    throw new ErreurEmission(
-      `Aucun paiement n'est enregistré pour ${libelleLongCapitalise(mois)}. ` +
-        'Enregistrez d’abord le règlement, ou émettez un avis d’échéance.',
-    );
-  }
-
-  if (demande.type === 'avis_echeance' && cumul.encaisse > 0) {
-    throw new ErreurEmission(
-      `Un paiement est déjà enregistré pour ${libelleLongCapitalise(mois)}. ` +
-        'Un avis d’échéance n’a plus lieu d’être.',
+        'Enregistrez le paiement manquant : la quittance s’ouvrira alors.',
     );
   }
 
@@ -282,47 +287,41 @@ export async function emettreDocument(demande: DemandeEmission): Promise<Documen
   }
 }
 
+/** Ce que l'application peut dire d'un mois, en vue d'une quittance. */
+export interface DiagnosticMois {
+  /** Le mois peut-il donner lieu à une quittance ? */
+  peutQuittance: boolean;
+  /** Pourquoi, en français, à afficher tel quel par l'écran. */
+  explication: string;
+}
+
 /**
- * Détermine le document que l'application a le droit d'émettre pour un mois.
- * Renvoie aussi l'explication, pour que l'écran puisse l'afficher.
+ * Détermine si le mois peut donner lieu à une quittance, et pourquoi.
+ *
+ * L'explication est écrite ici, pas dans l'écran : c'est la même phrase qui sert
+ * de motif au refus et de message à l'utilisateur, donc elle ne peut pas
+ * annoncer autre chose que ce que l'émission fera réellement.
  */
 export async function diagnostiquerMois(
   logementId: string,
   periode: string,
-): Promise<{
-  peutQuittance: boolean;
-  peutRecu: boolean;
-  peutAvis: boolean;
-  explication: string;
-}> {
+): Promise<DiagnosticMois> {
   const logement = await trouverLogement(logementId);
   if (!logement) {
-    return {
-      peutQuittance: false,
-      peutRecu: false,
-      peutAvis: false,
-      explication: "Ce logement n'existe plus.",
-    };
+    return { peutQuittance: false, explication: "Ce logement n'existe plus." };
   }
 
   const bail = await bailEnCours(logementId);
   if (!bail) {
     return {
       peutQuittance: false,
-      peutRecu: false,
-      peutAvis: false,
       explication: "Ce logement n'a pas de locataire en place.",
     };
   }
 
   const mois = depuisCle(periode);
   if (!mois) {
-    return {
-      peutQuittance: false,
-      peutRecu: false,
-      peutAvis: false,
-      explication: 'Le mois demandé est invalide.',
-    };
+    return { peutQuittance: false, explication: 'Le mois demandé est invalide.' };
   }
 
   const [periodesLoyer, paiements] = await Promise.all([
@@ -344,8 +343,6 @@ export async function diagnostiquerMois(
   if (statut === 'hors_bail') {
     return {
       peutQuittance: false,
-      peutRecu: false,
-      peutAvis: false,
       explication: `Le logement n'était pas loué en ${libelleLongCapitalise(mois)}.`,
     };
   }
@@ -353,8 +350,6 @@ export async function diagnostiquerMois(
   if (statut === 'paye') {
     return {
       peutQuittance: true,
-      peutRecu: false,
-      peutAvis: false,
       explication: 'Le loyer est intégralement réglé : la quittance peut être générée.',
     };
   }
@@ -363,20 +358,17 @@ export async function diagnostiquerMois(
     const restant = soldeRestant(montantDu, cumul);
     return {
       peutQuittance: false,
-      peutRecu: true,
-      peutAvis: false,
       explication:
-        `Paiement partiel enregistré. Il reste ${(restant / 100).toFixed(2).replace('.', ',')} € à percevoir : ` +
-        'un reçu peut être remis en attendant le solde complet.',
+        `Paiement partiel enregistré : il reste ${(restant / 100).toFixed(2).replace('.', ',')} € à percevoir. ` +
+        'Une quittance ne peut attester qu’un règlement intégral — enregistrez le complément.',
     };
   }
 
   return {
     peutQuittance: false,
-    peutRecu: false,
-    peutAvis: true,
     explication:
-      "Aucun paiement n'est enregistré pour ce mois. Un avis d'échéance peut être remis au locataire.",
+      "Aucun paiement n'est enregistré pour ce mois. " +
+      'Enregistrez le règlement du loyer pour obtenir la quittance.',
   };
 }
 

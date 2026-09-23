@@ -9,14 +9,16 @@ téléphone.
 Elle est pensée pour un bailleur particulier qui veut faire ses quittances en
 quelques secondes par mois, sans se tromper sur les montants.
 
-## Les trois promesses
+## Les promesses
 
-Trois règles portent la fiabilité des documents. Chacune vit dans **une seule
+Ces règles portent la fiabilité des documents. Chacune vit dans **une seule
 fonction pure**, éprouvée par un test qui tourne sans téléphone.
 
 | Promesse | Où elle est tenue |
 | --- | --- |
 | **Jamais de quittance sans paiement intégral enregistré** | `documentAutorise` et `peutEmettreQuittance` (`src/domain/payments.ts`), doublées d'un garde-fou dans `src/pdf/render.ts` |
+| **Aucun autre document ne se crée, mais tout document déjà émis reste lisible** | `DocumentEmissible` et `documentAutorise`, qui rend `null` hors règlement intégral (`src/domain/payments.ts`) |
+| **Une quittance oubliée reste rattrapable**, sans parcourir les mois un par un | `quittancesARattraper` (`src/domain/payments.ts`) |
 | **Un changement de loyer ne modifie aucun mois passé** | `planifierChangementLoyer` (`src/domain/rent.ts`) |
 | **Aucune règle de calcul n'est dupliquée entre l'écran et le document** | `contexteDuMois` (`src/domain/payments.ts`), seul point d'assemblage |
 
@@ -29,12 +31,14 @@ test a été retourné contre la règle qu'il prétend garder, pour vérifier qu
 Quatre onglets :
 
 - **Accueil** — le tableau de bord du mois : ce qui est encaissé, ce qui reste dû,
-  et un bouton pour agir directement.
-- **Logements** — vos biens, leurs locataires, leurs loyers, avec l'historique
+  et un bouton qui produit la quittance **directement**.
+- **Quittance** — trois vues : générer pour un logement en un appui, retrouver les
+  quittances **à rattraper** (les mois réglés dont la quittance n'a jamais été
+  produite, même il y a sept mois), et consulter tout ce qui a déjà été émis.
+- **Logement** — vos biens, leurs locataires, leurs loyers, avec l'historique
   mois par mois.
-- **Quittances** — les documents produits, et la **génération groupée** de tous
-  les logements en une fois.
-- **Plus** — propriétaires, modèles de document, sauvegarde chiffrée, rappels.
+- **Réglages** — thème, propriétaire, modèles de document, sauvegarde chiffrée,
+  rappels.
 
 Points de fond :
 

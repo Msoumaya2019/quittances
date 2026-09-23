@@ -316,11 +316,11 @@ export default function EcranLogement() {
                   />
                 ) : (
                   <Bouton
-                    libelle="Générer le document du mois"
+                    libelle="Générer la quittance du mois"
                     onPress={() =>
                       router.push({
                         pathname: '/quittance/apercu',
-                        params: { logementId: logement.id, periode: cle, type: 'auto' },
+                        params: { logementId: logement.id, periode: cle },
                       })
                     }
                   />

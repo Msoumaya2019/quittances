@@ -23,6 +23,7 @@ import {
   actionPrincipale,
   cumulerPaiements,
   determinerStatut,
+  quittancesARattraper,
   soldeRestant,
   statistiquesDuMois,
   type ActionPrincipale,
@@ -31,11 +32,12 @@ import {
   type StatistiquesMois,
 } from '../domain/payments';
 import { montantDuPourMois } from '../domain/rent';
-import { periodeActuelle, versCle, type Periode } from '../domain/period';
+import { aujourdHui, periodeActuelle, versCle, type Periode } from '../domain/period';
 import type {
   Bail,
   Document,
   Logement,
+  MontantDu,
   Paiement,
   PeriodeLoyer,
   Proprietaire,
@@ -61,6 +63,8 @@ export interface CarteLogement {
 export interface DonneesAccueil {
   cartes: CarteLogement[];
   statistiques: StatistiquesMois;
+  /** Les quittances oubliées, du plus récent au plus ancien. */
+  rattrapage: LigneRattrapage[];
   chargement: boolean;
   erreur: string | null;
 }
@@ -90,10 +94,18 @@ const ETAT_INITIAL: EtatInterne = {
 };
 
 /**
+ * Les données brutes, chargées en une fois et avant toute mise en forme.
+ *
+ * `chargement` et `erreur` n'en font pas partie : ce sont des états d'écran, pas
+ * des données. Les fonctions pures qui suivent ne reçoivent donc que du réel.
+ */
+export type EtatDonnees = Omit<EtatInterne, 'chargement' | 'erreur'>;
+
+/**
  * Charge, pour chaque logement, son bail en cours et les données associées.
  * Les requêtes indépendantes partent en parallèle.
  */
-async function chargerTout(): Promise<Omit<EtatInterne, 'chargement' | 'erreur'>> {
+async function chargerTout(): Promise<EtatDonnees> {
   await ouvrirBase();
 
   const [logements, proprietaires, paiements, documents] = await Promise.all([
@@ -135,7 +147,7 @@ async function chargerTout(): Promise<Omit<EtatInterne, 'chargement' | 'erreur'>
  * Fonction pure : c'est elle qui décide du statut et de l'action proposée.
  */
 export function construireCartes(
-  etat: Omit<EtatInterne, 'chargement' | 'erreur'>,
+  etat: EtatDonnees,
   mois: Periode,
   moisDuJour: Periode,
   jourDuJour: number,
@@ -214,6 +226,65 @@ export function construireCartes(
   });
 }
 
+/** Un mois réglé qui attend encore sa quittance, et le logement concerné. */
+export interface LigneRattrapage {
+  logement: Logement;
+  bail: Bail;
+  periode: Periode;
+  montantDu: MontantDu;
+  /** Nombre de mois écoulés depuis ce mois : 0 pour le mois courant. */
+  ancienneteMois: number;
+}
+
+/**
+ * Rassemble les quittances oubliées de tous les logements.
+ *
+ * Fonction pure, comme `construireCartes` : la règle qui décide quels mois
+ * manquent vit dans le domaine (`quittancesARattraper`), et cette fonction ne
+ * fait que la réunir par logement et ranger le résultat.
+ *
+ * Le tri est du plus récent au plus ancien — c'est l'ordre dans lequel on
+ * rattrape — et, à ancienneté égale, par nom de logement, pour que deux
+ * logements ne s'entrelacent pas au hasard.
+ */
+export function construireRattrapage(
+  etat: EtatDonnees,
+  dateDuJour: string,
+): LigneRattrapage[] {
+  const lignes: LigneRattrapage[] = [];
+
+  for (const logement of etat.logements) {
+    const bail = etat.baux.get(logement.id);
+    if (!bail) continue;
+
+    const sesPeriodes = etat.periodesLoyer.get(bail.id) ?? [];
+    const sesPaiements = etat.paiements.filter((p) => p.bailId === bail.id);
+    const sesDocuments = etat.documents.filter((d) => d.bailId === bail.id);
+
+    for (const manque of quittancesARattraper({
+      bail,
+      periodesLoyer: sesPeriodes,
+      paiements: sesPaiements,
+      documents: sesDocuments,
+      dateDuJour,
+    })) {
+      lignes.push({
+        logement,
+        bail,
+        periode: manque.periode,
+        montantDu: manque.montantDu,
+        ancienneteMois: manque.ancienneteMois,
+      });
+    }
+  }
+
+  return lignes.sort((a, b) =>
+    a.ancienneteMois !== b.ancienneteMois
+      ? a.ancienneteMois - b.ancienneteMois
+      : a.logement.nom.localeCompare(b.logement.nom),
+  );
+}
+
 /**
  * Hook principal de l'accueil.
  * Recharge les données à chaque fois que `cleRafraichissement` change, ce qui
@@ -261,9 +332,15 @@ export function useDonneesAccueil(mois: Periode, cleRafraichissement: number): D
     return statistiquesDuMois(contextes);
   }, [cartes]);
 
+  const rattrapage = useMemo(() => {
+    if (etat.chargement) return [];
+    return construireRattrapage(etat, aujourdHui());
+  }, [etat]);
+
   return {
     cartes,
     statistiques,
+    rattrapage,
     chargement: etat.chargement,
     erreur: etat.erreur,
   };

@@ -85,23 +85,23 @@ function contexte(mois: string, paiements: Paiement[], b = bail(), pl = [periode
 }
 
 describe('Cohérence : ce qui est enregistré, affiché, et émis', () => {
-  it('sans aucun paiement, aucun document de paiement n’est autorisé', () => {
+  it('sans aucun paiement, aucun document n’est autorisé', () => {
     const c = contexte('2026-09', []);
 
     assert.equal(c.cumul.encaisse, 0, 'rien encaissé');
     assert.equal(c.solde, 90000, 'le solde affiché vaut le montant dû');
     assert.equal(c.statut, 'retard', 'le 20 est après l’échéance du 5');
-    assert.equal(documentAutorise(c), 'avis_echeance');
+    assert.equal(documentAutorise(c), null, 'un mois impayé ne produit rien');
     assert.equal(peutEmettreQuittance(c), false, 'la quittance est interdite');
   });
 
-  it('un paiement partiel donne un reçu, jamais une quittance', () => {
+  it('un paiement partiel ne donne aucun document, et jamais une quittance', () => {
     const c = contexte('2026-09', [paiement('2026-09', 50000, '2026-09-08')]);
 
     assert.equal(c.cumul.encaisse, 50000);
     assert.equal(c.solde, 40000, 'le reste dû est exact');
     assert.equal(c.statut, 'partiel');
-    assert.equal(documentAutorise(c), 'recu');
+    assert.equal(documentAutorise(c), null, 'un paiement partiel ne produit rien');
     assert.equal(peutEmettreQuittance(c), false);
   });
 

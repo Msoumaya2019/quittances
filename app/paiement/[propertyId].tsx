@@ -383,7 +383,7 @@ export default function EcranPaiement() {
         </View>
 
         <Text style={[typographie.petit, styles.note]}>
-          Un paiement partiel donne droit à un reçu. La quittance n’est proposée qu’une fois
+          Un paiement partiel ne suffit pas pour une quittance : elle n’est produite qu’une fois
           le mois intégralement réglé.
         </Text>
       </ScrollView>

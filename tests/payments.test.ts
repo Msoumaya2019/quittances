@@ -18,12 +18,18 @@ import {
   documentAutorise,
   montantPropose,
   peutEmettreQuittance,
+  quittancesARattraper,
   soldeRestant,
   statistiquesDuMois,
   tropPercu,
   type ContexteMois,
 } from '../src/domain/payments.ts';
-import type { Bail, Paiement, PeriodeLoyer } from '../src/domain/types.ts';
+import {
+  LIBELLE_DOCUMENT,
+  type Bail,
+  type Paiement,
+  type PeriodeLoyer,
+} from '../src/domain/types.ts';
 
 const BAIL: Bail = {
   id: 'bail-1',
@@ -218,16 +224,27 @@ describe('Document autorisé — garde-fou central', () => {
     assert.equal(documentAutorise(paye), 'quittance');
   });
 
-  it('un paiement partiel ne donne pas droit à une quittance, mais à un reçu', () => {
+  it('un paiement partiel ne donne droit à aucun document', () => {
     const partiel = contexte({ paiements: [paiement({ montant: 50000 })] });
     assert.equal(peutEmettreQuittance(partiel), false);
-    assert.equal(documentAutorise(partiel), 'recu');
+    assert.equal(documentAutorise(partiel), null);
   });
 
-  it('un mois impayé donne un avis d’échéance, jamais une quittance', () => {
+  it('un mois impayé ne donne droit à aucun document', () => {
     const impaye = contexte({ paiements: [], moisPeriode: periode(2026, 6) });
     assert.equal(peutEmettreQuittance(impaye), false);
-    assert.equal(documentAutorise(impaye), 'avis_echeance');
+    assert.equal(documentAutorise(impaye), null);
+  });
+
+  it('les types déjà émis restent lisibles, même s’ils ne se créent plus', () => {
+    // `TypeDocument` est l'union des types **lisibles**. L'amputer ferait
+    // disparaître des documents que l'utilisateur a déjà chez lui : une mise à
+    // jour rendrait ses sauvegardes illisibles. Seule la création est close.
+    assert.deepEqual(Object.keys(LIBELLE_DOCUMENT).sort(), [
+      'avis_echeance',
+      'quittance',
+      'recu',
+    ]);
   });
 
   it('deux paiements partiels valant le total ouvrent droit à la quittance', () => {
@@ -275,13 +292,13 @@ describe('Action proposée sur la carte du logement', () => {
     if (action.type === 'voir_quittance') assert.equal(action.documentId, 'doc-1');
   });
 
-  it('propose de voir le reçu si un reçu a été émis pour un paiement partiel', () => {
+  it('un reçu déjà émis ne détourne plus l’action : il faut compléter le paiement', () => {
     const c = contexte({ paiements: [paiement({ montant: 50000 })] });
     const action = actionPrincipale({
       contexte: c,
       documentExistant: { id: 'recu-1', type: 'recu' },
     });
-    assert.equal(action.type, 'voir_recu');
+    assert.equal(action.type, 'completer_paiement');
   });
 
   it('n’annonce aucune action pour un mois hors bail', () => {
@@ -434,5 +451,123 @@ describe('Contexte d’un mois assemble par le domaine', () => {
 
     assert.equal(avantEcheance.statut, 'attente', 'avant le 5, rien n’est encore dû');
     assert.equal(apresEcheance.statut, 'retard', 'après le 5, le loyer est en retard');
+  });
+});
+
+describe('Rattrapage — les mois réglés qui attendent leur quittance', () => {
+  /** Sept mois avant septembre 2026, comme la demande initiale. */
+  const SEPT_MOIS = paiement({
+    montant: 85000,
+    periode: '2026-02',
+    datePaiement: '2026-02-05',
+  });
+
+  function rattraper(params: {
+    paiements?: Paiement[];
+    documents?: { periode: string; type: 'quittance' | 'recu' | 'avis_echeance' }[];
+    dateDuJour?: string;
+    bail?: Bail;
+  } = {}) {
+    return quittancesARattraper({
+      bail: params.bail ?? BAIL,
+      periodesLoyer: [LOYER],
+      paiements: params.paiements ?? [],
+      documents: params.documents ?? [],
+      dateDuJour: params.dateDuJour ?? '2026-09-20',
+    });
+  }
+
+  it('retrouve une quittance oubliée il y a sept mois', () => {
+    const trouvees = rattraper({ paiements: [SEPT_MOIS] });
+
+    assert.equal(trouvees.length, 1, 'un seul mois est en attente');
+    assert.equal(trouvees[0].periode.annee, 2026);
+    assert.equal(trouvees[0].periode.mois, 2);
+    assert.equal(trouvees[0].ancienneteMois, 7, 'sept mois d’ancienneté');
+    assert.equal(trouvees[0].cumul.encaisse, 85000);
+  });
+
+  it('ne propose pas un mois dont la quittance existe déjà', () => {
+    const trouvees = rattraper({
+      paiements: [SEPT_MOIS],
+      documents: [{ periode: '2026-02', type: 'quittance' }],
+    });
+
+    assert.deepEqual(trouvees, [], 'la quittance existe, il n’y a rien à rattraper');
+  });
+
+  it('un reçu déjà émis ne tient pas lieu de quittance', () => {
+    const trouvees = rattraper({
+      paiements: [SEPT_MOIS],
+      documents: [{ periode: '2026-02', type: 'recu' }],
+    });
+
+    assert.equal(trouvees.length, 1, 'le mois reste à quittancer');
+  });
+
+  it('ne propose jamais un mois partiellement réglé', () => {
+    const trouvees = rattraper({
+      paiements: [paiement({ montant: 50000, periode: '2026-07', datePaiement: '2026-07-05' })],
+    });
+
+    assert.deepEqual(trouvees, [], 'un règlement partiel ne donne pas de quittance');
+  });
+
+  it('range les mois du plus récent au plus ancien', () => {
+    const trouvees = rattraper({
+      paiements: [
+        paiement({ montant: 85000, periode: '2026-02', datePaiement: '2026-02-05' }),
+        paiement({ montant: 85000, periode: '2026-08', datePaiement: '2026-08-05' }),
+        paiement({ montant: 85000, periode: '2026-05', datePaiement: '2026-05-05' }),
+      ],
+    });
+
+    assert.deepEqual(
+      trouvees.map((t) => t.periode.mois),
+      [8, 5, 2],
+      'août, puis mai, puis février',
+    );
+  });
+
+  it('ne remonte pas avant l’entrée dans les lieux', () => {
+    // Le bail commence en janvier 2024 : un versement antérieur ne doit pas
+    // faire apparaître un mois qui n'a jamais été loué.
+    const trouvees = rattraper({
+      paiements: [
+        paiement({ montant: 85000, periode: '2023-11', datePaiement: '2023-11-05' }),
+        SEPT_MOIS,
+      ],
+    });
+
+    assert.equal(trouvees.length, 1);
+    assert.equal(trouvees[0].periode.annee, 2026, 'aucun mois de 2023 n’est proposé');
+  });
+
+  it('ne propose pas un mois futur, même réglé d’avance', () => {
+    const trouvees = rattraper({
+      paiements: [
+        paiement({ montant: 85000, periode: '2026-11', datePaiement: '2026-11-05' }),
+        SEPT_MOIS,
+      ],
+    });
+
+    assert.equal(trouvees.length, 1);
+    assert.equal(trouvees[0].periode.mois, 2, 'novembre est dans l’avenir');
+  });
+
+  it('s’arrête à la profondeur demandée', () => {
+    const trouvees = rattraper({ paiements: [SEPT_MOIS] });
+
+    const borne = quittancesARattraper({
+      bail: BAIL,
+      periodesLoyer: [LOYER],
+      paiements: [SEPT_MOIS],
+      documents: [],
+      dateDuJour: '2026-09-20',
+      profondeurMois: 6,
+    });
+
+    assert.equal(trouvees.length, 1, 'sans borne, février est atteint');
+    assert.deepEqual(borne, [], 'avec une borne de six mois, il ne l’est plus');
   });
 });

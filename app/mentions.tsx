@@ -37,7 +37,7 @@ const REGLES = [
   {
     titre: 'Le reçu',
     texte:
-      "Lorsque le paiement est partiel, le bailleur remet un reçu qui mentionne la somme effectivement reçue et, si le locataire le demande, ce qui reste dû. C'est le document que l'application produit dans ce cas.",
+      "Lorsque le paiement est partiel, le bailleur remet un reçu qui mentionne la somme effectivement reçue et, si le locataire le demande, ce qui reste dû. Cette application ne produit que des quittances : elle ne génère pas de reçu, mais elle dit pourquoi une quittance n'est pas encore possible et propose d'enregistrer le paiement manquant.",
   },
   {
     titre: 'Le loyer et les charges',

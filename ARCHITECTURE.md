@@ -18,25 +18,30 @@ Application de quittances de loyer, 100 % locale, hors ligne.
 app/                        # routes Expo Router (une route = un fichier)
   _layout.tsx               # pile racine + verrou biométrique + base de données
   (tabs)/
-    _layout.tsx             # barre d'onglets : Accueil, Logements, Quittances, Plus
+    _layout.tsx             # barre d'onglets : Accueil, Quittance, Logement, Réglages
     index.tsx               # ACCUEIL : tableau de bord + cartes logements
-    logements.tsx           # LOGEMENTS : liste et gestion des biens
-    quittances.tsx          # QUITTANCES : documents + génération groupée
-    plus.tsx                # PLUS : propriétaires, modèles, sauvegarde, réglages
+    quittances.tsx          # QUITTANCE : générer, rattraper, consulter
+    logements.tsx           # LOGEMENT : ajouter, modifier, supprimer
+    plus.tsx                # RÉGLAGES : thème, propriétaire, modèles, sauvegarde
   logement/
     nouveau.tsx             # assistant de création en 4 étapes
     [id].tsx                # détail d'un logement
     [id]/historique.tsx     # grille mensuelle des quittances
-    [id]/modifier.tsx       # édition, changement de locataire
+    [id]/locataires.tsx     # modification des titulaires du bail
+    [id]/modifier.tsx       # édition du logement et du bail
   paiement/
     [propertyId].tsx        # enregistrement rapide d'un paiement
   quittance/
-    apercu.tsx              # aperçu PDF
+    apercu.tsx              # vérification avant émission, consultation d'un document émis
     succes.tsx              # écran de confirmation et partage
-    groupee.tsx             # génération groupée
   proprietaire/
     index.tsx               # liste
     [id].tsx                # fiche
+  mentions.tsx              # mentions portées sur les documents
+  signature.tsx             # signature du bailleur
+  sauvegarde/
+    export.tsx              # création d'une sauvegarde chiffrée
+    import.tsx              # restauration d'une sauvegarde
 
 src/
   domain/                   # moteur métier pur, testable sans téléphone
@@ -75,16 +80,28 @@ tests/                      # tests du moteur métier avec node:test
 
 ## Chaîne de génération d'un document
 
+L'application ne **crée** qu'une quittance. Les reçus et les avis d'échéance
+qu'une version antérieure a émis restent lisibles — la base et les sauvegardes
+les portent — mais ils ne s'émettent plus.
+
 ```
-bouton « Générer la quittance »
+bouton « Générer »
   -> lecture du contexte du mois (logement, bail, loyer dû, paiements cumulés)
-  -> décision : quittance | reçu | avis d'échéance | enregistrer le paiement
+  -> décision du domaine : quittance, ou rien du tout
+       `documentAutorise` rend « quittance » si le mois est intégralement réglé,
+       `null` sinon. Aucun document intermédiaire n'existe.
+  -> si rien n'est permis : l'écran explique pourquoi et propose
+     d'enregistrer le paiement manquant — le seul geste qui ouvre ce droit
   -> rendu HTML à partir du modèle choisi dans les réglages
   -> impression PDF locale (expo-print)
   -> écriture du fichier dans le stockage de l'application
   -> enregistrement du document en base (numéro unique, période, montant, chemin)
   -> écran de succès : voir, partager, terminer
 ```
+
+La génération se fait **en un appui**, sans écran intermédiaire : l'onglet
+Quittance produit la quittance directement, et l'aperçu n'est plus qu'un chemin
+de vérification, atteint en touchant le nom du logement.
 
 ## Règles de calcul
 
@@ -97,17 +114,29 @@ bouton « Générer la quittance »
   d'habitation pour un mois commencé. Voir `src/domain/rent.ts`.
 - **Une quittance exige un règlement intégral enregistré.** Le statut « payé » n'est
   jamais modifiable directement : il découle mécaniquement de la somme des paiements.
+- **Aucun autre document ne se crée.** Un mois partiellement payé, impayé ou hors
+  bail ne donne aucun document : `documentAutorise` rend `null`. La lecture, elle,
+  reste ouverte aux reçus et avis d'échéance déjà émis, pour qu'une mise à jour ne
+  rende pas illisibles des documents que le bailleur a déjà chez lui. Le type de
+  création est `DocumentEmissible`, dérivé de `TypeDocument` par `Extract` : si
+  `'quittance'` quittait un jour l'union des types lisibles, le compilateur le
+  dirait.
+- **Une quittance oubliée reste rattrapable.** `quittancesARattraper` parcourt tous
+  les mois du bail et nomme ceux qui sont intégralement réglés sans quittance : un
+  mois d'il y a sept mois se retrouve sans faire défiler les mois un par un.
 - **Une modification de loyer ne remonte jamais dans le passé** : les périodes d'effet
   sont historisées et figées.
 
 ## Où sont garanties les promesses du projet
 
-Trois règles portent la fiabilité de l'application. Chacune vit dans **une seule
-fonction pure**, pour être éprouvable sans base de données et sans téléphone.
+Chacune de ces règles porte la fiabilité de l'application. Chacune vit dans **une
+seule fonction pure**, pour être éprouvable sans base de données et sans téléphone.
 
 | Promesse | Où elle vit | Comment on la vérifie |
 | --- | --- | --- |
 | Jamais de quittance sans paiement intégral enregistré | `documentAutorise` et `peutEmettreQuittance` dans `src/domain/payments.ts`, doublées du garde-fou de `emettreDocument` dans `src/pdf/render.ts` | `tests/coherence.test.ts` |
+| Aucun autre document ne se crée, mais tout document déjà émis reste lisible | `DocumentEmissible` et `documentAutorise` (`null` hors règlement intégral) dans `src/domain/payments.ts` ; le rendu garde ses branches `recu` / `avis_echeance` | `tests/payments.test.ts`, `tests/modele-officiel.test.ts` |
+| Une quittance oubliée reste rattrapable, sans parcourir les mois un par un | `quittancesARattraper` dans `src/domain/payments.ts` | `tests/payments.test.ts` |
 | Un changement de loyer ne modifie aucun mois passé | `planifierChangementLoyer` dans `src/domain/rent.ts` | `tests/rent.test.ts` |
 | Aucune règle de calcul n'est dupliquée entre l'écran et le document | `contexteDuMois` dans `src/domain/payments.ts`, seul point d'assemblage | `tests/payments.test.ts` |
 | Le rappel de loyers ne peut pas annoncer un mois faux | `texteRappel` dans `src/domain/rappels.ts` — le message ne nomme jamais de mois, parce qu'il est figé une fois pour toutes | `tests/rappels.test.ts` |

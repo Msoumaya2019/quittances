@@ -19,12 +19,14 @@ import {
   octetsVersBase64,
 } from './encodage';
 import { libelleLong, depuisCle } from '../domain/period';
-import type { Document, TypeDocument } from '../domain/types';
+import type { DocumentEmissible } from '../domain/payments';
+import type { Document } from '../domain/types';
 
 export interface DemandeLigne {
   logementId: string;
   periode: string;
-  type: TypeDocument;
+  /** `DocumentEmissible`, pas `TypeDocument` : la série n'émet que des quittances. */
+  type: DocumentEmissible;
 }
 
 export interface ResultatEmission {

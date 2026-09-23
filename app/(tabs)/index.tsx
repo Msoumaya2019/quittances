@@ -33,6 +33,7 @@ import { formatMontant } from '@/domain/money';
 import { libelleLongCapitalise, decaler, versCle, depuisCle } from '@/domain/period';
 import { useApplication } from '@/state/ApplicationContext';
 import { useDonneesAccueil, type CarteLogement } from '@/hooks/useAccueil';
+import { emettreDocument, ErreurEmission } from '@/pdf/render';
 import type { StatutMois } from '@/domain/types';
 import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
 
@@ -62,6 +63,8 @@ export default function EcranAccueil() {
   const [filtre, setFiltre] = useState<Filtre>('tous');
   const [enRafraichissement, setEnRafraichissement] = useState(false);
   const [cartePourMoisPrecedent, setCartePourMoisPrecedent] = useState<CarteLogement | null>(null);
+  const [generation, setGeneration] = useState(false);
+  const [erreurAction, setErreurAction] = useState<string | null>(null);
 
   // --- Filtrage ---------------------------------------------------------
   const cartesFiltrees = useMemo(() => {
@@ -86,26 +89,52 @@ export default function EcranAccueil() {
     };
   }, [cartes]);
 
+  /**
+   * Produit la quittance d'un logement pour un mois, en un seul appui.
+   *
+   * Aucun écran intermédiaire : on émet, puis l'écran de confirmation propose
+   * d'ouvrir, d'imprimer ou de partager le PDF. Si le mois n'est pas réglé,
+   * `emettreDocument` refuse et son message est affiché tel quel — c'est le
+   * garde-fou qui parle, pas l'écran.
+   */
+  const genererQuittance = useCallback(
+    async (logementId: string, periode: string) => {
+      setGeneration(true);
+      setErreurAction(null);
+
+      try {
+        const produit = await emettreDocument({ logementId, periode, type: 'quittance' });
+        rafraichir();
+
+        router.push({
+          pathname: '/quittance/succes',
+          params: { documentId: produit.id },
+        });
+      } catch (e) {
+        setErreurAction(
+          e instanceof ErreurEmission
+            ? e.message
+            : "La quittance n'a pas pu être générée. Réessayez dans un instant.",
+        );
+      } finally {
+        setGeneration(false);
+      }
+    },
+    [rafraichir],
+  );
+
   // --- Action principale d'une carte ------------------------------------
   const gererActionPrincipale = useCallback(
-    (donnees: CarteLogement) => {
+    async (donnees: CarteLogement) => {
       const { action, logement, bail } = donnees;
       if (!bail) return;
 
       switch (action.type) {
         case 'generer_quittance':
-          router.push({
-            pathname: '/quittance/apercu',
-            params: {
-              logementId: logement.id,
-              periode: versCle(mois),
-              type: 'quittance',
-            },
-          });
+          await genererQuittance(logement.id, versCle(mois));
           break;
 
         case 'voir_quittance':
-        case 'voir_recu':
           router.push({
             pathname: '/quittance/apercu',
             params: {
@@ -139,7 +168,7 @@ export default function EcranAccueil() {
           router.push({ pathname: '/logement/[id]', params: { id: logement.id } });
       }
     },
-    [mois],
+    [mois, genererQuittance],
   );
 
   const ouvrirLogement = useCallback((donnees: CarteLogement) => {
@@ -212,17 +241,27 @@ export default function EcranAccueil() {
           />
         }
         ListHeaderComponent={
-          <EnTete
-            moisLibelle={libelleLongCapitalise(mois)}
-            estMoisCourant={estMoisCourant}
-            statistiques={statistiques}
-            filtre={filtre}
-            compteurs={compteurs}
-            onChangerFiltre={setFiltre}
-            onPrecedent={moisPrecedent}
-            onSuivant={moisSuivant}
-            onAujourdhui={revenirAuMoisCourant}
-          />
+          <>
+            <EnTete
+              moisLibelle={libelleLongCapitalise(mois)}
+              estMoisCourant={estMoisCourant}
+              statistiques={statistiques}
+              filtre={filtre}
+              compteurs={compteurs}
+              onChangerFiltre={setFiltre}
+              onPrecedent={moisPrecedent}
+              onSuivant={moisSuivant}
+              onAujourdhui={revenirAuMoisCourant}
+            />
+            {generation || erreurAction ? (
+              <View style={styles.bandeau}>
+                {generation ? (
+                  <BandeauMessage ton="information" message="Génération de la quittance…" />
+                ) : null}
+                {erreurAction ? <BandeauMessage ton="erreur" message={erreurAction} /> : null}
+              </View>
+            ) : null}
+          </>
         }
         ListEmptyComponent={
           <View style={styles.videListe}>
@@ -257,7 +296,7 @@ export default function EcranAccueil() {
         titre="Quittance d’un mois précédent"
         message={
           cartePourMoisPrecedent
-            ? `Choisissez le mois concerné pour ${cartePourMoisPrecedent.logement.nom}. Seuls les mois intégralement réglés permettent d’obtenir une quittance ; sinon, l’application vous proposera un reçu ou un avis d’échéance.`
+            ? `Choisissez le mois concerné pour ${cartePourMoisPrecedent.logement.nom}. Seuls les mois intégralement réglés permettent d’obtenir une quittance ; sinon, l’application vous proposera d’enregistrer le paiement manquant.`
             : undefined
         }
         options={moisPrecedents(mois)}
@@ -274,7 +313,6 @@ export default function EcranAccueil() {
             params: {
               logementId: carte.logement.id,
               periode: valeur,
-              type: 'auto',
             },
           });
         }}
@@ -450,6 +488,9 @@ const creerStyles = (couleurs: Couleurs) =>
   liste: {
     paddingHorizontal: espaces.lg,
     gap: espaces.md,
+  },
+  bandeau: {
+    gap: espaces.sm,
   },
   entete: {
     gap: espaces.lg,
