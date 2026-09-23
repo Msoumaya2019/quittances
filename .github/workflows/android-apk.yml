@@ -93,10 +93,42 @@ jobs:
       - name: Lancer la compilation Android
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        # `--wait` attend la fin côté Expo et rapatrie le fichier dans ce job.
-        run: eas build --platform android --profile apercu --non-interactive --wait
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./app.json').expo.version")
+          fichier="Quittances-${version}-android.apk"
+
+          # La compilation distante d'abord : c'est l'image d'Expo, preparee pour
+          # ce projet. `--wait` attend la fin et rapatrie le fichier dans ce job.
+          #
+          # Le forfait gratuit limite les compilations Android du mois, et le
+          # refus tombe TARD — apres l'envoi du projet, sur une ligne noyee dans
+          # la sortie normale, au-dessus d'un « build command failed » qui ne dit
+          # rien. Mesure du 21 et du 23 septembre 2026 : le quota a bloque la
+          # livraison deux fois, la meme semaine.
+          #
+          # Le repli compile sur l'executeur. `--local` garde la CLE D'EXPO : les
+          # identifiants sont lus sur le serveur avec le jeton, et la signature
+          # se fait ici. C'est ce qui le distingue d'une compilation Gradle, qui
+          # signerait avec la cle de debogage — un APK d'une autre cle ne se pose
+          # pas par-dessus le precedent, et l'installation efface les donnees.
+          # La session dont `--local` a besoin est fournie par le jeton : en CI,
+          # personne n'a d'identifiant a saisir.
+          if eas build --platform android --profile apercu --non-interactive --wait; then
+            echo "MODE=distant" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Compilation distante indisponible — quota du forfait, ou panne. Nouvelle tentative sur l'executeur."
+            rm -f "$fichier"
+            eas build --platform android --profile apercu --local --non-interactive --output "$fichier"
+            ls -lh "$fichier"
+            echo "MODE=local" >> "$GITHUB_ENV"
+            echo "FICHIER=$fichier" >> "$GITHUB_ENV"
+          fi
 
       - name: Récupérer l'APK
+        # Seulement pour la compilation distante : en local, le fichier est deja
+        # sur l'executeur, et interroger Expo renverrait l'avant-dernier.
+        if: env.MODE == 'distant'
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         # On ne se fie pas au nom du fichier : on interroge Expo sur l'adresse
