@@ -11,6 +11,7 @@ import {
   decaler,
   dernierJour,
   depuisCle,
+  echeanceDuMois,
   formaterDateFr,
   libelleLong,
   nombreDeJours,
@@ -91,5 +92,38 @@ describe('Périodes', () => {
   it('met une date en forme à la française', () => {
     assert.equal(formaterDateFr('2026-09-15'), '15 septembre 2026');
     assert.equal(formaterDateFr('2026-01-01'), '1 janvier 2026');
+  });
+});
+
+describe('Date d’exigibilité', () => {
+  it('rend le jour convenu au bail, dans le mois demandé', () => {
+    assert.equal(echeanceDuMois(periode(2026, 8), 5), '2026-08-05');
+    assert.equal(echeanceDuMois(periode(2026, 1), 15), '2026-01-15');
+  });
+
+  it('ramène au dernier jour un mois plus court que le jour convenu', () => {
+    // Un bail exigible le 31 : février n'a pas de 31. Sans ce ramassage, la
+    // quittance annoncerait le 31 février, une date qui n'existe pas.
+    assert.equal(echeanceDuMois(periode(2026, 2), 31), '2026-02-28');
+    assert.equal(echeanceDuMois(periode(2027, 2), 31), '2027-02-28');
+    assert.equal(echeanceDuMois(periode(2028, 2), 31), '2028-02-29', 'année bissextile');
+    assert.equal(echeanceDuMois(periode(2026, 4), 31), '2026-04-30', 'avril a 30 jours');
+  });
+
+  it('accepte le dernier jour exact de chaque mois', () => {
+    assert.equal(echeanceDuMois(periode(2026, 2), 28), '2026-02-28');
+    assert.equal(echeanceDuMois(periode(2026, 12), 31), '2026-12-31');
+  });
+
+  it('ramène un jour aberrant dans les bornes du mois', () => {
+    assert.equal(echeanceDuMois(periode(2026, 5), 0), '2026-05-01');
+    assert.equal(echeanceDuMois(periode(2026, 5), -3), '2026-05-01');
+    assert.equal(echeanceDuMois(periode(2026, 5), 99), '2026-05-31');
+  });
+
+  it('produit toujours une date civile lisible, complétée à deux chiffres', () => {
+    assert.equal(echeanceDuMois(periode(2026, 3), 1), '2026-03-01');
+    assert.equal(echeanceDuMois(periode(2026, 3), 9), '2026-03-09');
+    assert.match(echeanceDuMois(periode(2026, 3), 9), /^\d{4}-\d{2}-\d{2}$/);
   });
 });

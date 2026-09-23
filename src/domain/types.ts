@@ -272,9 +272,17 @@ export const LIBELLE_DOCUMENT: Record<TypeDocument, string> = {
   avis_echeance: "Avis d'échéance",
 };
 
-export type ModeleDocument = 'classique' | 'moderne';
+/**
+ * Modèles de mise en page disponibles.
+ *
+ * `officiel` reproduit la feuille du bailleur : trois volets sur une seule page
+ * A4 — la quittance, l'avis d'échéance, puis le talon détachable. C'est le
+ * modèle par défaut, parce que c'est le papier que le bailleur remet déjà.
+ */
+export type ModeleDocument = 'officiel' | 'classique' | 'moderne';
 
 export const LIBELLE_MODELE: Record<ModeleDocument, string> = {
+  officiel: 'Officiel — la feuille du bailleur',
   classique: 'Classique et professionnel',
   moderne: 'Moderne et épuré',
 };

@@ -37,6 +37,18 @@ import {
 import { COULEURS_THEME, type CouleurTheme } from '@/ui/palette';
 import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
 
+/**
+ * Ce que chaque modèle donne à voir, en une phrase.
+ *
+ * On décrit l'aspect, jamais la qualité : « officiel » n'est pas meilleur que
+ * « moderne », c'est le papier du bailleur ou une autre présentation.
+ */
+const DESCRIPTION_MODELE: Record<ModeleDocument, string> = {
+  officiel: 'Votre feuille habituelle : le document et son talon détachable, sur une page.',
+  classique: 'Présentation sobre et traditionnelle, très lisible à l’impression.',
+  moderne: 'Mise en page moderne, bandeau coloré, montant mis en avant.',
+};
+
 export default function EcranReglages() {
   const styles = useStyles(creerStyles);
   const { reglages, majReglages, rafraichir } = useApplication();
@@ -241,7 +253,7 @@ export default function EcranReglages() {
           changent pas.
         </Text>
 
-        {(['classique', 'moderne'] as ModeleDocument[]).map((modele) => {
+        {(['officiel', 'classique', 'moderne'] as ModeleDocument[]).map((modele) => {
           const actif = reglages.modeleParDefaut === modele;
           return (
             <Pressable
@@ -256,9 +268,7 @@ export default function EcranReglages() {
                   {LIBELLE_MODELE[modele]}
                 </Text>
                 <Text style={[typographie.petit, styles.detailChoix]}>
-                  {modele === 'classique'
-                    ? 'Présentation sobre et traditionnelle, très lisible à l’impression.'
-                    : 'Mise en page moderne, bandeau coloré, montant mis en avant.'}
+                  {DESCRIPTION_MODELE[modele]}
                 </Text>
               </View>
               <View style={[styles.radio, actif && styles.radioActif]}>
@@ -390,7 +400,7 @@ export default function EcranReglages() {
             await majReglages({
               couleurTheme: 'vert',
               modeTheme: 'clair',
-              modeleParDefaut: 'classique',
+              modeleParDefaut: 'officiel',
               signatureActive: false,
               rappelPaiements: false,
             });

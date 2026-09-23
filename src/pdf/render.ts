@@ -29,8 +29,12 @@ import { lireReglages } from '../db/repositories/settings';
 import {
   libelleLongCapitalise,
   depuisCle,
+  echeanceDuMois,
+  formaterDateCourte,
   formaterDateFr,
   aujourdHui,
+  premierJour,
+  dernierJour,
   periodeActuelle,
 } from '../domain/period';
 import { MODES_PAIEMENT, nomPourDocument, type Document, type TypeDocument } from '../domain/types';
@@ -157,6 +161,10 @@ export async function emettreDocument(demande: DemandeEmission): Promise<Documen
 
   const signatureIncluse = reglages.signatureActive && !!reglages.signatureBase64;
 
+  // Date d'exigibilité du loyer du mois : le jour convenu au bail, ramené au
+  // dernier jour quand le mois est plus court (un bail au 31 en février).
+  const echeance = echeanceDuMois(mois, bail.jourEcheance);
+
   const contenu: ContenuDocument = {
     type: demande.type,
     numero,
@@ -184,7 +192,11 @@ export async function emettreDocument(demande: DemandeEmission): Promise<Documen
     montantRecu: cumul.encaisse,
     datesPaiement: cumul.dates.map((d) => formaterDateFr(d)),
     modesPaiement,
-    dateEcheance: `${bail.jourEcheance} du mois`,
+    dateEcheance: formaterDateCourte(echeance),
+    periodeDebut: formaterDateCourte(premierJour(mois)),
+    periodeFin: formaterDateCourte(dernierJour(mois)),
+    echeanceLibelle: formaterDateFr(echeance),
+    resteAPercevoir: solde,
     lieuEmission: reglages.lieuEmission || proprietaire.ville,
     signatureBase64: signatureIncluse ? reglages.signatureBase64 : null,
     mentionLibre: reglages.mentionLibre,

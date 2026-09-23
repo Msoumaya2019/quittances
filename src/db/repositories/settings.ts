@@ -40,7 +40,9 @@ export interface Reglages {
 }
 
 export const REGLAGES_PAR_DEFAUT: Reglages = {
-  modeleParDefaut: 'classique',
+  // La feuille du bailleur par défaut : c'est le papier qu'il remet déjà, et
+  // c'est donc celui qui demande le moins d'explications au premier lancement.
+  modeleParDefaut: 'officiel',
   couleurTheme: 'vert',
   modeTheme: 'clair',
   signatureBase64: null,
@@ -76,6 +78,9 @@ const COULEURS_ADMISES: CouleurTheme[] = ['bleu', 'vert', 'rose', 'noir'];
 /** Modes admis. */
 const MODES_ADMIS: ModeTheme[] = ['clair', 'sombre'];
 
+/** Modèles de document admis. */
+const MODELES_ADMIS: ModeleDocument[] = ['officiel', 'classique', 'moderne'];
+
 function serialiser(valeur: unknown): string {
   return JSON.stringify(valeur);
 }
@@ -107,7 +112,7 @@ export async function lireReglages(): Promise<Reglages> {
   }
 
   // Contrôles de forme : une valeur corrompue ne doit pas casser l'application.
-  if (resultat.modeleParDefaut !== 'classique' && resultat.modeleParDefaut !== 'moderne') {
+  if (!MODELES_ADMIS.includes(resultat.modeleParDefaut)) {
     resultat.modeleParDefaut = REGLAGES_PAR_DEFAUT.modeleParDefaut;
   }
   // Une couleur ou un mode inconnu — réglage écrit par une version antérieure,

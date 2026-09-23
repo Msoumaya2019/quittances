@@ -170,6 +170,19 @@ export function formaterDateCourte(dateISO: string): string {
   return `${j}/${m}/${a}`;
 }
 
+/**
+ * Date d'exigibilité du loyer pour un mois : le jour convenu au bail, ramené au
+ * dernier jour du mois quand celui-ci est plus court.
+ *
+ * Un bail dont le loyer est exigible le 31 ne doit pas produire une date
+ * inexistante en février : la quittance annoncerait un jour qui n'existe pas.
+ */
+export function echeanceDuMois(p: Periode, jour: number): string {
+  const dernier = Number(dernierJour(p).slice(8, 10));
+  const sur = Math.min(Math.max(Math.trunc(jour) || 1, 1), dernier);
+  return `${p.annee}-${String(p.mois).padStart(2, '0')}-${String(sur).padStart(2, '0')}`;
+}
+
 /** Les 12 périodes d'une année, de janvier à décembre. */
 export function periodesDeLAnnee(annee: number): Periode[] {
   return Array.from({ length: 12 }, (_, i) => periode(annee, i + 1));

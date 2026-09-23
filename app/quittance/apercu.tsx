@@ -27,7 +27,12 @@ import { PastilleStatut } from '@/ui/components/PastilleStatut';
 import { espaces, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import { libelleLongCapitalise, depuisCle, formaterDateFr } from '@/domain/period';
-import { LIBELLE_DOCUMENT, type Document, type TypeDocument } from '@/domain/types';
+import {
+  LIBELLE_DOCUMENT,
+  LIBELLE_MODELE,
+  type Document,
+  type TypeDocument,
+} from '@/domain/types';
 import { emettreDocument, diagnostiquerMois, ErreurEmission } from '@/pdf/render';
 import { ouvrirDocument, partagerDocument } from '@/pdf/partage';
 import { trouverDocument } from '@/db/repositories/documents';
@@ -322,7 +327,7 @@ export default function EcranApercuQuittance() {
 
           <View style={styles.separateur} />
 
-          <LigneDetail libelle="Modèle" valeur={reglages.modeleParDefaut === 'moderne' ? 'Moderne et épuré' : 'Classique et professionnel'} />
+          <LigneDetail libelle="Modèle" valeur={LIBELLE_MODELE[reglages.modeleParDefaut]} />
           <LigneDetail
             libelle="Signature du bailleur"
             valeur={reglages.signatureActive && reglages.signatureBase64 ? 'Apposée' : 'Non apposée'}

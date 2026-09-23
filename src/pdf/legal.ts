@@ -66,6 +66,25 @@ export function mentionAvisEcheance(params: {
   );
 }
 
+/**
+ * Les deux mentions du modèle officiel, relevées sur le document de référence
+ * du bailleur.
+ *
+ * Elles ne sont pas rédigées ici : ce sont les phrases que le bailleur imprime
+ * déjà sur ses quittances. Les reformuler serait modifier un papier contractuel
+ * sans mandat. Elles sont reproduites telles quelles, à la virgule près.
+ */
+export const MENTION_RESERVE_DROITS =
+  "Dont quittance, sous réserve de tous les droits et actions du propriétaire, de toutes " +
+  "poursuites qu'aurait pu engager. En cas de congé précédemment donné, cette quittance " +
+  "représentera l'indemnité d'occupation des lieux et ne saurait être considérée comme un " +
+  'titre de location.';
+
+export const MENTION_ANNULATION_RECUS =
+  'Cette quittance annule tous les reçus qui auraient pu être donnés pour acomptes versés, ' +
+  'même si ces reçus portent une date postérieure à la date ci-contre. Le paiement de la ' +
+  "présente quittance n'emporte pas présomption de paiement des termes antérieurs.";
+
 /** Rappel utile imprimé en bas de document. */
 export const RAPPEL_LOCATAIRE =
   "Conservez ce document : il peut vous être demandé comme justificatif de paiement de votre loyer.";
