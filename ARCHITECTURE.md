@@ -889,6 +889,63 @@ sensible est le secret `EXPO_TOKEN`, stocké dans les secrets GitHub. Les
 compilations refusent de produire une application dont les types ou les tests
 échouent, pour qu'un artefact publié soit toujours un artefact vérifié.
 
+## La mémoire du projet
+
+Le fichier `.workbuddy-ai/memory/MEMORY.md`, **hors du dépôt** (un cran au-dessus,
+aux côtés de ce document), porte les seuls faits qu'un agent doit retrouver sans
+relire 66 000 octets d'architecture. Il a **deux façons d'échouer**, et une seule
+se voit dans sa taille :
+
+- **tronqué** — au-delà de son budget, la fin disparaît au chargement. Mesuré :
+  l'injection s'arrête à **8 133 octets**, et la coupe emporte alors précisément
+  la section qui annonce ce budget ;
+- **appauvri** — resserré pour tenir sous ce budget, jusqu'à ce que des faits
+  n'existent plus nulle part. C'est le défaut le plus coûteux, et il ne se voit
+  pas : le fichier est plus court, plus propre, et **faux**.
+
+D'où deux bancs, et ils se lisent ensemble :
+
+```bash
+python .verif/verifier-memoire.py <chemin de MEMORY.md>
+python .verif/diagnostiquer-memoire.py <chemin de MEMORY.md>
+```
+
+`verifier-memoire.py` porte la liste des faits à ne pas perdre — 43 témoins
+nommés — et exige **que chacun vive quelque part** : dans la mémoire, ou hors
+d'elle. Il distingue trois verdicts, et un seul fait échouer :
+
+| verdict | sens | défaut ? |
+| --- | --- | --- |
+| dans la mémoire | le fait y est | non |
+| **déplacé** | le fait vit ailleurs, et le nom du porteur est imprimé | non |
+| **perdu** | le fait ne vit nulle part | **oui** |
+
+Cette distinction est le point du banc, et elle a coûté cher à apprendre. Écrit
+d'abord pour exiger les 43 témoins **dans le fichier**, il contredisait la
+dernière ligne de la mémoire elle-même — « ce qui n'est pas ici vit dans les
+skills nommées et dans `ARCHITECTURE.md` » — et forçait à payer deux fois le même
+fait. Le 24 septembre 2026, une passe de resserrement a donc mené la mémoire de
+8 614 à **8 127 octets** sans perdre un seul fait, et le banc l'a déclarée
+**appauvrie** : **19 témoins sur 43**. La mesure a montré que **23** d'entre eux
+étaient simplement **déplacés** — 18 dans ce document, 5 dans des skills, 1 dans
+`.github/COMPILATION.md` — et que **un seul** était réellement perdu
+(`falsifier-reinitialisation`, le banc qui garde la remise à zéro). Ce fait a été
+remis dans la mémoire ; le banc a été corrigé.
+
+**Un témoin ne se retire donc que si le fait vit ailleurs — et cela se mesure.**
+Le réflexe d'attribuer un fait à une skill au nom plausible est ce que la mesure
+interrompt : `createClient` et `SECURITY DEFINER` ont ainsi été déclarés absents
+d'une skill où on les croyait rangés, 0 occurrence, et la règle est restée en
+clair. `diagnostiquer-memoire.py` sert à cela : il **relit la liste des témoins
+dans le banc** — la recopier la ferait diverger de celle qui juge — et imprime,
+témoin par témoin, où le fait vit quand il a quitté la mémoire.
+
+Le seuil de marge est de **50 octets**, et non les plusieurs centaines héritées :
+exiger davantage forcerait à supprimer des faits, ce que ce banc existe
+précisément pour empêcher. Le raisonnement complet, les passe précédentes et les
+mesures de budget des deux mémoires (projet et utilisateur) sont dans la skill
+`resserrer-une-memoire-tronquee`.
+
 ## Vérifications disponibles
 
 ```bash
@@ -1031,12 +1088,49 @@ c'est ce qui prouve que le second ne double pas le premier.
 
 `.verif/mesurer-inventaire.py` fait le même travail pour l'inventaire du mobilier,
 sur trois témoins — un court, un complet de six pièces et trente-sept meubles, et
-un de sortie. Onze mesures : le plancher de pages du cas complet, le témoin
+un de sortie. Quatorze mesures : le plancher de pages du cas complet, le témoin
 négatif du cas court, l'ordre des onze sections d'une entrée **et** des treize
 d'une sortie, la photo qui reste sous son meuble, le portrait sous le plafond de
 hauteur — plafond **lu dans la source**, et non cité de mémoire —, le dernier
 meuble, la dernière signature sur la même feuille que les sources, les réserves,
-et les deux teintes distinctes de la paire avant / après.
+les deux teintes distinctes de la paire avant / après, la **place** de chaque
+colonne, la mention de la mise en regard, la phrase qui n'impute rien au
+locataire, et l'en-tête du tableau comparatif.
+
+**Trois de ces mesures manquaient, et c'est la falsification qui l'a dit.** Le
+banc comptait dix `OK` sur la source saine — dont **deux mesures sans mutation**
+et **une mesure sans objet** :
+
+- l'ordre des colonnes n'était vérifié par rien. Compter les pixels ne dit pas de
+  quel côté chaque image se trouve : sous une inversion, les deux teintes restent
+  dessinées, et les dix mesures restaient vertes. C'est la **boîte** de chaque
+  teinte, page par page, qui le dit ;
+- la mention « Ce tableau met deux constats en regard » et l'en-tête
+  « Meuble / Entrée / Sortie » étaient **imprimés et lus par personne**. Une
+  mention que rien ne lit est une mention qu'on peut retirer sans qu'un contrôle
+  tombe ;
+- et le contrôle des sections ne cherchait que des **titres**. Mesuré : quand le
+  rendu ne répond plus à la section des évolutions, la section s'imprime avec son
+  titre, **vide**, et le contrôle restait vert sur un document qui ne constatait
+  plus rien. Un titre imprimé ne dit pas qu'une section porte quelque chose.
+
+La mesure « section vide » a demandé trois écritures, et les deux échecs valent
+d'être connus. La première définissait `communes` dans la branche `else` d'une
+autre mesure, si bien que le banc plantait en `UnboundLocalError` au lieu de
+signaler un échec lisible — **un banc qui plante cache les mesures qu'il n'a pas
+encore faites**. Les deux suivantes butaient sur la **numérotation** : entre
+« Évolutions depuis l'entrée » et « Synthèse », le texte plat porte `11.`, et un
+contrôle qui l'ignorait déclarait la section pleine. Le contrôle retire donc la
+numérotation avant de conclure, et **ne conclut rien** quand aucun titre suivant
+n'est trouvé sur la même page : une section peut légitimement commencer en bas
+d'une feuille. Cette limite est écrite dans la fonction, pas cachée.
+
+`.verif/falsifier-inventaire-sortie.py` éprouve les cinq mesures propres à la
+sortie : cinq mutations, aucune muette, chacune nommant son test. **La première
+est spécifique à la sortie** — intervertir les deux sections de sortie ne touche
+aucune des onze sections communes, si bien que le contrôle des onze reste vert
+pendant que celui des treize tombe : c'est ce qui prouve que le second ne double
+pas le premier.
 
 `.verif/falsifier-inventaire.py` l'éprouve : la mutation fait résoudre le côté
 entrée contre l'index de la sortie, et le banc tombe — **0 pixel** de la teinte
