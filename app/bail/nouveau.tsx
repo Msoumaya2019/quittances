@@ -131,7 +131,14 @@ export default function EcranNouveauBail() {
           bailleurPersonneMorale: !!charge.proprietaire.siret,
         };
 
-        const enregistre = await lireBrouillon(logement.id, 'bail');
+        // `charge.logement.id`, et non `logement.id` : `logement` est
+        // déstructuré du contexte plus bas, après le retour anticipé qui suit
+        // le chargement. Le rappel s'exécute alors que ce retour a déjà eu
+        // lieu, si bien que la variable n'a jamais été initialisée — elle vaut
+        // `undefined`, et `.id` faisait échouer toute la préparation du bail.
+        // TypeScript ne pouvait pas le voir : la déclaration existe bien dans
+        // la fonction, et l'usage est dans une fermeture.
+        const enregistre = await lireBrouillon(charge.logement.id, 'bail');
         const repris = enregistre
           ? reprendreBrouillon(analyserDonnees(JSON.stringify(enregistre.donnees)), base)
           : base;

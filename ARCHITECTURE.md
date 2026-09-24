@@ -938,6 +938,19 @@ apparaîtrait dans `git status` comme si elle faisait partie du projet — et
 **prouve la restauration sur les octets**, jamais sur la couleur des tests : une
 source laissée mutée peut rendre les tests verts par chance.
 
+`tests/lecture-avant-declaration.test.ts` garde une faute de **forme**, celle
+qu'aucun autre contrôle ne pouvait voir : un écran qui lit une variable de
+contexte **avant** de l'avoir déstructurée. Mesuré le 24 septembre 2026,
+« Créer le bail » échouait à tous les coups — le chargement lisait
+`lireBrouillon(logement.id, 'bail')` alors que `logement` est déstructuré plus
+bas, après le retour anticipé, et vaut donc `undefined` à cet endroit. `tsc` ne
+le voit pas : la déclaration existe bien dans la fonction, et l'usage est dans
+une fermeture. Le contrôle lit donc les sources — la **fenêtre du chargement**
+seulement, privée des chaînes et des commentaires, et sans les clés d'objet : la
+première version regardait le fichier entier et accusait trente-trois fois du
+code juste. `.verif/falsifier-lecture-avant-declaration.py` remet la faute pour
+exiger qu'il tombe, sur la ligne exacte, et sans laisser la source mutée.
+
 `.verif/falsifier-inventaire.py` va plus loin sur un point : il **imprime** le
 banc deux fois — une fois sur la source saine, une fois sous mutation — et exige
 de la première qu'elle passe, sans quoi « le banc tombe » se confondrait avec
