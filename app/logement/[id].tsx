@@ -395,6 +395,20 @@ export default function EcranLogement() {
                     })
                   }
                 />
+                {/* L'état des lieux se fabrique ici aussi, pour la même raison :
+                    le logement et son locataire sont connus, donc rien n'est à
+                    ressaisir. Les pièces et leurs éléments sont proposés par
+                    défaut selon le type de logement. */}
+                <Bouton
+                  libelle="État des lieux d’entrée"
+                  variante="secondaire"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/etat-des-lieux/nouveau',
+                      params: { logementId: logement.id },
+                    })
+                  }
+                />
                 <Bouton
                   libelle="Ranger un document"
                   variante="secondaire"

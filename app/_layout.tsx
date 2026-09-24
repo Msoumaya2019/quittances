@@ -92,6 +92,28 @@ function Coquille() {
           name="bail/succes"
           options={{ presentation: 'card', animation: 'fade' }}
         />
+        {/* L'état des lieux suit le même parcours que le bail — choisir,
+            remplir, vérifier, établir — avec une différence : le formulaire se
+            remplit sur place, souvent debout dans une pièce vide, et
+            l'enregistrement automatique y est plus court. Les quatre écrans
+            montent du bas, et le succès remplace la vérification pour qu'un
+            retour arrière ne ramène pas sur un brouillon qui n'existe plus. */}
+        <Stack.Screen
+          name="etat-des-lieux/choisir"
+          options={{ presentation: 'card', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="etat-des-lieux/nouveau"
+          options={{ presentation: 'card', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="etat-des-lieux/verification"
+          options={{ presentation: 'card', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="etat-des-lieux/succes"
+          options={{ presentation: 'card', animation: 'fade' }}
+        />
       </Stack>
     </>
   );

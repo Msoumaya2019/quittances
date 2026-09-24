@@ -26,6 +26,16 @@ app/                        # routes Expo Router (une route = un fichier)
     plus.tsx                # RÉGLAGES : thème, propriétaire, modèles, sauvegarde
   document/
     ajouter.tsx             # ranger dans un dossier un fichier déjà sur le téléphone
+  bail/
+    choisir.tsx             # désigner le logement dont on veut le bail
+    nouveau.tsx             # formulaire guidé en neuf étapes
+    verification.tsx        # relecture avant génération
+    succes.tsx              # confirmation, partage
+  etat-des-lieux/
+    choisir.tsx             # désigner le logement à constater
+    nouveau.tsx             # formulaire guidé en six étapes, photos et signatures
+    verification.tsx        # relecture avant établissement
+    succes.tsx              # confirmation, partage, exemplaires à remettre
   logement/
     nouveau.tsx             # assistant de création en 4 étapes
     [id].tsx                # détail d'un logement
@@ -56,17 +66,22 @@ src/
     rent.ts                 # loyer dû pour un mois, selon date d'effet et bail
     payments.ts             # cumul des paiements, solde, statut, action contextuelle
     dossier.ts              # ordre du dossier, rattachement des pièces, saisie
+    bail.ts                 # règles du bail : catégories, durée, dépôt, annexes
+    etat-des-lieux.ts       # pièces, éléments, états, compteurs, clés, contrôle
+    signature.ts            # une seule forme de signature, partagée
     numbering.ts            # numérotation unique et stable des documents
     rappels.ts              # texte des rappels, sans mois figé
     reinitialisation.ts     # le mot qui confirme un effacement, règle pure
   documents/
     stockage.ts             # copie d'un fichier choisi dans le dossier des documents
+    bail-contexte.ts        # ce que la location porte déjà, lu en une fois
+    photos.ts               # prise, choix, compression et rangement des photos
   db/
     schema.ts               # schéma SQL, migrations versionnées, tables à vider
     database.ts             # ouverture, pragmas, migration au démarrage
     reinitialisation.ts     # effacement de toutes les données et des PDF
     repositories/           # owners, properties, payments, documents, pieces,
-                            #   settings
+                            #   brouillons, settings
   pdf/
     styles.ts               # styles partagés par tous les modèles
     styles-colore.ts        # palette du modèle coloré, qui ne suit pas le thème
@@ -77,6 +92,11 @@ src/
     groupee.ts              # génération en série
     partage.ts              # partage d'un document
     encodage.ts             # échappement du texte inséré dans le HTML
+    trace.ts                # tracé de signature en URI, dimensions de photo
+    bail.ts                 # rendu du bail
+    etat-des-lieux.ts       # rendu de l'état des lieux, paginé et illustré
+    emettre-bail.ts         # contrôle, assemblage, impression, rangement du bail
+    emettre-etat-des-lieux.ts # idem pour l'état des lieux
     legal.ts                # mentions légales françaises obligatoires
   backup/
     crypto.ts               # chiffrement authentifié (AES-GCM) + dérivation de clé
@@ -296,6 +316,134 @@ reçoit un nom fabriqué par `src/documents/stockage.ts` — accents et espaces
 retirés, comme pour les quittances. Si l'enregistrement en base échoue après la
 copie, le fichier copié est retiré : un fichier que rien ne référence serait
 invisible, et personne ne saurait qu'il existe.
+
+## Les états des lieux
+
+Un état des lieux décrit un logement **pièce par pièce, élément par élément**.
+C'est le seul document du projet dont la longueur ne se maîtrise pas : une
+quittance tient sur une feuille, un état des lieux en ouvre six.
+
+### Le domaine (`src/domain/etat-des-lieux.ts`)
+
+**Sept états, et non cinq.** `non_verifie` et `non_applicable` ne décrivent pas
+le logement : le premier dit qu'on n'a pas regardé, le second que l'élément
+n'existe pas dans cette pièce. Les mêler aux cinq autres ferait dire au document
+« douze éléments en bon état » là où deux n'ont jamais été regardés.
+`etatConstate` porte cette distinction, et la synthèse sépare `constates` de
+`aRenseigner`.
+
+**Un élément sans état bloque.** Un état par défaut serait un constat inventé ;
+c'est précisément pour pouvoir terminer **sans mentir** que le septième état
+existe. `manquesDeLEdl` refuse donc d'établir le document.
+
+**Un index de compteur est une chaîne, jamais un nombre.** Il porte des zéros de
+tête (`007412`) qui sont l'information : les parser en nombre les ferait
+disparaître. La reprise d'un brouillon enregistré accepte un nombre et le
+convertit ; elle n'accepte jamais de transformer une chaîne en nombre.
+
+**Les identifiants sont déterministes** (`p1`, `e1`, `ph1`, `c1`, `k1`), dérivés
+du rang par `premierLibre`. Deux raisons, et la seconde est la vraie :
+`nouvelId()` passe par `expo-crypto`, que `node --test` ne charge pas — et un
+état des lieux de sortie construit depuis celui d'entrée **réutilise les mêmes
+identifiants**, ce qui rend la comparaison entrée/sortie exacte au lieu
+d'heuristique. `identifiantRepris` refuse un identifiant dupliqué lu d'une
+sauvegarde abîmée : deux pièces qui partageraient `p1` feraient comparer la
+mauvaise pièce à la mauvaise.
+
+**Une seule liste de règles, marquée par étape.** `exigencesDeLEdl` alimente à la
+fois `manquesDeLEdl` (le contrôle final) et `manquesDeLEtapeEdl` (le bouton
+« suivant »). Un test structurel vérifie l'égalité des deux sur treize
+brouillons : le formulaire et le contrôle final ne peuvent pas diverger.
+
+**Douze sections, quinze à la sortie.** `SECTIONS_EDL` porte les douze ;
+`SECTIONS_EDL_SORTIE` en ajoute trois, et `sectionsEdl(type)` les **insère à
+leur place** — après `bail`, avant `synthese` — pour que les sections communes ne
+puissent pas diverger.
+
+### Les signatures
+
+`src/domain/signature.ts` porte une seule forme, partagée par le bail, l'état
+des lieux et l'inventaire : `signatureValide` exige une date civile réelle **et
+un tracé** — une signature sans tracé n'est pas une signature.
+
+**L'appariement se fait par identifiant, jamais par rang.** La première version
+de `pdf/etat-des-lieux.ts` assignait les signatures par position : dès qu'une
+signature manquait, celle d'un colocataire se retrouvait sous le nom de l'autre.
+`contenuEdlDepuis` construit une liste `SignataireImprime[]` avec les
+identifiants des titulaires, et `corpsSignatures` apparie dessus. Un signataire
+attendu qui n'a pas signé figure quand même, avec « Non signé » : c'est une
+information, pas un oubli.
+
+**Qui doit signer vient du domaine.** `signatairesAttendusDeLEdl` vivait dans le
+module d'émission, et le formulaire en refabriquait une. Elle est remontée dans
+le domaine parce que **deux endroits** en dépendent : le formulaire, qui refuse
+d'avancer, et l'émission, qui réimprime. Deux constructions séparées finissent
+par ne plus désigner les mêmes personnes.
+
+**Ce que la signature vaut est dit dans le document.** Un tracé au doigt
+matérialise l'accord comme un exemplaire signé à la main puis numérisé. Ce n'est
+pas une signature électronique qualifiée, et le document l'écrit lui-même, sous
+les signatures.
+
+### Le rendu (`src/pdf/etat-des-lieux.ts`)
+
+`STYLES_EDL` reprend la classe `.page` de `STYLES_BASE` — celle de la quittance
+est une **colonne flex** à hauteur minimale de 285 mm, dessinée pour tenir sur
+une feuille, et une colonne flex se pagine mal. L'état des lieux repasse en bloc
+et laisse le contenu décider du nombre de feuilles.
+
+Les ruptures de page sont tenues par des règles explicites : un titre ne reste
+pas seul en bas de page (`break-after: avoid-page` sur les `h2` et les `h3` de
+pièce), un élément **et ses photos** ne se séparent pas (`break-inside:
+avoid-page` sur `.e-element`), et les deux listes du document — réserves et
+sources — se lisent d'un bloc.
+
+**Les photos s'impriment sous leur élément**, jamais regroupées à la fin : la
+légende suit l'image, l'ensemble vit dans `.e-element`. Une photo en portrait est
+plafonnée en hauteur (`HAUTEUR_PHOTO_MAX_MM`) et sa largeur **recalculée pour
+conserver le rapport** — une photo étirée ne prouverait plus rien. Une photo dont
+le fichier est illisible imprime « Photo illisible » : l'omettre ferait croire
+qu'il n'y avait pas de photo.
+
+**Toute valeur écrite dans un attribut HTML est échappée.** Le tracé de signature
+du bail l'était ; l'URI de données de la photo et celle de la signature de l'état
+des lieux ne l'étaient pas. Une URI contenant un guillemet fermait donc
+l'attribut `src`, et Chromium imprimait le texte de remplacement **plus le
+balisage restant** à la place de l'image. Défaut trouvé par le banc de
+pagination, corrigé aux deux endroits, et tenu par deux tests.
+
+### Le parcours
+
+`app/etat-des-lieux/nouveau.tsx` est le formulaire guidé en six étapes
+(logement, pièces, compteurs et clés, visite, observations, signatures). Il
+n'enregistre pas à la fermeture mais **pendant** : un brouillon est écrit dans la
+table `brouillons` après 500 ms d'inactivité, et au démontage. Le délai est plus
+court que celui du bail parce qu'un état des lieux se remplit avec des photos, et
+qu'un appareil photo qui revient au premier plan ne laisse pas toujours le temps
+d'un délai long.
+
+**Une photo est rangée avant d'être rattachée.** Le fichier est compressé
+(`src/documents/photos.ts` : redimensionnement à 1280 px par `expo-image-manipulator`,
+puis JPEG à 0,6) et déplacé dans `documents/photos/` **avant** que son chemin
+n'entre dans le brouillon : si le rangement échoue, rien n'est rattaché, et
+l'erreur est montrée. Le brouillon ne porte que des chemins ; les fichiers sont
+lus au dernier moment par l'émission, et une photo disparue entre-temps donne une
+entrée vide plutôt qu'une absence d'entrée.
+
+`app/etat-des-lieux/verification.tsx` relit ce qui sera imprimé, section par
+section, et **bloque** tant que `manquesDeLEdl` n'est pas vide. Les réserves du
+domaine y sont montrées avant l'émission, parce qu'elles seront imprimées dans le
+document. `app/etat-des-lieux/succes.tsx` rappelle le nombre d'exemplaires
+(`exemplairesNecessaires` : un pour le bailleur, un par locataire, conformément à
+l'article 3-2) et ce que vaut la signature.
+
+### Les fondements
+
+`SOURCES_EDL` porte sept entrées, chacune avec ce qu'elle **établit**, sa
+référence et la date de consultation. Chaque section du document nomme son
+`fondement`, et un test exige que tout `fondement` renvoie à une source
+déclarée : un fondement qui ne renvoie à aucune source lue est une clause
+inventée, même quand elle est vraie.
 
 ## Règles de calcul
 
@@ -561,6 +709,49 @@ test vert qu'aucune mutation ne fait tomber ne prouve rien : il ne mesure peut-�
 rien. Chaque mutation part des octets d'origine, et la source est restaurée dans
 un `finally` : une mutation oubliée accuserait ensuite le code pour un défaut qui
 n'existe plus.
+
+**Un banc à la fois, jamais deux en parallèle.** Deux bancs qui mutent le même
+fichier se neutralisent : l'un restaure pendant que l'autre croit avoir muté, et
+une mutation **vivante** est comptée muette. Mesuré sur les bancs du bail :
+`20/0` en série contre `19/1` en parallèle, sur les mêmes octets de départ.
+
+`.verif/falsifier-bail.py` (vingt mutations du domaine),
+`.verif/falsifier-bail-rendu.py` (quatorze du rendu),
+`.verif/falsifier-brouillon.py` (six de la reprise de brouillon) et
+`.verif/falsifier-etat-des-lieux.py` (vingt-huit, domaine et rendu) suivent la
+même méthode. Chacun écrit sa sauvegarde dans `.verif/sauvegardes/` — jamais
+**à côté de sa source**, où elle apparaîtrait dans `git status` comme si elle
+faisait partie du projet — et **prouve la restauration sur les octets**, jamais
+sur la couleur des tests : une source laissée mutée peut rendre les tests verts
+par chance.
+
+### Ce que seule une page imprimée peut dire
+
+`.verif/mesurer-edl.py` ne lit ni sources ni constantes : il **imprime**. Le banc
+de rendu `.verif/rendre-etat-des-lieux.ts` produit deux témoins — un court, un
+complet de cinq pièces, vingt-huit éléments et quatre photos — puis Chromium
+`--headless=new --print-to-pdf` les imprime et `pypdfium2` compte les pages. Dix
+mesures, dont celles qu'aucun test unitaire ne peut porter :
+
+- le document complet **ouvre plus d'une feuille**, et le court en ouvre
+  strictement moins — sans ce témoin négatif, « au moins trois pages » pourrait
+  être satisfait par un rendu qui répète son contenu ;
+- les douze sections s'impriment dans l'ordre du domaine ;
+- une photo s'imprime **entre son élément et le suivant**, dans sa pièce ;
+- l'image est **réellement dessinée** — et c'est un compte de pixels de la teinte
+  témoin, pas une lecture de texte, qui le dit : quand une URI casse l'attribut
+  `src`, Chromium dessine le texte de remplacement, qui porte la légende, et
+  l'ordre des mots reste bon alors qu'aucune photo n'est imprimée ;
+- la photo en portrait **tient sur une seule page**, sous le plafond de hauteur ;
+- les sources ne se coupent pas entre deux feuilles ;
+- la fin du document est imprimée — dernier élément, dernière signature,
+  dernière source.
+
+`.verif/falsifier-edl-pagination.py` éprouve ce banc : quatre mutations, une par
+mesure, et aucune muette. Deux d'entre elles ont d'abord été **muettes**, ce qui
+a révélé deux vrais trous : la mesure de hauteur mélangeait les systèmes de
+coordonnées de deux pages, et le contrôle d'ordre ne distinguait pas une section
+absente d'une section déplacée.
 
 `scripts/check-workflows.mjs` valide les flux GitHub avant de pousser : YAML
 analysé, chaque script `run:` passé à `bash -n`, actions épinglées, permissions

@@ -119,6 +119,63 @@ signé à la main puis numérisé. L'application écrit noir sur blanc qu'elles 
 constituent pas** une signature électronique qualifiée — elle ne délivre ni
 certificat, ni horodatage, ni cachet de tiers de confiance.
 
+### Les états des lieux
+
+On part d'un logement : depuis sa fiche, **« État des lieux d'entrée »**, ou
+depuis l'onglet **Documents**, catégorie **États des lieux**. L'application
+reprend l'adresse, le propriétaire, le locataire et le loyer déjà enregistrés, et
+**propose les pièces et leurs éléments** selon le type de logement — cuisine,
+salle de bain, séjour, chambres, entrée. La liste s'ajuste : on renomme, on
+ajoute, on retire.
+
+**Le formulaire compte six étapes**, avec « Étape 3/6 » affiché, et il
+**s'enregistre tout seul** pendant la saisie — pas seulement à la fermeture. Un
+état des lieux interrompu, ou repris trois jours plus tard, repart exactement où
+il s'était arrêté, **photos comprises**. Un brouillon oublié depuis plus de trente
+jours reste accessible sans être imposé.
+
+**Chaque élément reçoit un état**, choisi d'un appui parmi sept : Neuf, Très bon
+état, Bon état, État d'usage, Mauvais état, **Non vérifié**, **Non applicable**.
+Les deux derniers ne décrivent pas le logement — ils disent ce qu'on a fait, ou
+ce qui n'existe pas dans la pièce — et le document ne les compte donc pas comme
+des états constatés. **Un élément sans état empêche d'établir le document** :
+l'application ne remplit rien à votre place, parce qu'un état par défaut serait
+un constat inventé.
+
+**Les photos se prennent depuis l'application** et se rattachent à une pièce ou à
+un élément précis, avec une légende. Elles sont compressées et rangées dans le
+dossier du logement, puis imprimées **sous l'élément concerné**, jamais regroupées
+à la fin. Une photo prise avant une interruption ne se perd pas.
+
+**Des raccourcis pour aller vite**, prévus pour un usage à une main :
+« Tout est en bon état » — qui **n'écrase jamais** un état déjà relevé —,
+« Reprendre les états », « Pièce suivante », et un champ d'ajout d'élément.
+
+**Les compteurs et les clés.** L'application demande si le logement a un
+chauffage ou un chauffe-eau individuel : si oui, la loi impose de relever les
+index, et elle le rappelle. Les index sont conservés **tels qu'ils sont
+affichés, zéros de tête compris**. Les clés remises sont listées avec leur
+quantité et leur destination.
+
+**Les signatures se tracent au doigt** — le bailleur, puis chaque locataire, sous
+son propre nom. Elles peuvent être refaites avant l'établissement du document ;
+après, le document est figé. Comme pour le bail, l'application écrit noir sur
+blanc ce qu'elles valent : un tracé au doigt matérialise l'accord des parties,
+**ce n'est pas** une signature électronique qualifiée.
+
+**Le PDF fait plusieurs pages** — c'est le seul document du projet dans ce cas —
+et il est composé pour cela : un titre ne reste pas seul en bas de page, un
+élément ne se sépare pas de ses photos, et les listes ne se coupent pas en deux.
+Il est rangé automatiquement dans le dossier du logement, sous le locataire en
+place, et un bouton **« Partager le PDF »** l'envoie où vous voulez.
+
+**Aucune exigence n'est inventée.** Les douze sections du document suivent le
+décret n° 2016-382 du 30 mars 2016 et l'article 3-2 de la loi du 6 juillet 1989,
+lus à Légifrance. Chaque section dit son fondement, et les sources sont imprimées
+en fin de document avec leur date de consultation. Le document rappelle aussi que
+la vétusté s'entend comme l'usure du temps ou de l'usage normal, et qu'il
+**n'impute aucune dégradation au locataire**.
+
 Points de fond :
 
 - **Le statut « payé » n'est pas modifiable à la main.** Il découle mécaniquement

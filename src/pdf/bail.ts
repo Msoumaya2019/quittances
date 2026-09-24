@@ -30,8 +30,17 @@ import {
   type TypeAnnexe,
 } from '../domain/bail.ts';
 import { adresseEnLignes } from '../domain/types.ts';
-import { chaineVersOctets, octetsVersBase64 } from './encodage.ts';
 import { COULEURS_DOCUMENT, echapper, STYLES_BASE } from './styles.ts';
+
+/**
+ * Le tracé de signature est **réexporté** d'ici, où il a longtemps vécu.
+ *
+ * Les écrans qui le demandent à `@/pdf/bail` continuent donc de fonctionner :
+ * un déplacement de code ne doit pas se payer par une rupture d'import. Il vit
+ * désormais dans `pdf/trace.ts`, avec les photos, parce que l'état des lieux
+ * s'en sert de la même façon.
+ */
+export { traceEnDataUri } from './trace.ts';
 
 // ---------------------------------------------------------------------------
 // Contenu
@@ -298,30 +307,6 @@ export const MENTION_SIGNATURE =
 export const MENTION_ANNEXES =
   "Les annexes listées ci-dessus ne sont pas produites par cette application : elles doivent être " +
   "jointes au bail par le bailleur avant signature.";
-
-/**
- * Un tracé de signature, transformé en image insérable dans le document.
- *
- * Le document insère la signature par une balise `img` : il lui faut donc une
- * **image**, pas un chemin. On produit un SVG encodé en base64 plutôt qu'un PNG
- * capturé à l'écran, et c'est délibéré : un SVG reste net à l'impression, à
- * n'importe quelle taille, et ne dépend d'aucun outil de capture — la même
- * chaîne fonctionne sur le téléphone, dans l'aperçu et sur le papier.
- *
- * Le tracé est reproduit **tel quel**. Une signature redessinée serait une
- * autre signature.
- */
-export function traceEnDataUri(chemin: string, largeur: number, hauteur: number): string {
-  const l = Math.max(1, Math.round(largeur));
-  const h = Math.max(1, Math.round(hauteur));
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${l} ${h}" width="${l}" height="${h}">` +
-    `<rect width="${l}" height="${h}" fill="#ffffff"/>` +
-    `<path d="${chemin}" fill="none" stroke="#111111" stroke-width="2.5" ` +
-    `stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-
-  return `data:image/svg+xml;base64,${octetsVersBase64(chaineVersOctets(svg))}`;
-}
 
 // ---------------------------------------------------------------------------
 // Fragments

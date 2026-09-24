@@ -171,6 +171,28 @@ export function formaterDateCourte(dateISO: string): string {
 }
 
 /**
+ * Une date `AAAA-MM-JJ` qui existe vraiment dans le calendrier.
+ *
+ * Le contrôle ne porte pas sur la forme mais sur la **réalité** : `2026-02-31`
+ * a la bonne forme et n'existe pas. Un bail daté du 31 février, ou un état des
+ * lieux établi un jour inexistant, passeraient tous les contrôles de forme et
+ * seraient imprimés tels quels.
+ *
+ * La règle vit ici, et une seule fois : le bail et l'état des lieux l'exigent
+ * tous les deux, et deux validateurs écrits séparément finiraient par ne plus
+ * accepter les mêmes dates.
+ */
+export function dateCivileValide(valeur: string): boolean {
+  if (typeof valeur !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valeur)) return false;
+  const [annee, mois, jour] = valeur.split('-').map(Number);
+  if (!annee || !mois || !jour) return false;
+  const d = new Date(Date.UTC(annee, mois - 1, jour));
+  return (
+    d.getUTCFullYear() === annee && d.getUTCMonth() === mois - 1 && d.getUTCDate() === jour
+  );
+}
+
+/**
  * Date d'exigibilité du loyer pour un mois : le jour convenu au bail, ramené au
  * dernier jour du mois quand celui-ci est plus court.
  *

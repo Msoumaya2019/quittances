@@ -16,6 +16,8 @@
  */
 
 import type { Centimes } from './money.ts';
+import { dateCivileValide } from './period.ts';
+import type { Signature } from './signature.ts';
 
 // ---------------------------------------------------------------------------
 // Catégories
@@ -400,22 +402,14 @@ export function numeroEtape(etape: EtapeBail): number {
 // Brouillon et vérifications
 // ---------------------------------------------------------------------------
 
-export interface SignatureBail {
-  /** Identifiant du signataire : `bailleur`, ou l'identifiant du titulaire. */
-  signataire: string;
-  /** Nom affiché sous le tracé. */
-  nom: string;
-  /** Date de signature, `AAAA-MM-JJ`. */
-  date: string;
-  /**
-   * Le tracé de la signature, sous la forme que le document insère.
-   *
-   * C'est une image — le tracé vectoriel encodé en `data:` — et non un chemin
-   * SVG nu : le document l'insère par une balise `img`. La transformation vit
-   * dans `pdf/bail.ts` (`traceEnDataUri`), avec la mise en page qui la consomme.
-   */
-  trace: string;
-}
+/**
+ * La signature du bail est la signature **commune** : un tracé, un nom, une
+ * date. La forme vit dans `domain/signature.ts`, avec les contrôles qui la
+ * valident, parce que l'état des lieux et l'inventaire signent de la même
+ * façon. Le nom `SignatureBail` reste, pour que le vocabulaire du bail ne
+ * change pas sous les pieds de ceux qui le lisent.
+ */
+export type SignatureBail = Signature;
 
 export interface BrouillonBail {
   logementId: string;
@@ -810,10 +804,8 @@ export function dureeMinimaleMois(
 
 /** Une date `AAAA-MM-JJ` qui existe vraiment dans le calendrier. */
 function dateReelle(valeur: string): boolean {
-  const [annee, mois, jour] = valeur.split('-').map(Number);
-  if (!annee || !mois || !jour) return false;
-  const d = new Date(Date.UTC(annee, mois - 1, jour));
-  return (
-    d.getUTCFullYear() === annee && d.getUTCMonth() === mois - 1 && d.getUTCDate() === jour
-  );
+  // La règle vit dans `period.ts`, avec les autres manipulations de dates :
+  // l'état des lieux l'exige aussi, et deux validateurs écrits séparément
+  // finiraient par ne plus accepter les mêmes dates.
+  return dateCivileValide(valeur);
 }

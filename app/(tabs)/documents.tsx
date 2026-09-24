@@ -75,9 +75,12 @@ const VIDE: Record<
   etats_des_lieux: {
     titre: 'Aucun état des lieux rangé',
     message:
-      'Les états des lieux d’entrée et de sortie apparaîtront ici, rangés sous le logement et le locataire concernés.',
-    action: 'Ajouter un document',
-    vers: '/document/ajouter',
+      'Faites l’état des lieux d’entrée depuis votre téléphone : l’application reprend l’adresse, ' +
+      'le locataire et le loyer déjà enregistrés, propose les pièces et leurs éléments, garde vos ' +
+      'photos, et produit un PDF signable. Un état des lieux signé sur papier peut aussi être ' +
+      'scanné et rangé ici.',
+    action: 'Faire un état des lieux',
+    vers: '/etat-des-lieux/choisir',
   },
   inventaires: {
     titre: 'Aucun inventaire rangé',
@@ -253,6 +256,17 @@ export default function EcranDocuments() {
                 libelle="Créer un bail"
                 variante="secondaire"
                 onPress={() => router.push('/bail/choisir')}
+                style={styles.creer}
+              />
+            ) : null}
+
+            {/* Même raison pour l'état des lieux : un logement peut déjà en
+                avoir un à l'entrée et en attendre un autre. */}
+            {categorie === 'etats_des_lieux' ? (
+              <Bouton
+                libelle="Faire un état des lieux"
+                variante="secondaire"
+                onPress={() => router.push('/etat-des-lieux/choisir')}
                 style={styles.creer}
               />
             ) : null}

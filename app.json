@@ -60,8 +60,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "L'application accède à vos photos uniquement pour y choisir l'image de votre signature. Aucune photo n'est transmise : tout reste sur votre téléphone.",
-          "cameraPermission": false,
+          "photosPermission": "L'application accède à vos photos uniquement pour y choisir l'image de votre signature et les photos de vos états des lieux. Aucune photo n'est transmise : tout reste sur votre téléphone.",
+          "cameraPermission": "L'application utilise l'appareil photo pour illustrer vos états des lieux. Les photos restent sur votre téléphone et ne sont transmises à personne.",
           "microphonePermission": false
         }
       ],
