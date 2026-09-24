@@ -951,6 +951,31 @@ première version regardait le fichier entier et accusait trente-trois fois du
 code juste. `.verif/falsifier-lecture-avant-declaration.py` remet la faute pour
 exiger qu'il tombe, sur la ligne exacte, et sans laisser la source mutée.
 
+`tests/signature-montree.test.ts` garde la même famille de faute, sur la
+**signature** : la donnée était bien recueillie, bien enregistrée, bien insérée
+dans le PDF — et l'écran de relecture la résumait par le mot « Signé ». Le
+bailleur signait, relisait, et voyait un cadre blanc ; il en a conclu le
+24 septembre 2026 que la signature n'était pas prise. Aucun contrôle de données
+ne voit ce défaut, puisque la donnée existe. Ce test exige donc que le tracé
+soit **montré**, des deux côtés : `<img src="data:image/svg+xml;…">` dans un
+`div.b-cadre` pour le document, un `Image` de React Native dans un cadre blanc
+pour l'écran d'aperçu, la mention « Non signé » quand le tracé manque, et un
+pavé qui affiche le tracé qu'on lui passe au lieu de rester blanc.
+`.verif/falsifier-signature-montree.py` lui remet six fautes, une à une, et
+exige que chacune tombe **en nommant son test** — `node --test` sort en 0 quand
+un motif ne désigne aucun test, si bien qu'un nom mal orthographié ferait passer
+une faute pour un succès.
+
+`.verif/mesurer-marges-bail.py` mesure la marge réellement **imprimée** sur
+chaque page du bail, et non celle écrite dans le CSS. La règle de page de
+`STYLES_BASE` pose `margin: 0` et met les blancs dans `.page` : cela convient à
+une quittance — une feuille, un bloc — mais pas à un bail, qui change de page.
+Un rembourrage de bloc ne protège pas la deuxième feuille, et le bail
+s'imprimait à **12 mm** du haut et du bas. Les 30 mm demandés sont donc portés
+par le `@page` de `STYLES_BAIL`, seule règle que le moteur applique à *chaque*
+page : mesuré 30,2 mm en haut et jamais moins de 38,5 mm en bas, sur les trois
+feuilles.
+
 `.verif/falsifier-inventaire.py` va plus loin sur un point : il **imprime** le
 banc deux fois — une fois sur la source saine, une fois sous mutation — et exige
 de la première qu'elle passe, sans quoi « le banc tombe » se confondrait avec

@@ -24,7 +24,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { PanResponder, StyleSheet, Text, View } from 'react-native';
+import { Image, PanResponder, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { espaces, rayons, typographie } from '../tokens';
@@ -126,6 +126,22 @@ export function BlocSignature({
   }
 
   const vide = traits.length === 0 && !chemin;
+  /**
+   * Le tracé venu de l'extérieur, quand rien n'a encore été dessiné sur cet
+   * écran.
+   *
+   * C'est le cas d'une signature **déjà recueillie** : on revient sur l'étape,
+   * ou la reprise d'un brouillon rend le tracé enregistré. Le pavé doit alors
+   * le montrer, sans quoi l'écran affiche un cadre vide sous un nom, et l'on ne
+   * peut pas vérifier avant d'imprimer *quelle* signature a été retenue.
+   *
+   * Un tracé venu de l'extérieur n'est **pas** lu comme des points : il a été
+   * converti en image au moment de la signature, à une taille fixe, et ne
+   * dépend donc pas de la largeur du pavé qui l'a recueilli. Le redessiner
+   * depuis ses points supposerait de les relire, ce qu'un chemin ne permet pas.
+   * On affiche donc l'image telle quelle — la même que le document insérera.
+   */
+  const traceExterne = !vide && traits.length === 0 && chemin ? chemin : null;
 
   return (
     <View style={styles.conteneur}>
@@ -138,7 +154,16 @@ export function BlocSignature({
         accessibilityHint="Dessinez votre signature avec le doigt."
         {...repondre.panHandlers}
       >
-        {largeur > 0 ? (
+        {traceExterne ? (
+          <Image
+            source={{ uri: traceExterne }}
+            style={styles.trace}
+            resizeMode="contain"
+            accessibilityLabel="Signature déjà recueillie"
+          />
+        ) : null}
+
+        {largeur > 0 && !traceExterne ? (
           <Svg width={largeur} height={hauteur}>
             {traits.map((trait, rang) => (
               <Path
@@ -198,6 +223,12 @@ const creerStyles = (couleurs: Couleurs) =>
     },
     desactive: {
       opacity: 0.5,
+    },
+    trace: {
+      // Le tracé extérieur occupe la largeur utile, sa hauteur suit son
+      // rapport — `resizeMode="contain"` ne deforme jamais la signature.
+      width: '100%',
+      height: '100%',
     },
     invite: {
       ...typographie.petit,

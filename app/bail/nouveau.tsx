@@ -23,7 +23,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 
@@ -1034,17 +1034,31 @@ export default function EcranNouveauBail() {
                 Signature de {signataires.find((s) => s.id === signataire)?.nom ?? ''}
               </Text>
 
+              {/*
+                Un seul et même pavé, signé ou non. Il reçoit `chemin` dans les
+                deux cas : quand une signature est déjà recueillie, il **montre
+                l'image telle que le PDF l'insérera**, ce qui permet de vérifier
+                avant d'imprimer que c'est bien la sienne. Il reste modifiable —
+                on peut redessiner par-dessus.
+              */}
+              <BlocSignature
+                // La clé force un pavé neuf à chaque changement de signataire :
+                // sans elle, le tracé du précédent resterait affiché sous le nom
+                // du suivant.
+                key={signataire}
+                chemin={signatureCourante?.trace ?? ''}
+                onTrace={signer}
+                onDessinEnCours={(enCours) => setDefilement(!enCours)}
+                hauteur={180}
+                invite={
+                  signatureCourante
+                    ? `Signature de ${signataires.find((s) => s.id === signataire)?.nom ?? ''}`
+                    : 'Signez ici avec le doigt'
+                }
+              />
+
               {signatureCourante ? (
                 <>
-                  {/* On montre l'image **telle que le PDF l'insérera**, et non un
-                      aperçu redessiné : c'est la seule façon de vérifier avant
-                      d'imprimer que la signature est bien la sienne. */}
-                  <Image
-                    source={{ uri: signatureCourante.trace }}
-                    style={styles.signatureImage}
-                    resizeMode="contain"
-                    accessibilityLabel={`Signature de ${signatureCourante.nom}`}
-                  />
                   <Text style={styles.note}>
                     Signé le {formaterDateFr(signatureCourante.date)}. Le document est figé à la
                     génération : une signature reste modifiable jusqu'à ce moment.
@@ -1057,19 +1071,7 @@ export default function EcranNouveauBail() {
                     onPress={() => signer('')}
                   />
                 </>
-              ) : (
-                <BlocSignature
-                  // La clé force un pavé neuf à chaque changement de
-                  // signataire : sans elle, le tracé du précédent resterait
-                  // affiché sous le nom du suivant.
-                  key={signataire}
-                  chemin=""
-                  onTrace={signer}
-                  onDessinEnCours={(enCours) => setDefilement(!enCours)}
-                  hauteur={180}
-                  invite="Signez ici avec le doigt"
-                />
-              )}
+              ) : null}
             </Carte>
 
             {aSigner > 0 ? (
@@ -1266,14 +1268,6 @@ const creerStyles = (couleurs: Couleurs) =>
       borderTopWidth: 1,
       borderTopColor: couleurs.bordure,
       paddingTop: espaces.xs,
-    },
-    signatureImage: {
-      width: '100%',
-      height: 120,
-      backgroundColor: '#FFFFFF',
-      borderRadius: rayons.md,
-      borderWidth: 1,
-      borderColor: couleurs.bordure,
     },
     sousChamp: {
       paddingLeft: espaces.xl,

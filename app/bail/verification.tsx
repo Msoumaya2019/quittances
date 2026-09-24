@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 
@@ -369,21 +369,36 @@ export default function EcranVerifierBail() {
         {/* --- Signatures ------------------------------------------------- */}
         <Carte>
           <Text style={styles.section}>Signatures</Text>
-          <LigneDetail libelle="Bailleur" valeur={proprietaire.nom} pointillee />
-          {signatures.some((s) => s.signataire === 'bailleur') ? (
-            <Text style={styles.note}>Signé.</Text>
-          ) : (
-            <Text style={styles.note}>Non signé.</Text>
-          )}
-          {titulaires.map((t) => {
-            const signe = signatures.some((s) => s.signataire === t.id);
-            return (
-              <View key={t.id}>
-                <LigneDetail libelle="Locataire" valeur={nomComplet(t)} pointillee />
-                <Text style={styles.note}>{signe ? 'Signé.' : 'Non signé.'}</Text>
-              </View>
-            );
-          })}
+          {/*
+            On montre l'image **telle que le PDF l'insérera**, et non une
+            vignette redessinée : c'est la seule façon de vérifier avant
+            d'imprimer que la signature retenue est bien la sienne. Un simple
+            « Signé » laissait le bailleur devant un cadre qu'il croyait vide.
+
+            Les noms de classes sont ceux du document (`b-cadre`, `b-qui`) : le
+            banc de contrôle cherche ces mêmes formes des deux côtés, et deux
+            jeux de noms à tenir en accord finiraient par diverger.
+          */}
+          <View style={styles.signatures}>
+            <BlocSignatureLecture
+              nom={proprietaire.nom}
+              role="Le bailleur"
+              trace={signatures.find((s) => s.signataire === SIGNATAIRE_BAILLEUR)?.trace}
+              date={signatures.find((s) => s.signataire === SIGNATAIRE_BAILLEUR)?.date}
+            />
+            {titulaires.map((t) => {
+              const signature = signatures.find((s) => s.signataire === t.id);
+              return (
+                <BlocSignatureLecture
+                  key={t.id}
+                  nom={nomComplet(t)}
+                  role={titulaires.length > 1 ? 'Locataire' : 'Le locataire'}
+                  trace={signature?.trace}
+                  date={signature?.date}
+                />
+              );
+            })}
+          </View>
           {nonSignes > 0 ? (
             <Text style={styles.note}>
               {nonSignes} cadre{nonSignes > 1 ? 's' : ''} restera
@@ -427,6 +442,52 @@ export default function EcranVerifierBail() {
   );
 }
 
+/**
+ * Un signataire relu : son tracé tel qu'il sera imprimé, son nom, sa date.
+ *
+ * Ce bloc existe pour que l'aperçu **montre** la signature au lieu de la
+ * résumer par un mot. Le bailleur qui relit doit pouvoir reconnaître la
+ * signature qu'il a recueillie : « Signé. » ne le lui permettait pas.
+ */
+function BlocSignatureLecture({
+  nom,
+  role,
+  trace,
+  date,
+}: {
+  nom: string;
+  role: string;
+  trace?: string;
+  date?: string;
+}) {
+  const styles = useStyles(creerStyles);
+  return (
+    <View style={styles.blocLecture}>
+      <View style={styles.bCadre}>
+        {trace ? (
+          <Image
+            source={{ uri: trace }}
+            style={styles.traceLecture}
+            resizeMode="contain"
+            accessibilityLabel={`Signature de ${nom}`}
+          />
+        ) : (
+          <Text style={styles.bVide}>Non signé</Text>
+        )}
+      </View>
+      <Text style={styles.bQui}>
+        <Text style={styles.bQuiNom}>{nom}</Text>
+        {'\n'}
+        {role}
+        {date ? `\nSigné le ${formaterDateFr(date)}` : ''}
+      </Text>
+    </View>
+  );
+}
+
+/** Le mot employé partout pour désigner le bailleur dans les signatures. */
+const SIGNATAIRE_BAILLEUR = 'bailleur';
+
 const creerStyles = (couleurs: Couleurs) =>
   StyleSheet.create({
     plein: {
@@ -468,5 +529,43 @@ const creerStyles = (couleurs: Couleurs) =>
       ...typographie.petit,
       color: couleurs.texteSecondaire,
       marginTop: espaces.xs,
+    },
+    blocLecture: {
+      flex: 1,
+    },
+    signatures: {
+      flexDirection: 'row',
+      gap: espaces.sm,
+    },
+    bCadre: {
+      // Blanc sur fond blanc, comme le pavé du formulaire : c'est le papier
+      // que ce cadre représente, et le tracé noir doit s'y lire.
+      height: 72,
+      backgroundColor: '#FFFFFF',
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: couleurs.bordure,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    traceLecture: {
+      width: '100%',
+      height: '100%',
+    },
+    bVide: {
+      ...typographie.petit,
+      color: couleurs.texteTertiaire,
+      fontStyle: 'italic',
+    },
+    bQui: {
+      ...typographie.petit,
+      color: couleurs.texteSecondaire,
+      marginTop: espaces.xs,
+      lineHeight: 17,
+    },
+    bQuiNom: {
+      ...typographie.petitAppuye,
+      color: couleurs.texte,
     },
   });

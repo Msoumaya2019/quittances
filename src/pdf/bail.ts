@@ -127,6 +127,21 @@ export interface ContenuBail {
 // ---------------------------------------------------------------------------
 
 /**
+ * Les blancs haut et bas du bail, en millimetres.
+ *
+ * Trente millimetres, et non les douze du gabarit d'une quittance : c'est le
+ * minimum que reclame une imprimante pour **prendre** la feuille. En dessous,
+ * le rouleau d'entrainement mord sur le haut de la page et le bac de sortie sur
+ * le bas — un bail dont les premieres lignes sont rognees ne se lit pas.
+ *
+ * Ces deux blancs sont **communs a toutes les pages** du bail, et non au seul
+ * document : une valeur posee sur le premier bloc ne protege que celui-la, et
+ * la page 2 s'imprimerait de bord a bord. C'est le `@page` qui les porte, donc
+ * toutes les feuilles du document.
+ */
+export const MARGE_IMPRESSION_MM = 30;
+
+/**
  * Le bail est un document **long** : il change de page. Les règles de coupure
  * sont donc explicites — un bloc de signatures ne se scinde pas, et un titre de
  * section ne reste pas seul en bas de page.
@@ -135,18 +150,31 @@ export const STYLES_BAIL = `
   /* Le format de page vient de STYLES_BASE (A4) : on ne le redeclare pas ici,
      un second @page l'emporterait sur le premier selon le moteur.
 
-     En revanche on reprend la classe page. Celle de STYLES_BASE est une
-     **colonne flex** à hauteur minimale de 285 mm, dessinée pour une quittance
-     qui tient sur une feuille. Un bail, lui, change de page : une colonne flex
-     se pagine mal — le moteur peut refuser de couper un enfant flex et
-     repousser tout le contenu, ou rogner la hauteur minimale. On repasse donc
-     en bloc, et on laisse le contenu décider du nombre de feuilles.
-     (Les accents graves sont proscrits dans ce commentaire : il vit à
-     l'intérieur d'un littéral de gabarit, et ils fermeraient la chaîne.) */
+     Ce que l'on reprend, en revanche, c'est son REMBOURRAGE : STYLES_BASE pose
+     \`margin: 0\` sur la page et met les blancs dans \`.page\`, ce qui convient a
+     une quittance — une feuille, un bloc — mais pas a un bail, qui change de
+     page. Un rembourrage de bloc ne protege pas la deuxieme feuille.
+
+     Mesure du 24 septembre 2026 : sans cette reprise, les blocs du bail
+     s'imprimaient a 12 mm du haut et 12 mm du bas, quelle que soit la valeur
+     posee dans \`.page\`. Le blanc haut et bas est donc porte par le \`@page\`, et
+     par lui seul : c'est la seule regle que le moteur applique a CHAQUE page.
+
+     Le blanc lateral, lui, reste dans \`.page\` : il est plus large que celui
+     d'une imprimante, et le \`@page\` sert aussi au modele de quittance, qui
+     tient sa tenue en page d'un calcul en millimetres.
+
+     (Les accents graves sont proscrits dans ce commentaire : il vit a
+     l'interieur d'un littéral de gabarit, et ils fermeraient la chaîne.) */
+  @page {
+    size: A4;
+    margin: ${MARGE_IMPRESSION_MM}mm 0;
+  }
+
   .page {
     display: block;
     min-height: 0;
-    padding: 12mm 18mm 12mm 18mm;
+    padding: 0 18mm;
   }
 
   .b-bandeau {
