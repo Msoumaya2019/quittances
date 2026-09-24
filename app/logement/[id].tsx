@@ -422,6 +422,32 @@ export default function EcranLogement() {
                     })
                   }
                 />
+                {/* L'inventaire du mobilier se fabrique ici aussi, pour la même
+                    raison : le logement et son locataire sont connus. C'est le
+                    document d'une location meublée, et il peut être annexé au
+                    bail. */}
+                <Bouton
+                  libelle="Inventaire du mobilier d’entrée"
+                  variante="secondaire"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/inventaire/nouveau',
+                      params: { logementId: logement.id, type: 'entree' },
+                    })
+                  }
+                />
+                {/* La sortie se compare à l'entrée : le formulaire la retrouve
+                    tout seul, et refuse de s'ouvrir s'il n'y en a pas. */}
+                <Bouton
+                  libelle="Inventaire du mobilier de sortie"
+                  variante="secondaire"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/inventaire/nouveau',
+                      params: { logementId: logement.id, type: 'sortie' },
+                    })
+                  }
+                />
                 <Bouton
                   libelle="Ranger un document"
                   variante="secondaire"

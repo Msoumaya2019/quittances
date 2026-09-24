@@ -117,3 +117,43 @@ export function retirerSignature(
 ): Signature[] {
   return (signatures ?? []).filter((s) => s.signataire !== signataire);
 }
+
+/**
+ * Qui doit signer un document, dans quel ordre et sous quel identifiant.
+ *
+ * Le bailleur d'abord, puis chaque titulaire dans l'ordre du bail, puis le
+ * mandataire s'il y en a un. Cette liste sert à **deux** endroits : le
+ * formulaire, qui refuse d'avancer tant qu'un signataire manque, et l'émission,
+ * qui réimprime le document. Deux constructions séparées finiraient par ne plus
+ * désigner les mêmes personnes — et un document imprimé sans la signature d'un
+ * locataire nommé est un document que le juge écarte.
+ *
+ * L'identifiant du locataire est celui du titulaire, **jamais son rang** : deux
+ * personnes peuvent porter le même nom de famille, et une signature glissée
+ * sous le mauvais nom ne se voit pas.
+ */
+export function signatairesAttendus(params: {
+  nomBailleur: string;
+  titulaires: readonly { id: string; nom: string; prenom: string }[];
+  mandataire?: string | null;
+}): SignataireAttendu[] {
+  const attendus: SignataireAttendu[] = [
+    { id: 'bailleur', nom: params.nomBailleur },
+    ...params.titulaires.map((t) => ({ id: t.id, nom: `${t.prenom} ${t.nom}`.trim() })),
+  ];
+  const mandataire = params.mandataire?.trim();
+  if (mandataire) attendus.push({ id: 'mandataire', nom: mandataire });
+  return attendus;
+}
+
+/**
+ * Combien d'exemplaires imprimer, pour que chaque partie ait le sien.
+ *
+ * L'article 3-2 de la loi du 6 juillet 1989 demande un état des lieux « en
+ * autant d'exemplaires que de parties ». Le bailleur en garde toujours un ; le
+ * locataire en reçoit un, qu'il soit seul ou cinq en colocation — l'écran le
+ * dit plutôt que de laisser chacun imprimer à l'aveugle.
+ */
+export function exemplairesNecessaires(nombreLocataires: number): number {
+  return 1 + Math.max(1, nombreLocataires);
+}

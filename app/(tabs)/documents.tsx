@@ -85,9 +85,12 @@ const VIDE: Record<
   inventaires: {
     titre: 'Aucun inventaire rangé',
     message:
-      'L’inventaire du mobilier d’une location meublée apparaîtra ici, et se comparera à celui de l’entrée.',
-    action: 'Ajouter un document',
-    vers: '/document/ajouter',
+      'Faites l’inventaire du mobilier d’une location meublée depuis votre téléphone : ' +
+      'l’application reprend le logement et le locataire déjà enregistrés, propose les pièces et ' +
+      'le mobilier courant, garde vos photos, et produit un PDF annexable au bail. Une sortie se ' +
+      'compare à l’entrée, qu’elle retrouve toute seule.',
+    action: 'Faire un inventaire',
+    vers: '/inventaire/choisir',
   },
   autres: {
     titre: 'Aucun autre document',
@@ -267,6 +270,17 @@ export default function EcranDocuments() {
                 libelle="Faire un état des lieux"
                 variante="secondaire"
                 onPress={() => router.push('/etat-des-lieux/choisir')}
+                style={styles.creer}
+              />
+            ) : null}
+
+            {/* Et pour l'inventaire du mobilier : une location meublée peut
+                déjà avoir son inventaire d'entrée et attendre celui de sortie. */}
+            {categorie === 'inventaires' ? (
+              <Bouton
+                libelle="Faire un inventaire"
+                variante="secondaire"
+                onPress={() => router.push('/inventaire/choisir')}
                 style={styles.creer}
               />
             ) : null}

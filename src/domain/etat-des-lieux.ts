@@ -35,7 +35,30 @@
 
 import { dateCivileValide, formaterDateFr } from './period.ts';
 import type { Signature, SignataireAttendu } from './signature.ts';
-import { signatureValide } from './signature.ts';
+import { exemplairesNecessaires, signatairesAttendus, signatureValide } from './signature.ts';
+
+// Le nombre d'exemplaires à imprimer se décide dans `signature.ts` : un
+// inventaire du mobilier s'imprime lui aussi « en autant d'exemplaires que de
+// parties ». Le nom reste réexposé ici, où le projet l'importe depuis l'origine.
+export { exemplairesNecessaires };
+// La fabrication des identifiants et l'unicité des photos vivent dans un module
+// partagé avec l'inventaire du mobilier : deux documents qui rangent des photos
+// de la même façon ne doivent pas porter deux règles.
+import { identifiantRepris, identifiantsDePhotos as idsDePhotos, premierLibre } from './identifiants.ts';
+import { ETATS_ELEMENT, estEtatValide, etatConstate, libelleEtat, presentationEtat } from './etats.ts';
+import type { EtatElement, PresentationEtat } from './etats.ts';
+import { normaliserNom, piecesParDefaut, PIECES_PAR_DEFAUT } from './pieces.ts';
+import { objet, reprendrePhoto, reprendrePhotos, tableau, texteOuVide } from './lecture.ts';
+import type { PhotoDocument } from './lecture.ts';
+
+// Les sept états et leurs trois lecteurs sont **définis** dans `etats.ts`,
+// partagés avec l'inventaire du mobilier, et réexposés ici : tout le reste du
+// projet les importe depuis ce module depuis l'origine, et changer ces chemins
+// n'apporterait rien.
+export { ETATS_ELEMENT, etatConstate, libelleEtat, presentationEtat };
+export type { EtatElement, PresentationEtat };
+// Le vocabulaire des pièces est défini dans `pieces.ts`, pour la même raison.
+export { normaliserNom, piecesParDefaut, PIECES_PAR_DEFAUT };
 
 // ---------------------------------------------------------------------------
 // Nature de l'état des lieux
@@ -51,76 +74,10 @@ export const LIBELLE_TYPE_EDL: Record<TypeEdl, string> = {
 // ---------------------------------------------------------------------------
 // L'état d'un élément : sept valeurs, et ce qu'elles disent
 // ---------------------------------------------------------------------------
-
-/**
- * Les sept états proposés pour un élément.
- *
- * `non_verifie` et `non_applicable` **ne sont pas des états du logement** : le
- * premier dit qu'on n'a pas regardé, le second que l'élément n'existe pas dans
- * cette pièce. Les mêler aux cinq autres dans un comptage ferait dire au
- * document que trois éléments sont « en bon état » là où un seul l'est.
- */
-export type EtatElement =
-  | 'neuf'
-  | 'tres_bon'
-  | 'bon'
-  | 'usage'
-  | 'mauvais'
-  | 'non_verifie'
-  | 'non_applicable';
-
-export interface PresentationEtat {
-  valeur: EtatElement;
-  libelle: string;
-  /** Une abréviation pour les listes serrées et les pastilles. */
-  court: string;
-  /**
-   * Un état **constaté** décrit le logement ; `non_verifie` et
-   * `non_applicable` décrivent ce qu'on a fait, pas ce qu'on a vu.
-   */
-  constate: boolean;
-  /**
-   * Rang d'affichage, du meilleur au moins bon.
-   *
-   * Sert **uniquement** à ordonner une liste ou à trier une synthèse. Ce n'est
-   * pas une échelle de responsabilité : l'article 4 du décret range l'usure du
-   * temps et de l'usage normal hors de toute imputation au locataire, et
-   * l'application n'a pas à trancher ce que le juge trancherait.
-   */
-  rang: number;
-}
-
-export const ETATS_ELEMENT: PresentationEtat[] = [
-  { valeur: 'neuf', libelle: 'Neuf', court: 'Neuf', constate: true, rang: 1 },
-  { valeur: 'tres_bon', libelle: 'Très bon état', court: 'Très bon', constate: true, rang: 2 },
-  { valeur: 'bon', libelle: 'Bon état', court: 'Bon', constate: true, rang: 3 },
-  { valeur: 'usage', libelle: "État d'usage", court: 'Usage', constate: true, rang: 4 },
-  { valeur: 'mauvais', libelle: 'Mauvais état', court: 'Mauvais', constate: true, rang: 5 },
-  { valeur: 'non_verifie', libelle: 'Non vérifié', court: 'Non vérifié', constate: false, rang: 6 },
-  {
-    valeur: 'non_applicable',
-    libelle: 'Non applicable',
-    court: 'Sans objet',
-    constate: false,
-    rang: 7,
-  },
-];
-
-/** La présentation d'un état, ou `null` si la valeur est inconnue. */
-export function presentationEtat(etat: EtatElement | undefined): PresentationEtat | null {
-  if (!etat) return null;
-  return ETATS_ELEMENT.find((e) => e.valeur === etat) ?? null;
-}
-
-/** L'état décrit-il le logement, ou seulement ce qu'on a fait ? */
-export function etatConstate(etat: EtatElement | undefined): boolean {
-  return presentationEtat(etat)?.constate === true;
-}
-
-/** Le libellé d'un état, ou une chaîne vide s'il n'est pas renseigné. */
-export function libelleEtat(etat: EtatElement | undefined): string {
-  return presentationEtat(etat)?.libelle ?? '';
-}
+//
+// Les sept états, leurs libellés et `etatConstate` sont **définis** dans
+// `etats.ts`, parce que l'inventaire du mobilier décrit ses meubles dans les
+// mêmes termes. Ils sont réexposés en tête de ce fichier.
 
 // ---------------------------------------------------------------------------
 // Photos
@@ -129,25 +86,12 @@ export function libelleEtat(etat: EtatElement | undefined): string {
 /**
  * Une photo prise dans l'application.
  *
- * Elle est **rattachée à son élément** — elle vit dans l'objet de l'élément, et
- * non dans une liste à part — parce que le décret demande que la description
- * d'une pièce « peut être illustrée d'images » : la photo documente ce qu'elle
- * montre, et une photo détachée de son élément ne prouve plus rien.
+ * Le type est défini dans `lecture.ts`, avec le lecteur tolérant qui le
+ * reconstruit depuis un contenu enregistré. Le nom `PhotoEdl` reste employé
+ * ici, et partout ailleurs dans le projet : c'est le même type, et il n'en
+ * existe qu'un.
  */
-export interface PhotoEdl {
-  /** Identifiant local, stable dans le document. */
-  id: string;
-  /** Chemin du fichier dans le dossier des documents de l'application. */
-  chemin: string;
-  /** Ce que la photo montre, écrit par l'utilisateur. */
-  legende: string;
-  /** Date de prise de vue, `AAAA-MM-JJ`. */
-  priseLe: string;
-  /** Largeur en pixels, si on la connaît : sert à ne pas déformer l'image. */
-  largeur?: number;
-  /** Hauteur en pixels, si on la connaît. */
-  hauteur?: number;
-}
+export type PhotoEdl = PhotoDocument;
 
 // ---------------------------------------------------------------------------
 // Pièces, éléments
@@ -525,65 +469,12 @@ export function etapePrecedenteEdl(etape: EtapeEdl): EtapeEdl | null {
 // ---------------------------------------------------------------------------
 // Pièces et éléments proposés par défaut
 // ---------------------------------------------------------------------------
+//
+// `normaliserNom`, `PIECES_PAR_DEFAUT` et `piecesParDefaut` sont **définis**
+// dans `pieces.ts` : l'inventaire du mobilier parcourt le même logement, et une
+// liste de pièces qui différerait d'un document à l'autre serait un défaut.
 
-/** Normalise un nom de pièce : sans accent, sans casse, sans espace de bord. */
-export function normaliserNom(nom: string): string {
-  return nom
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
-/**
- * Les pièces proposées par défaut, selon le type de logement.
- *
- * La liste est **modifiable** dans tous les cas : ce sont des points de départ,
- * pas des cases à cocher. Un studio n'a pas de chambre, une maison a une cave,
- * et l'application ne peut pas le deviner mieux que celui qui est sur place.
- */
-export const PIECES_PAR_DEFAUT: Record<string, string[]> = {
-  appartement: [
-    'Entrée',
-    'Séjour',
-    'Cuisine',
-    'Chambre 1',
-    'Chambre 2',
-    'Salle de bain',
-    'WC',
-    'Couloir',
-    'Balcon',
-  ],
-  studio: ['Entrée', 'Pièce principale', 'Kitchenette', 'Salle de bain', 'WC'],
-  maison: [
-    'Entrée',
-    'Séjour',
-    'Cuisine',
-    'Chambre 1',
-    'Chambre 2',
-    'Chambre 3',
-    'Salle de bain',
-    'WC',
-    'Couloir',
-    'Cave',
-    'Garage',
-    'Jardin',
-  ],
-  chambre: ['Chambre', 'Salle de bain', 'WC', 'Couloir'],
-  garage: ['Garage'],
-  parking: ['Emplacement'],
-  local: ['Local', 'Réserve', 'WC'],
-  autre: ['Entrée', 'Pièce principale', 'Salle de bain', 'WC'],
-};
-
-/** La liste de pièces proposée pour un type de logement. */
-export function piecesParDefaut(typeLogement: string): string[] {
-  return PIECES_PAR_DEFAUT[typeLogement] ?? PIECES_PAR_DEFAUT.autre;
-}
-
-/**
- * Les éléments proposés par défaut, selon la pièce.
+/** Les éléments proposés par défaut, selon la pièce.
  *
  * On part des éléments que l'article 2, 1°, h) du décret nomme lui-même — « les
  * revêtements des sols, murs et plafonds, les équipements et les éléments du
@@ -699,40 +590,10 @@ export function elementsParDefaut(nomPiece: string): string[] {
 // ---------------------------------------------------------------------------
 // Fabrication : identifiants déterministes
 // ---------------------------------------------------------------------------
-
-/**
- * Le premier identifiant libre pour un préfixe donné.
- *
- * Les identifiants sont **déterministes** et non aléatoires, pour deux raisons.
- * La première est que ce module doit rester pur : `nouvelId()` passe par
- * `expo-crypto`, qu'un test sous `node --test` ne peut pas charger. La seconde
- * est plus utile encore : un état des lieux de sortie construit à partir de
- * celui d'entrée réemploie les mêmes identifiants, et la comparaison entre les
- * deux se fait alors par égalité, sans deviner quelles pièces se correspondent.
- */
-function premierLibre(prefixe: string, pris: readonly string[]): string {
-  let rang = 1;
-  while (pris.includes(`${prefixe}${rang}`)) rang += 1;
-  return `${prefixe}${rang}`;
-}
-
-/**
- * L'identifiant repris d'un contenu enregistré, ou un identifiant neuf.
- *
- * On ne fait pas confiance à l'identifiant lu, même bien formé : deux pièces
- * peuvent porter le même si le contenu vient d'une sauvegarde abîmée ou d'une
- * version antérieure. Or ces identifiants servent à **apparier** un état des
- * lieux de sortie à celui d'entrée : deux pièces confondues feraient comparer
- * la mauvaise chambre à la mauvaise chambre, et le document affirmerait une
- * évolution qui n'a pas eu lieu.
- */
-function identifiantRepris(valeur: unknown, prefixe: string, pris: readonly string[]): string {
-  if (typeof valeur === 'string') {
-    const propre = valeur.trim();
-    if (propre.length > 0 && !pris.includes(propre)) return propre;
-  }
-  return premierLibre(prefixe, pris);
-}
+//
+// `premierLibre` et `identifiantRepris` sont importés de `identifiants.ts` :
+// l'inventaire du mobilier en a besoin exactement pour les mêmes raisons, et
+// une règle écrite deux fois finit par n'être corrigée qu'une fois.
 
 /** Construit une pièce vide, avec les éléments proposés pour son nom. */
 export function pieceVide(nom: string, prises: readonly string[]): PieceEdl {
@@ -795,14 +656,10 @@ export function ajouterElement(
  * la seconde disparaissait du document sans que rien ne le signale. Mesuré.
  */
 export function identifiantsDePhotos(pieces: readonly PieceEdl[]): string[] {
-  const ids: string[] = [];
-  for (const piece of pieces) {
-    for (const p of piece.photos) if (p.id) ids.push(p.id);
-    for (const element of piece.elements) {
-      for (const p of element.photos) if (p.id) ids.push(p.id);
-    }
-  }
-  return ids;
+  return idsDePhotos([
+    ...pieces.map((p) => p.photos),
+    ...pieces.flatMap((p) => p.elements.map((e) => e.photos)),
+  ]);
 }
 
 /**
@@ -1343,40 +1200,22 @@ export function avertissementsDeLEdl(b: BrouillonEdl): string[] {
 /**
  * Combien d'exemplaires remettre.
  *
- * L'article 3-2 de la loi du 6 juillet 1989 exige « autant d'exemplaires que de
- * parties ». Un bailleur et deux locataires en veulent donc trois, et l'écran
- * le dit plutôt que de laisser chacun imprimer à l'aveugle.
+ * La règle vit dans `signature.ts` et est réexposée en tête de ce fichier.
  */
-export function exemplairesNecessaires(nombreLocataires: number): number {
-  return 1 + Math.max(1, nombreLocataires);
-}
 
 /**
  * Qui doit signer un état des lieux, dans quel ordre et sous quel identifiant.
  *
- * Cette liste vivait dans le module d'émission. Elle est remontée ici parce que
- * **deux endroits** en dépendent : le formulaire, qui refuse d'avancer tant
- * qu'un signataire manque, et l'émission, qui réimprime le document. Deux
- * constructions séparées finiraient par ne plus désigner les mêmes personnes —
- * et un état des lieux imprimé sans la signature d'un locataire nommé est un
- * document que le juge écarte.
- *
- * L'identifiant du locataire est celui du titulaire, **jamais son rang** : deux
- * personnes peuvent porter le même nom de famille, et une signature glissée
- * sous le mauvais nom ne se voit pas.
+ * La règle est celle de `signature.ts`, partagée avec l'inventaire du mobilier :
+ * un document se signe de la même façon, quelle que soit sa nature. Le nom
+ * reste, parce que tout le projet l'importe depuis l'origine.
  */
 export function signatairesAttendusDeLEdl(params: {
   nomBailleur: string;
   titulaires: readonly { id: string; nom: string; prenom: string }[];
   mandataire?: string | null;
 }): SignataireAttendu[] {
-  const attendus: SignataireAttendu[] = [
-    { id: 'bailleur', nom: params.nomBailleur },
-    ...params.titulaires.map((t) => ({ id: t.id, nom: `${t.prenom} ${t.nom}`.trim() })),
-  ];
-  const mandataire = params.mandataire?.trim();
-  if (mandataire) attendus.push({ id: 'mandataire', nom: mandataire });
-  return attendus;
+  return signatairesAttendus(params);
 }
 
 // ---------------------------------------------------------------------------
@@ -1435,58 +1274,13 @@ export function titreDeLEdl(type: TypeEdl, dateEdl: string): string {
 // ---------------------------------------------------------------------------
 // Reprise d'un brouillon
 // ---------------------------------------------------------------------------
+//
+// `texteOuVide`, `tableau`, `objet`, `reprendrePhoto` et `reprendrePhotos` sont
+// importés de `lecture.ts` : l'inventaire du mobilier relit ses meubles et ses
+// photos exactement de la même façon, et une règle de sûreté écrite deux fois
+// finit par n'être corrigée qu'une fois.
 
-const ETATS_VALIDES = new Set<string>(ETATS_ELEMENT.map((e) => e.valeur));
 const TYPES_COMPTEURS = new Set<string>(COMPTEURS.map((c) => c.valeur));
-
-function texteOuVide(valeur: unknown): string {
-  return typeof valeur === 'string' ? valeur : '';
-}
-
-function tableau(valeur: unknown): unknown[] {
-  return Array.isArray(valeur) ? valeur : [];
-}
-
-function objet(valeur: unknown): Record<string, unknown> | null {
-  if (valeur === null || typeof valeur !== 'object' || Array.isArray(valeur)) return null;
-  return valeur as Record<string, unknown>;
-}
-
-function reprendrePhoto(valeur: unknown, prises: string[]): PhotoEdl | null {
-  const o = objet(valeur);
-  if (!o) return null;
-  const chemin = texteOuVide(o.chemin);
-  // Une photo sans fichier n'est pas une photo : la garder ferait afficher une
-  // image vide dans le document, et personne ne saurait qu'il en manque une.
-  if (!chemin) return null;
-
-  const id = identifiantRepris(o.id, 'ph', prises);
-  const photo: PhotoEdl = {
-    id,
-    chemin,
-    legende: texteOuVide(o.legende),
-    priseLe: dateCivileValide(texteOuVide(o.priseLe)) ? texteOuVide(o.priseLe) : '',
-  };
-  if (typeof o.largeur === 'number' && Number.isFinite(o.largeur) && o.largeur > 0) {
-    photo.largeur = Math.round(o.largeur);
-  }
-  if (typeof o.hauteur === 'number' && Number.isFinite(o.hauteur) && o.hauteur > 0) {
-    photo.hauteur = Math.round(o.hauteur);
-  }
-  return photo;
-}
-
-function reprendrePhotos(valeur: unknown, prises: string[]): PhotoEdl[] {
-  const photos: PhotoEdl[] = [];
-  for (const brut of tableau(valeur)) {
-    const photo = reprendrePhoto(brut, prises);
-    if (photo) {
-      photos.push(photo);
-      prises.push(photo.id);
-    }
-  }
-  return photos;
-}
 
 function reprendreElement(valeur: unknown, pris: string[], photosPrises: string[]): ElementEdl | null {
   const o = objet(valeur);
@@ -1501,7 +1295,7 @@ function reprendreElement(valeur: unknown, pris: string[], photosPrises: string[
     // Un état inconnu est traité comme absent : le conserver ferait afficher
     // une case vide dans la liste des sept, et le contrôle final refuserait un
     // élément que l'utilisateur croirait avoir renseigné.
-    etat: ETATS_VALIDES.has(etat) ? (etat as EtatElement) : undefined,
+    etat: estEtatValide(etat) ? etat : undefined,
     commentaire: texteOuVide(o.commentaire),
     photos: reprendrePhotos(o.photos, photosPrises),
   };

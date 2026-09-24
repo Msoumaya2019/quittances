@@ -35,7 +35,12 @@ export default function EcranExportSauvegarde() {
   const [enCours, setEnCours] = useState(false);
   const [etape, setEtape] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
-  const [reussi, setReussi] = useState<{ chemin: string; taille: number } | null>(null);
+  const [reussi, setReussi] = useState<{
+    chemin: string;
+    taille: number;
+    fichiers: number;
+    octetsFichiers: number;
+  } | null>(null);
 
   const assezLong = motDePasse.length >= 8;
   const identiques = motDePasse.length > 0 && motDePasse === confirmation;
@@ -48,9 +53,14 @@ export default function EcranExportSauvegarde() {
     setReussi(null);
 
     try {
-      const { chemin } = await creerSauvegarde(motDePasse, setEtape);
+      const { chemin, resume } = await creerSauvegarde(motDePasse, setEtape);
       const taille = await tailleSauvegarde(chemin);
-      setReussi({ chemin, taille });
+      setReussi({
+        chemin,
+        taille,
+        fichiers: resume.fichiers ?? 0,
+        octetsFichiers: resume.octetsFichiers ?? 0,
+      });
       setMotDePasse('');
       setConfirmation('');
     } catch (e) {
@@ -109,6 +119,14 @@ export default function EcranExportSauvegarde() {
             <Text style={styles.section}>La sauvegarde</Text>
             <LigneDetail libelle="Fichier" valeur={reussi.chemin.split('/').pop() ?? '—'} />
             <LigneDetail libelle="Taille" valeur={formaterTaille(reussi.taille)} />
+            <LigneDetail
+              libelle="Fichiers emportés"
+              valeur={
+                reussi.fichiers === 0
+                  ? 'Aucun'
+                  : `${reussi.fichiers} (${formaterTaille(reussi.octetsFichiers)})`
+              }
+            />
             <LigneDetail libelle="Protection" valeur="Mot de passe" />
           </Carte>
 
@@ -141,16 +159,18 @@ export default function EcranExportSauvegarde() {
             <LigneDetail libelle="Historique des loyers" valeur="Inclus" />
             <LigneDetail libelle="Tous les paiements" valeur="Inclus" />
             <LigneDetail libelle="Documents émis et réglages" valeur="Inclus" />
-            <LigneDetail libelle="Fichiers PDF des quittances" valeur="Non inclus" />
+            <LigneDetail libelle="Fichiers PDF des quittances" valeur="Inclus" />
+            <LigneDetail libelle="Photos des états des lieux et inventaires" valeur="Incluses" />
           </Carte>
 
-          {/* Les PDF ne sont pas dans l'archive, et l'application n'en refabrique
-              jamais : le bailleur doit donc les garder lui-même. Le dire ici, au
-              moment où il croit tout mettre à l'abri, et non le jour où il
-              cherche un document disparu. */}
+          {/* Les fichiers sont maintenant dans l'archive, et chiffrés avec le
+              reste : des photos de logement sont des données personnelles. Ce
+              qui reste à dire ici, c'est ce que la sauvegarde ne peut pas
+              promettre — un fichier déjà absent du téléphone au moment de
+              l'export n'a pas pu être joint. */}
           <BandeauMessage
             ton="avertissement"
-            message="Les fichiers PDF eux-mêmes ne sont pas dans la sauvegarde. L’application ne les régénère jamais : une quittance émise reste celle qui a été émise. Partagez ou enregistrez vos quittances au fur et à mesure si vous voulez les conserver."
+            message="Les fichiers PDF, les photos et les documents scannés sont joints à la sauvegarde, et chiffrés avec le reste. Un fichier déjà absent de ce téléphone au moment de l’export n’a pas pu être joint : le décompte ci-dessous dit ce qui a réellement été emporté."
           />
 
           <BandeauMessage

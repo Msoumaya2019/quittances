@@ -33,9 +33,11 @@ import {
   appliquerSauvegarde,
   documentsSansFichier,
   lireSauvegarde,
+  piecesSansFichier,
   type BilanRestauration,
 } from '@/backup/import';
 import { tousLesDocuments } from '@/db/repositories/documents';
+import { toutesLesPieces } from '@/db/repositories/pieces';
 import type { ContenuSauvegarde } from '@/backup/export';
 import type { EnveloppeSauvegarde } from '@/backup/crypto';
 import { useApplication } from '@/state/ApplicationContext';
@@ -146,8 +148,11 @@ export default function EcranImportSauvegarde() {
       // échoue, la restauration reste réussie et on se tait plutôt que de
       // l'annoncer comme un échec.
       try {
-        const documents = await tousLesDocuments();
-        setPdfManquants((await documentsSansFichier(documents)).length);
+        const [documents, pieces] = await Promise.all([tousLesDocuments(), toutesLesPieces()]);
+        const sansFichier =
+          (await documentsSansFichier(documents)).length +
+          (await piecesSansFichier(pieces)).length;
+        setPdfManquants(sansFichier);
       } catch {
         setPdfManquants(null);
       }
@@ -198,10 +203,12 @@ export default function EcranImportSauvegarde() {
               libelle="Documents"
               valeur={
                 pdfManquants !== null && pdfManquants > 0
-                  ? `${bilan.documents} (dont ${pdfManquants} sans PDF)`
+                  ? `${bilan.documents} (${pdfManquants} fichier(s) manquant(s))`
                   : String(bilan.documents)
               }
+              accentuee={pdfManquants !== null && pdfManquants > 0}
             />
+            <LigneDetail libelle="Fichiers réécrits" valeur={String(bilan.fichiers)} />
             <LigneDetail libelle="Préférences et signature" valeur="Restaurées" />
           </Carte>
           <Bouton libelle="Terminer" onPress={() => router.back()} />
@@ -276,11 +283,26 @@ export default function EcranImportSauvegarde() {
                 />
                 <LigneDetail libelle="Paiements" valeur={String(contenu.resume.paiements)} />
                 <LigneDetail libelle="Documents" valeur={String(contenu.resume.documents)} />
+                <LigneDetail
+                  libelle="Fichiers joints"
+                  valeur={
+                    contenu.resume.fichiers === undefined
+                      ? 'Aucun — sauvegarde antérieure'
+                      : `${contenu.resume.fichiers} (${formaterTaille(
+                          contenu.resume.octetsFichiers ?? 0,
+                        )})`
+                  }
+                  accentuee={contenu.resume.fichiers === undefined}
+                />
               </Carte>
 
               <BandeauMessage
                 ton="avertissement"
-                message="Les logements, paiements et documents présents sur ce téléphone seront remplacés par ceux de la sauvegarde. Les fichiers PDF déjà générés resteront sur l’appareil, mais ne seront plus rattachés à rien."
+                message={
+                  contenu.resume.fichiers === undefined
+                    ? 'Cette sauvegarde a été créée par une version antérieure : elle ne contient pas les fichiers PDF ni les photos. Les documents seront restaurés sans leur fichier, et l’application ne les régénère jamais.'
+                    : 'Les logements, paiements, documents et fichiers présents sur ce téléphone seront remplacés par ceux de la sauvegarde. Les fichiers PDF et les photos qu’elle contient seront réécrits dans le dossier du logement.'
+                }
               />
 
               <Bouton
@@ -306,6 +328,15 @@ export default function EcranImportSauvegarde() {
       />
     </ScrollView>
   );
+}
+
+/** Formate une taille en octets de façon lisible. */
+function formaterTaille(octets: number): string {
+  if (octets < 1024) return `${octets} octets`;
+  if (octets < 1024 * 1024) {
+    return `${(octets / 1024).toFixed(1).replace('.', ',')} Ko`;
+  }
+  return `${(octets / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo`;
 }
 
 const creerStyles = (couleurs: Couleurs) =>

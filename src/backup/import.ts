@@ -8,7 +8,17 @@
  *
  * On restaure aussi les réglages, signature comprise : sans elle, les documents
  * suivants ne ressembleraient plus aux précédents.
+ *
+ * Les **fichiers** sont réécrits après la transaction, et l'ordre est une
+ * décision : les écrire avant poserait les fichiers de la sauvegarde dans le
+ * dossier de l'installation actuelle, si bien qu'un échec de la transaction
+ * laisserait les données d'aujourd'hui avec les fichiers d'hier. Dans cet
+ * ordre-ci, un échec laisse des lignes sans fichier — ce que
+ * `documentsSansFichier` et `piecesSansFichier` savent nommer, et que l'écran
+ * de restauration affiche.
  */
+
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { transaction } from '@/db/database';
 import { ecrireReglages, type Reglages } from '@/db/repositories/settings';
@@ -25,7 +35,7 @@ import type {
 import { documentExiste } from '@/pdf/partage';
 
 import { dechiffrer, ErreurSauvegarde, verifierEnveloppe, type EnveloppeSauvegarde } from './crypto';
-import { VERSION_CONTENU, type ContenuSauvegarde } from './export';
+import { VERSION_CONTENU, type ContenuSauvegarde, type FichierSauvegarde } from './export';
 
 /** Ce que la restauration a effectivement réinséré. */
 export interface BilanRestauration {
@@ -37,6 +47,8 @@ export interface BilanRestauration {
   paiements: number;
   documents: number;
   pieces: number;
+  /** Nombre de fichiers réécrits dans le dossier documentaire. */
+  fichiers: number;
   reglages: boolean;
 }
 
@@ -112,6 +124,26 @@ export function validerContenu(objet: ContenuSauvegarde): void {
     throw new ErreurSauvegarde(
       'Cette sauvegarde est incomplète : une partie des données manque. Elle ne peut pas être restaurée.',
     );
+  }
+
+  // Même règle pour les fichiers : une sauvegarde de version 1 n'en porte pas.
+  // Quand le champ est là, il doit être lisible — un tableau d'entrées sans
+  // chemin ni contenu ferait écrire des fichiers vides, et l'utilisateur
+  // croirait ses photos restaurées.
+  if (objet.donnees.fichiers !== undefined) {
+    if (!Array.isArray(objet.donnees.fichiers)) {
+      throw new ErreurSauvegarde(
+        'Cette sauvegarde est incomplète : une partie des données manque. Elle ne peut pas être restaurée.',
+      );
+    }
+    for (const fichier of objet.donnees.fichiers) {
+      if (!fichier || typeof fichier.chemin !== 'string' || typeof fichier.donnees !== 'string') {
+        throw new ErreurSauvegarde(
+          'Cette sauvegarde annonce des fichiers dont le contenu est illisible. ' +
+            'Elle ne peut pas être restaurée.',
+        );
+      }
+    }
   }
 
   if (!objet.donnees.reglages || typeof objet.donnees.reglages !== 'object') {
@@ -314,6 +346,14 @@ export async function appliquerSauvegarde(
   // écrire à part évite d'alourdir la transaction principale.
   await ecrireReglages(d.reglages as Reglages);
 
+  // Les fichiers viennent en dernier, et l'ordre est une décision. Les écrire
+  // avant la transaction les poserait dans le dossier de l'installation
+  // **actuelle** : si la transaction échouait ensuite, l'utilisateur garderait
+  // ses données d'aujourd'hui avec les fichiers d'hier, et rien ne le dirait.
+  // Dans cet ordre-ci, un échec laisse des lignes sans fichier — ce que
+  // `documentsSansFichier` sait nommer, et que l'écran de restauration affiche.
+  const fichiers = await restaurerFichiers(d.fichiers ?? []);
+
   return {
     proprietaires: d.proprietaires.length,
     logements: d.logements.length,
@@ -323,18 +363,61 @@ export async function appliquerSauvegarde(
     paiements: d.paiements.length,
     documents: d.documents.length,
     pieces: (d.pieces ?? []).length,
+    fichiers,
     reglages: true,
   };
 }
 
 /**
- * Les documents dont le PDF n'est plus présent sur l'appareil.
+ * Réécrit les fichiers de la sauvegarde dans le dossier de l'application.
  *
- * Une sauvegarde contient la trace des documents, **pas les fichiers PDF
- * eux-mêmes**. Le chemin, lui, est restauré tel quel : il désigne un fichier du
- * dossier de l'application, qui n'existe plus si la sauvegarde est restaurée
- * sur un autre téléphone, ou après une réinstallation — le chemin d'une
- * application change à chaque installation.
+ * Le chemin enregistré est **relatif** au dossier de l'application, et il est
+ * reconstruit ici : c'est ce qui permet à une sauvegarde faite sur un téléphone
+ * d'être restaurée sur un autre, où le dossier absolu est différent. Un chemin
+ * absolu restauré tel quel désignerait un dossier qui n'existe pas, et toutes
+ * les photos seraient perdues sans que rien ne le dise.
+ *
+ * Rend le nombre de fichiers réellement écrits. Un fichier qui échoue
+ * n'interrompt pas la restauration : les autres sont écrits, et le décompte
+ * annoncé est celui des succès — jamais celui des intentions.
+ */
+export async function restaurerFichiers(fichiers: FichierSauvegarde[]): Promise<number> {
+  const racine = FileSystem.documentDirectory;
+  if (!racine) return 0;
+
+  let ecrits = 0;
+  for (const fichier of fichiers) {
+    const chemin = `${racine}${fichier.chemin}`;
+    const dossier = chemin.slice(0, chemin.lastIndexOf('/') + 1);
+    try {
+      const info = await FileSystem.getInfoAsync(dossier);
+      if (!info.exists) {
+        await FileSystem.makeDirectoryAsync(dossier, { intermediates: true });
+      }
+      await FileSystem.writeAsStringAsync(chemin, fichier.donnees, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      ecrits += 1;
+    } catch {
+      // On continue : un fichier refusé ne doit pas priver l'utilisateur des
+      // autres. Son absence sera nommée par `documentsSansFichier`.
+    }
+  }
+  return ecrits;
+}
+
+/**
+ * Les documents dont le PDF n'est pas présent sur l'appareil.
+ *
+ * Depuis la version 2 du contenu, une sauvegarde **contient les fichiers
+ * eux-mêmes** : elle les réécrit, et un document restauré retrouve son PDF. Ce
+ * contrôle reste nécessaire, et pour deux raisons qui n'ont pas disparu :
+ *
+ *  - une sauvegarde **de version 1** ne portait que la trace des documents. Elle
+ *    se restaure — la refuser priverait l'utilisateur de ses propres
+ *    sauvegardes — et ses PDF, eux, ne reviendront pas ;
+ *  - un fichier déjà absent de l'appareil au moment de la sauvegarde n'a pas pu
+ *    être joint, et le restaurer ne le fera pas réapparaître.
  *
  * Le contrôle porte donc sur le **fichier**, et non sur la présence d'un
  * chemin : un chemin restauré n'est pas un fichier. Tester `!cheminFichier` ne
@@ -350,6 +433,23 @@ export async function documentsSansFichier(documents: Document[]): Promise<Docum
     ),
   );
   return verdicts.filter((document): document is Document => document !== null);
+}
+
+/**
+ * Les pièces du dossier dont le fichier n'est pas présent sur l'appareil.
+ *
+ * Le même contrôle que pour les quittances, et il manquait : un bail signé, un
+ * état des lieux ou un inventaire porte lui aussi un `cheminFichier`, et un
+ * écran qui n'aurait compté que les quittances aurait annoncé une restauration
+ * complète en laissant des constats sans PDF.
+ */
+export async function piecesSansFichier(pieces: PieceDossier[]): Promise<PieceDossier[]> {
+  const verdicts = await Promise.all(
+    pieces.map(async (piece) =>
+      (await documentExiste(piece.cheminFichier)) ? null : piece,
+    ),
+  );
+  return verdicts.filter((piece): piece is PieceDossier => piece !== null);
 }
 
 /** Types réexportés pour l'écran de restauration. */

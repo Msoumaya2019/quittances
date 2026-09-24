@@ -47,51 +47,50 @@ import { adresseEnLignes } from '../domain/types.ts';
 import { COULEURS_DOCUMENT, echapper, STYLES_BASE } from './styles.ts';
 import { MENTION_SIGNATURE } from './bail.ts';
 import type { LogementBail, PartieBailleur, PartieLocataire } from './bail.ts';
-import { dimensionDansLaLargeur } from './trace.ts';
+import {
+  HAUTEUR_PHOTO_MAX_MM,
+  LARGEUR_PHOTO_MM,
+  TONS_ETAT,
+  pastille,
+  rendrePhoto,
+  rendrePhotos,
+} from './constats.ts';
+import type { PhotoImprimable, PhotosImprimables } from './constats.ts';
+// Les sections qu'un document de constat imprime de la même façon sont
+// **définies** dans `sections-constat.ts`, avec l'inventaire du mobilier : la
+// charpente d'un constat ne se décrit pas deux fois, et la section des
+// signatures — qui apparie par identifiant — encore moins.
+import {
+  corpsBail,
+  corpsLogement,
+  corpsObservations,
+  corpsParties,
+  corpsSignatures,
+  corpsSources,
+  corpsVetuste,
+  dateFr,
+  exemplairesEnLigne,
+  ligne,
+  paireEnHtml,
+  section,
+} from './sections-constat.ts';
+import type { ClassesPaire, SignataireImprime } from './sections-constat.ts';
 
-/**
- * La largeur utile d'une photo, en millimètres.
- *
- * A4 fait 210 mm de large, et la page réserve 18 mm de marge de chaque côté :
- * il reste 174 mm. Deux photos côte à côte tiennent donc dans 85 mm chacune,
- * marges comprises. La valeur est écrite ici, et non calculée depuis la feuille
- * de style, parce qu'elle décide de la taille imprimée et qu'un changement de
- * marge doit la faire changer — le banc de mesure des marges s'en assure.
- */
-export const LARGEUR_PHOTO_MM = 85;
+export type { SignataireImprime };
 
-/**
- * La hauteur maximale d'une photo, en millimètres.
- *
- * Une photo en portrait, cadrée sur la seule largeur, occuperait la moitié
- * d'une feuille et repousserait les éléments suivants. On plafonne donc la
- * hauteur, en conservant le rapport largeur/hauteur : une photo étirée ne
- * prouverait plus ce qu'elle montre.
- */
-export const HAUTEUR_PHOTO_MAX_MM = 105;
+// La pastille d'un état et l'impression d'une photo sont **définies** dans
+// `constats.ts`, avec l'inventaire du mobilier : les deux documents constatent
+// dans les mêmes termes, et « Photo illisible » ne doit pas se dire de deux
+// façons. Les noms restent réexposés ici, où le projet les importe depuis
+// l'origine.
+export { HAUTEUR_PHOTO_MAX_MM, LARGEUR_PHOTO_MM };
+export type { PhotoImprimable };
+/** Les photos d'un état des lieux, indexées par identifiant. */
+export type PhotosEdl = PhotosImprimables;
 
 // ---------------------------------------------------------------------------
 // Contenu
 // ---------------------------------------------------------------------------
-
-/**
- * Une photo prête à imprimer.
- *
- * `donnees` porte l'URI `data:` complète, construite au moment de l'émission en
- * lisant le fichier. Une chaîne vide signifie que le fichier est **illisible** :
- * le document imprime alors une ligne qui le dit, plutôt qu'une image cassée
- * dont personne ne saurait qu'il en manque une.
- */
-export interface PhotoImprimable {
-  id: string;
-  donnees: string;
-  legende: string;
-  largeur?: number;
-  hauteur?: number;
-}
-
-/** Les photos d'un état des lieux, indexées par identifiant. */
-export type PhotosEdl = Record<string, PhotoImprimable>;
 
 export interface BailReference {
   dateEntree: string;
@@ -105,19 +104,10 @@ export interface BailReference {
 /**
  * Qui doit signer, et sous quel nom la signature s'imprime.
  *
- * C'est une **liste**, et non un rang calculé à l'impression. La première
- * version de ce fichier appariait les signatures par position — la première
- * sous le bailleur, la suivante sous le premier locataire — ce qui plaçait la
- * signature d'un colocataire sous le nom de l'autre dès qu'une signature
- * manquait ou arrivait dans un autre ordre. Un document qui attribue une
- * signature à la mauvaise personne est faux, et c'est la faute la plus grave
- * que ce fichier puisse commettre.
+ * Le type est **défini** dans `sections-constat.ts`, avec la section qui
+ * l'imprime, et réexposé en tête de ce fichier : tout le projet l'importe
+ * d'ici depuis l'origine.
  */
-export interface SignataireImprime {
-  id: string;
-  nom: string;
-  role: string;
-}
 
 export interface ContenuEdl {
   type: TypeEdl;
@@ -164,17 +154,9 @@ export interface ContenuEdl {
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
-
-/** La couleur d'une pastille d'état. Le libellé l'accompagne toujours. */
-const TONS_ETAT: Record<EtatElement, { fond: string; texte: string; bordure: string }> = {
-  neuf: { fond: '#E8F5E9', texte: '#1B5E20', bordure: '#A5D6A7' },
-  tres_bon: { fond: '#F1F8E9', texte: '#33691E', bordure: '#C5E1A5' },
-  bon: { fond: '#ECF5FA', texte: '#00406E', bordure: '#BBDEFB' },
-  usage: { fond: '#FFF8E1', texte: '#8D6E00', bordure: '#FFE082' },
-  mauvais: { fond: '#FDECEA', texte: '#B3261E', bordure: '#F5C6C2' },
-  non_verifie: { fond: '#F5F5F5', texte: '#555555', bordure: '#DDDDDD' },
-  non_applicable: { fond: '#FAFAFA', texte: '#777777', bordure: '#E8E8E8' },
-};
+//
+// Les tons d'une pastille d'état sont définis dans `constats.ts`, avec la
+// pastille elle-même : un meuble d'inventaire se colore comme un mur.
 
 export const STYLES_EDL = `
   /* Le format de page vient de STYLES_BASE (A4). On reprend la classe page,
@@ -471,98 +453,39 @@ export const STYLES_EDL = `
 // ---------------------------------------------------------------------------
 
 /** Une ligne « libellé / valeur » d'un tableau. */
-function ligne(libelle: string, valeur: string): string {
-  return `<tr><th>${echapper(libelle)}</th><td>${valeur}</td></tr>`;
-}
 
 /** Une section numérotée. Le numéro aide à vérifier qu'aucune ne manque. */
-function section(rang: number, titre: string, corps: string): string {
-  return `<section class="e-section">
-    <h2><span class="e-numero">${rang}.</span> ${echapper(titre)}</h2>
-    ${corps}
-  </section>`;
-}
 
 /** « 15 septembre 2026 » à partir de `2026-09-15`. */
-function dateFr(valeur: string | null | undefined): string {
-  if (!valeur) return '—';
-  const [a, m, j] = valeur.split('-').map(Number);
-  if (!a || !m || !j) return valeur;
-  const mois = [
-    'janvier',
-    'février',
-    'mars',
-    'avril',
-    'mai',
-    'juin',
-    'juillet',
-    'août',
-    'septembre',
-    'octobre',
-    'novembre',
-    'décembre',
-  ];
-  return `${j} ${mois[m - 1]} ${a}`;
-}
-
-/** La pastille d'un état : le libellé est toujours imprimé à côté. */
-function pastille(etat: EtatElement | undefined): string {
-  if (!etat) {
-    return '<span class="e-etat" style="background:#FFFFFF;color:#B3261E;border:0.25mm solid #F5C6C2">Non renseigné</span>';
-  }
-  const presentation = ETATS_ELEMENT.find((e) => e.valeur === etat);
-  const ton = TONS_ETAT[etat];
-  const libelle = presentation?.libelle ?? etat;
-  return (
-    `<span class="e-etat" style="background:${ton.fond};color:${ton.texte};` +
-    `border:0.25mm solid ${ton.bordure}">${echapper(libelle)}</span>`
-  );
-}
 
 /**
  * Une photo, ou la mention de son absence.
  *
- * Une photo dont le fichier est illisible **le dit**. Imprimer une image cassée
- * ferait croire à un défaut d'affichage ; l'omettre ferait croire qu'il n'y
- * avait pas de photo.
+ * L'impression d'une photo est **définie** dans `constats.ts`, avec l'inventaire
+ * du mobilier : « Photo illisible » ne doit pas se dire de deux façons. Le nom
+ * local reste, parce que tout ce fichier l'appelle.
  */
-function photo(imprimable: PhotoImprimable | undefined): string {
-  if (!imprimable) return '';
-  if (!imprimable.donnees) {
-    return `<figure class="e-photo"><div class="e-photo-absente">Photo illisible<br />${echapper(
-      imprimable.legende || 'sans légende',
-    )}</div></figure>`;
-  }
-
-  // Une photo en portrait, cadrée sur la seule largeur, occuperait toute une
-  // feuille. On plafonne donc la hauteur, et on recalcule la largeur pour
-  // conserver le rapport : une photo étirée ne prouverait plus rien.
-  const cadre = dimensionDansLaLargeur(
-    imprimable.largeur ?? 4,
-    imprimable.hauteur ?? 3,
-    LARGEUR_PHOTO_MM,
-  );
-  const hauteur = Math.min(cadre.hauteur, HAUTEUR_PHOTO_MAX_MM);
-  const largeur = Math.round((cadre.largeur * hauteur) / Math.max(1, cadre.hauteur));
-
-  return `<figure class="e-photo" style="width:${largeur}mm">
-    <img src="${echapper(imprimable.donnees)}" alt="${echapper(imprimable.legende || 'Photo du logement')}" />
-    ${imprimable.legende ? `<figcaption>${echapper(imprimable.legende)}</figcaption>` : ''}
-  </figure>`;
-}
+const photo = rendrePhoto;
 
 /** Toutes les photos d'un élément, dans l'ordre. */
-function photosDe(liste: { id: string }[], photos: PhotosEdl): string {
-  const rendues = liste.map((p) => photo(photos[p.id])).filter((h) => h.length > 0);
-  return rendues.length > 0 ? `<div class="e-photos">${rendues.join('')}</div>` : '';
-}
+const photosDe = rendrePhotos;
 
 // ---------------------------------------------------------------------------
 // Les sections, une par une
 // ---------------------------------------------------------------------------
 
+/**
+ * La phrase de vétusté propre à un état des lieux.
+ *
+ * La définition de la vétusté est la même pour les deux documents de constat ;
+ * c'est la phrase qui l'applique qui nomme le document.
+ */
+const PHRASE_VETUSTE_EDL = `Le présent état des lieux <strong>constate</strong> l’état des lieux et de ses
+éléments. Il ne qualifie aucune évolution et n’impute aucune dégradation au locataire : l’appréciation
+d’une éventuelle responsabilité relève des parties, et le cas échéant de la juridiction compétente.
+Lorsqu’une grille de vétusté a été convenue entre les parties, elle s’applique à ces constats.`;
+
 function corpsObjet(contenu: ContenuEdl): string {
-  const nombreParties = 1 + contenu.locataires.length;
   return `<table class="e-table">
     ${ligne('Nature', `<strong>${echapper(LIBELLE_TYPE_EDL[contenu.type])}</strong>`)}
     ${ligne('Date d’établissement', echapper(dateFr(contenu.dateEdl)))}
@@ -572,10 +495,7 @@ function corpsObjet(contenu: ContenuEdl): string {
         : ''
     }
     ${ligne('Établi à', contenu.lieu ? echapper(contenu.lieu) : '—')}
-    ${ligne(
-      'Exemplaires',
-      `${nombreParties} — un pour le bailleur, un pour chacun des ${contenu.locataires.length} locataire(s)`,
-    )}
+    ${ligne('Exemplaires', exemplairesEnLigne(contenu.locataires.length))}
   </table>
   <p class="e-mention">
     Document établi contradictoirement et amiablement, conformément à l’article 3-2 de la loi
@@ -584,77 +504,8 @@ function corpsObjet(contenu: ContenuEdl): string {
   </p>`;
 }
 
-function corpsLogement(contenu: ContenuEdl): string {
-  const adresse = adresseEnLignes(contenu.logement);
-  return `<table class="e-table">
-    ${ligne('Désignation', echapper(contenu.logement.nom))}
-    ${ligne('Adresse', adresse.map((l) => echapper(l)).join('<br />') || '—')}
-    ${ligne(
-      'Surface habitable',
-      contenu.logement.surface ? `${contenu.logement.surface} m²` : 'Non renseignée',
-    )}
-    ${ligne('Référence', contenu.logement.reference ? echapper(contenu.logement.reference) : '—')}
-  </table>`;
-}
 
-function corpsParties(contenu: ContenuEdl): string {
-  const adresseBailleur = adresseEnLignes(contenu.bailleur);
-  const bailleur = `<div class="e-partie">
-    <h3>Le bailleur</h3>
-    <p><strong>${echapper(
-      contenu.bailleur.qualite
-        ? `${contenu.bailleur.nom} — ${contenu.bailleur.qualite}`
-        : contenu.bailleur.nom,
-    )}</strong></p>
-    ${adresseBailleur.map((l) => `<p>${echapper(l)}</p>`).join('')}
-    ${contenu.bailleur.telephone ? `<p>Tél. ${echapper(contenu.bailleur.telephone)}</p>` : ''}
-  </div>`;
 
-  const locataires =
-    contenu.locataires.length > 0
-      ? contenu.locataires
-          .map(
-            (l) => `<div class="e-partie">
-        <h3>${contenu.locataires.length > 1 ? 'Un locataire' : 'Le locataire'}</h3>
-        <p><strong>${echapper(`${l.prenom} ${l.nom}`.trim())}</strong></p>
-        ${
-          l.dateNaissance
-            ? `<p>Naissance : ${echapper(dateFr(l.dateNaissance))}${
-                l.lieuNaissance ? ` à ${echapper(l.lieuNaissance)}` : ''
-              }</p>`
-            : ''
-        }
-        ${l.telephone ? `<p>Tél. ${echapper(l.telephone)}</p>` : ''}
-      </div>`,
-          )
-          .join('')
-      : `<div class="e-partie"><h3>Le locataire</h3><p class="e-vide">Aucun locataire enregistré.</p></div>`;
-
-  const mandataire = contenu.mandataire.trim()
-    ? `<div class="e-partie">
-        <h3>Mandataire</h3>
-        <p>${echapper(contenu.mandataire.trim())}</p>
-      </div>`
-    : '';
-
-  return `<div class="e-parties">${bailleur}${locataires}${mandataire}</div>`;
-}
-
-function corpsBail(contenu: ContenuEdl): string {
-  const total = contenu.bail.loyer + contenu.bail.charges;
-  return `<table class="e-table">
-    ${ligne("Date d'entrée", echapper(dateFr(contenu.bail.dateEntree)))}
-    ${ligne('Date de sortie', contenu.bail.dateSortie ? echapper(dateFr(contenu.bail.dateSortie)) : 'Location en cours')}
-    ${ligne('Loyer hors charges', `${echapper(formatMontant(contenu.bail.loyer))} par mois`)}
-    ${ligne('Provision pour charges', `${echapper(formatMontant(contenu.bail.charges))} par mois`)}
-    ${ligne('Total mensuel', `<strong>${echapper(formatMontant(total))}</strong>`)}
-    ${ligne(
-      'Dépôt de garantie',
-      contenu.bail.depotGarantie > 0 ? echapper(formatMontant(contenu.bail.depotGarantie)) : 'Aucun',
-    )}
-    ${ligne('Échéance', `Le ${contenu.bail.jourEcheance} de chaque mois`)}
-  </table>`;
-}
 
 function corpsCompteurs(contenu: ContenuEdl): string {
   if (contenu.compteurs.length === 0) {
@@ -738,27 +589,7 @@ function corpsPieces(contenu: ContenuEdl): string {
   return contenu.pieces.map((p) => pieceEnHtml(p, contenu.photos)).join('');
 }
 
-function corpsObservations(contenu: ContenuEdl): string {
-  const texte = contenu.observations.trim();
-  const reserves =
-    contenu.reserves.length > 0
-      ? `<ul class="e-liste">${contenu.reserves.map((r) => `<li>${echapper(r)}</li>`).join('')}</ul>`
-      : '';
-  return `${texte ? `<p class="e-texte-libre">${echapper(texte)}</p>` : '<p class="e-vide">Aucune observation générale n’a été saisie.</p>'}
-    ${reserves}`;
-}
 
-function corpsVetuste(): string {
-  // L'article 4 definit la vetuste comme l'usure du temps ou de l'usage normal.
-  // Le document le rappelle, et rappelle surtout qu'il ne tranche pas : c'est
-  // cette phrase qui empeche de lire une evolution comme une faute du locataire.
-  return `<p class="e-texte-libre">La vétusté s’entend comme l’état d’usure ou de détérioration résultant
-du temps ou de l’usage normal des matériaux et éléments d’équipement du logement.</p>
-  <p class="e-mention">Le présent état des lieux <strong>constate</strong> l’état des lieux et de ses
-éléments. Il ne qualifie aucune évolution et n’impute aucune dégradation au locataire : l’appréciation
-d’une éventuelle responsabilité relève des parties, et le cas échéant de la juridiction compétente.
-Lorsqu’une grille de vétusté a été convenue entre les parties, elle s’applique à ces constats.</p>`;
-}
 
 function corpsSynthese(contenu: ContenuEdl): string {
   const synthese = syntheseEdl({
@@ -798,48 +629,7 @@ function corpsSynthese(contenu: ContenuEdl): string {
     ${avertissement}`;
 }
 
-function corpsSignatures(contenu: ContenuEdl): string {
-  // L'appariement se fait **par identifiant**, jamais par rang : deux
-  // colocataires dont un seul a signé ne doivent pas se retrouver avec la
-  // signature de l'autre. Un signataire attendu qui n'a pas signé figure quand
-  // même, avec la mention « Non signé » — c'est une information, pas un oubli.
-  const blocs = contenu.signataires
-    .map((attendu) => ({
-      nom: attendu.nom,
-      role: attendu.role,
-      signature: contenu.signatures.find((s) => s.signataire === attendu.id && s.trace.length > 0),
-    }))
-    .filter((b) => b.nom.trim().length > 0);
 
-  const contenu_ = `<div class="e-signatures">${blocs
-    .map(
-      (b) => `<div class="e-signature">
-        <div class="e-cadre">${
-          b.signature
-            ? `<img src="${echapper(b.signature.trace)}" alt="Signature de ${echapper(b.nom)}" />`
-            : '<span class="e-vide">Non signé</span>'
-        }</div>
-        <div class="e-qui"><strong>${echapper(b.nom)}</strong><br />${echapper(b.role)}${
-          b.signature ? `<br />Signé le ${echapper(dateFr(b.signature.date))}` : ''
-        }</div>
-      </div>`,
-    )
-    .join('')}</div>
-    <p class="e-mention">${echapper(MENTION_SIGNATURE)}</p>`;
-
-  // Aucun signataire attendu : le document le dit, plutôt que d'afficher une
-  // zone vide qui laisserait croire à un défaut d'affichage.
-  if (blocs.length === 0) {
-    return `<p class="e-vide">Aucun signataire n’est identifié sur ce document.</p>`;
-  }
-  return contenu_;
-}
-
-function corpsSources(): string {
-  return `<ul class="e-sources">${SOURCES_EDL.map(
-    (s) => `<li>${echapper(s.reference)} — consulté le ${echapper(dateFr(s.consulteLe))}</li>`,
-  ).join('')}</ul>`;
-}
 
 /** Le corps de chaque section, par sa valeur. */
 function corpsDeSection(valeur: string, contenu: ContenuEdl): string {
@@ -861,13 +651,13 @@ function corpsDeSection(valeur: string, contenu: ContenuEdl): string {
     case 'observations':
       return corpsObservations(contenu);
     case 'vetuste':
-      return corpsVetuste();
+      return corpsVetuste(PHRASE_VETUSTE_EDL);
     case 'synthese':
       return corpsSynthese(contenu);
     case 'signatures':
       return corpsSignatures(contenu);
     case 'sources':
-      return corpsSources();
+      return corpsSources(SOURCES_EDL);
     case 'reference_entree':
       return contenu.dateEntree
         ? `<table class="e-table">${ligne(
@@ -891,57 +681,15 @@ function corpsDeSection(valeur: string, contenu: ContenuEdl): string {
 }
 
 /**
- * Une colonne d'une paire avant/après.
- *
- * La colonne porte son propre intitulé — « Entrée du 12 mars 2026 » — et non un
- * simple « Avant » : deux photos de la même pièce prises à des années
- * d'intervalle se distinguent par leur date, et une paire sans date ne dit pas
- * au lecteur laquelle des deux est l'entrée.
- */
-function colonneDePaire(
-  etiquette: string,
-  etat: EtatElement | undefined,
-  photos: PhotoImprimable[],
-): string {
-  const rendues = photos.map((p) => photo(p)).filter((h) => h.length > 0).join('');
-  return `<div class="e-paire-colonne">
-    <p class="e-paire-etiquette">${echapper(etiquette)} — ${echapper(libelleEtat(etat))}</p>
-    ${rendues || '<p class="e-paire-sans">Aucune photo</p>'}
-  </div>`;
-}
-
-/**
  * Une paire avant / après, pour un élément.
  *
- * Les photos viennent de **deux index distincts** — celles de l'entrée et
- * celles de la sortie — et ne peuvent pas être confondues : les deux états des
- * lieux numérotent leurs photos `ph1`, `ph2`… par élément, si bien qu'un index
- * unique ferait imprimer la photo de l'entrée à la place de celle de la sortie.
- * C'est aussi la raison pour laquelle la paire est construite ici, et non
- * déduite d'un tableau de photos commun.
+ * La mise en regard de deux constats est **écrite une seule fois**, dans
+ * `sections-constat.ts`, et c'est là que chaque côté résout ses photos contre
+ * **son propre** index — faute de quoi la photo de l'entrée s'imprimerait dans
+ * la colonne « Sortie », et un document faux naîtrait sans qu'aucun contrôle de
+ * texte ne le voie. Les noms de classes sont communs aux deux documents, pour
+ * la même raison.
  */
-function paireEnHtml(
-  element: ComparaisonElement,
-  etiquetteEntree: string,
-  etiquetteSortie: string,
-  photosEntree: PhotosEdl,
-  photosSortie: PhotosEdl,
-): string {
-  const avant = element.photosEntree
-    .map((id) => photosEntree[id])
-    .filter((p): p is PhotoImprimable => p !== undefined);
-  const apres = element.photosSortie
-    .map((id) => photosSortie[id])
-    .filter((p): p is PhotoImprimable => p !== undefined);
-
-  return `<div class="e-paire">
-    <p class="e-paire-titre">${echapper(element.nom || 'Élément sans nom')}</p>
-    <div class="e-paire-colonnes">
-      ${colonneDePaire(etiquetteEntree, element.etatEntree, avant)}
-      ${colonneDePaire(etiquetteSortie, element.etatSortie, apres)}
-    </div>
-  </div>`;
-}
 
 /** La ligne d'un élément dans le tableau comparatif. */
 function ligneComparaison(element: ComparaisonElement): string {
@@ -988,7 +736,21 @@ function pieceCompareeEnHtml(
     illustres.length > 0
       ? `<div class="e-paires">${illustres
           .map((e) =>
-            paireEnHtml(e, etiquetteEntree, etiquetteSortie, contenu.photosEntree ?? {}, contenu.photos),
+            paireEnHtml({
+              titre: e.nom || 'Élément sans nom',
+              entree: {
+                etiquette: etiquetteEntree,
+                condition: libelleEtat(e.etatEntree),
+                ids: e.photosEntree,
+                index: contenu.photosEntree ?? {},
+              },
+              sortie: {
+                etiquette: etiquetteSortie,
+                condition: libelleEtat(e.etatSortie),
+                ids: e.photosSortie,
+                index: contenu.photos,
+              },
+            }),
           )
           .join('')}</div>`
       : '';

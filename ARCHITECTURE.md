@@ -36,6 +36,11 @@ app/                        # routes Expo Router (une route = un fichier)
     nouveau.tsx             # formulaire guidé en six étapes, photos et signatures
     verification.tsx        # relecture avant établissement, comparaison comprise
     succes.tsx              # confirmation, partage, exemplaires à remettre
+  inventaire/
+    choisir.tsx             # désigner le logement, et la nature : entrée ou sortie
+    nouveau.tsx             # formulaire guidé en cinq étapes, comptage et photos
+    verification.tsx        # relecture avant établissement, mobilier obligatoire compris
+    succes.tsx              # confirmation, partage, annexion au bail
   logement/
     nouveau.tsx             # assistant de création en 4 étapes
     [id].tsx                # détail d'un logement
@@ -529,6 +534,121 @@ référence et la date de consultation. Chaque section du document nomme son
 déclarée : un fondement qui ne renvoie à aucune source lue est une clause
 inventée, même quand elle est vraie.
 
+## L'inventaire du mobilier
+
+C'est le constat d'une location **meublée** : ce que le logement contient, en
+quel nombre et dans quel état. Le parcours est celui de l'état des lieux — choisir,
+remplir, vérifier, établir — parce que c'est le même geste, et il ne justifiait
+pas un second parcours avec ses propres conventions de retour.
+
+### Ce qui est partagé, et non recopié
+
+Un meuble se constate dans les mêmes termes qu'un mur, et « Photo illisible » ne
+se dit pas de deux façons. Les sept états (`src/domain/etats.ts`), la pastille,
+le plafond de hauteur d'une photo (`src/pdf/constats.ts`), le squelette des
+sections d'un constat (`src/pdf/sections-constat.ts`), la règle des signataires
+(`src/domain/signature.ts`) et le vocabulaire des pièces sont **une seule**
+implémentation. Un inventaire reprend `STYLES_EDL` et n'ajoute que ce qu'il est
+seul à imprimer : la liste légale du mobilier obligatoire, le mobilier pièce par
+pièce, la mise en regard de deux constats, et sa synthèse.
+
+### Deux décisions de fond
+
+**Une quantité non comptée n'est pas un compte.** Le nombre d'exemplaires d'un
+meuble est facultatif, et son absence **bloque** l'établissement du document. Un
+défaut de `1` compterait un meuble que personne n'a compté ; un défaut d'état
+serait un constat inventé. Mais `0` a un sens, et un sens utile : « il n'y en a
+plus ». C'est ainsi qu'un inventaire de sortie signale qu'une chaise a disparu,
+sans aucun vocabulaire d'accusation.
+
+**Un inventaire de sortie ne recopie pas le constat d'entrée.**
+`sortieInventaireDepuisLEntree` reprend les pièces, les meubles, leurs
+identifiants et leurs noms — c'est ce qui permet à `comparerInventaire`
+d'apparier **par identifiant**, jamais par nom ni par rang — et rien d'autre. La
+quantité d'entrée est rendue **à part**, dans `quantitesEntree`, pour que l'écran
+l'affiche à côté d'un champ vide : un rappel se lit, il ne se valide pas. L'état,
+les observations et les photos sont vidés, parce qu'un inventaire de sortie
+constate à nouveau.
+
+`quantitesEntree` est indexé par `cleDeRappel(pieceId, meubleId)`, et non par
+l'identifiant du meuble : les identifiants sont déterministes et **propres à leur
+pièce** (`m1`, `m2`… par pièce), si bien qu'une carte indexée par le seul
+identifiant gardait la dernière quantité lue et l'affichait partout. Mesuré sur
+la liste par défaut d'un appartement : **60 meubles comptés n'en laissaient que
+11**, et le séjour aurait rappelé le compte de la chambre.
+
+### Les deux index de photos
+
+Les deux documents numérotent leurs photos à partir de `ph1`. La mise en regard
+résout donc chaque côté contre **son propre** index (`CoteDePaire` porte le
+sien) : un index commun ferait imprimer la photo de l'entrée dans la colonne
+« Sortie », et le document montrerait le logement d'avant en prétendant montrer
+celui d'après. Rien dans le texte ne le dirait ; seul un banc qui compte les
+pixels peut le voir — `.verif/mesurer-inventaire.py` exige deux teintes
+distinctes, et `.verif/falsifier-inventaire.py` prouve que ce contrôle tombe
+quand on résout le côté entrée contre l'index de la sortie.
+
+### Le mobilier obligatoire
+
+`ELEMENTS_MEUBLE_OBLIGATOIRES` reproduit les onze éléments que la loi énumère
+pour un logement meublé, **y compris leur orthographe** : c'est une citation, et
+le Journal officiel écrit « Etagères » sans accent. `presenceDesElementsObligatoires`
+cherche leurs mots dans les noms de meubles et dit ce que l'inventaire en trouve.
+Un élément non trouvé **ne bloque pas** — le logement n'est peut-être pas loué
+meublé, ou le meuble est rangé ailleurs — mais il est signalé dans le document.
+
+La déclaration « loué meublé » est faite par le bailleur, jamais supposée. Pour un
+inventaire de sortie, c'est celle de l'entrée qui fait foi : c'est elle qui a été
+signée. Une déclaration contraire dans le brouillon de sortie ne se tranche pas en
+silence — l'émission s'arrête et le dit, parce qu'un des deux documents se
+tromperait, et que le choix appartient au bailleur.
+
+### Où il se range
+
+Les deux natures se rangent sous le **même** type de pièce, `inventaire` : c'est
+le champ `type` enregistré dans `donnees` qui dit de laquelle il s'agit, et c'est
+lui que lisent la fiche du logement, l'écran de choix et l'émission d'une sortie.
+Le titre, lui, diffère (`titreDeLInventaire`), si bien que les deux documents
+d'une même location restent distincts dans le dossier.
+
+## La sauvegarde et la restauration
+
+Une sauvegarde est un fichier **chiffré**, protégé par un mot de passe dérivé par
+PBKDF2 (`src/backup/pbkdf2.ts`). Une simple copie de la base SQLite n'en serait
+pas une : elle serait lisible par quiconque met la main sur le téléphone.
+
+Elle contient les données de gestion, les réglages — signature comprise, sans quoi
+les documents suivants ne ressembleraient plus aux précédents — **et les fichiers
+du dossier documentaire**, chiffrés avec le reste : des photos de logement sont
+des données personnelles.
+
+**Le changement de version 1 à 2 est purement additif.** Une sauvegarde ancienne
+se restaure sans fichiers, ce qui est exactement ce qu'elle contenait ; la refuser
+priverait l'utilisateur de ses propres sauvegardes. Le champ `fichiers` est donc
+facultatif, et le contrôle de forme porte sur sa **forme quand il est là**, jamais
+sur sa présence.
+
+Trois décisions valent d'être dites :
+
+- **Le chemin enregistré est relatif** au dossier de l'application. Un chemin
+  absolu change à chaque installation : le restaurer sur un autre téléphone
+  désignerait un dossier qui n'existe pas, et toutes les photos seraient perdues
+  sans que rien ne le dise. La restauration le reconstruit.
+- **Les fichiers sont réécrits après la transaction.** Les écrire avant poserait
+  les fichiers de la sauvegarde dans le dossier de l'installation **actuelle** :
+  si la transaction échouait ensuite, l'utilisateur garderait ses données
+  d'aujourd'hui avec les fichiers d'hier. Dans cet ordre-ci, un échec laisse des
+  lignes sans fichier — ce que `documentsSansFichier` et `piecesSansFichier`
+  savent nommer, et que l'écran affiche.
+- **Un plafond de 64 Mo, et il se dit.** Au-delà, la sauvegarde refuse et
+  l'explique, plutôt que de laisser le téléphone manquer de mémoire au milieu du
+  chiffrement. Un refus annoncé vaut mieux qu'un échec silencieux.
+
+Le comptage des fichiers manquants couvre **les documents et les pièces** : un
+bail signé, un état des lieux ou un inventaire porte lui aussi un `cheminFichier`,
+et un écran qui n'aurait compté que les quittances aurait annoncé une restauration
+complète en laissant des constats sans PDF.
+
 ## Règles de calcul
 
 - **Les montants sont stockés en centimes entiers.** Aucun flottant, donc aucun
@@ -572,6 +692,12 @@ seule fonction pure**, pour être éprouvable sans base de données et sans tél
 | Un document reste rattaché au locataire qui l'a signé, jamais au suivant | `construireDossier` dans `src/domain/dossier.ts` — le rattachement se fait par `bailId`, et une pièce orpheline va sous le bien plutôt que d'être écartée | `tests/dossier.test.ts`, falsifié par `.verif/falsifier-dossier.py` |
 | L'ordre du dossier est la vie de la location, et il est le même partout | `SECTIONS_DU_DOSSIER` dans `src/domain/dossier.ts` | `tests/dossier.test.ts` |
 | Le thème affiché à l'ouverture est celui des réglages par défaut | `COULEUR_PAR_DEFAUT` / `MODE_PAR_DEFAUT` dans `src/ui/palette.ts`, d'où `REGLAGES_PAR_DEFAUT` les tire | `tests/theme.test.ts` |
+| Un meuble décrit sans son état, ou sans son nombre, bloque l'établissement du document | `manquesDeLInventaire` dans `src/domain/inventaire.ts` — relu à l'**émission**, et pas seulement dans le formulaire, pour qu'un brouillon restauré d'une sauvegarde ne passe pas | `tests/inventaire.test.ts` |
+| Un inventaire de sortie ne recopie aucun constat d'entrée | `sortieInventaireDepuisLEntree` dans `src/domain/inventaire.ts` — identifiants et noms repris, quantité rendue **à part**, états et photos vidés | `tests/inventaire.test.ts` |
+| Le rappel d'une quantité désigne un meuble **dans sa pièce**, jamais dans le document | `cleDeRappel` et `quantiteRappelee` dans `src/domain/inventaire.ts` — les identifiants de meubles sont propres à leur pièce | `tests/inventaire.test.ts`, falsifié par `.verif/falsifier-rappel-quantite.py` |
+| Les deux colonnes d'une paire avant / après portent **deux** images, et non deux fois la même | `CoteDePaire` porte son propre index, résolu par `paireEnHtml` dans `src/pdf/sections-constat.ts` | `tests/inventaire-rendu.test.ts`, et la mesure des pixels par `.verif/mesurer-inventaire.py` — falsifié par `.verif/falsifier-inventaire.py` |
+| Une sauvegarde emporte les fichiers eux-mêmes, et se relit sans eux | `VERSION_CONTENU` porté à 2, `rassemblerFichiers` (`src/backup/export.ts`) et `restaurerFichiers` (`src/backup/import.ts`) — champ **facultatif**, chemin **relatif** | `tests/promesses-sauvegarde.test.ts` |
+| Aucun écran de sauvegarde ne promet une régénération que l'application ne fait pas | `app/sauvegarde/export.tsx` et `import.tsx` — l'ancienne phrase « les PDF peuvent être régénérés » est interdite par le contrôle | `tests/promesses-sauvegarde.test.ts` |
 
 Le dépôt en base de `ajouterPeriodeLoyer` ne fait qu'**appliquer** le plan
 calculé par le domaine : la décision est prise ailleurs, et la transaction
@@ -802,13 +928,22 @@ une mutation **vivante** est comptée muette. Mesuré sur les bancs du bail :
 `.verif/falsifier-bail.py` (vingt mutations du domaine),
 `.verif/falsifier-bail-rendu.py` (quatorze du rendu),
 `.verif/falsifier-brouillon.py` (six de la reprise de brouillon),
-`.verif/falsifier-etat-des-lieux.py` (vingt-huit, domaine et rendu) et
+`.verif/falsifier-etat-des-lieux.py` (vingt-huit, domaine et rendu),
+`.verif/falsifier-rappel-quantite.py` (une : le rappel indexé par le seul
+identifiant du meuble) et
 `.verif/falsifier-edl-pagination.py` / `.verif/falsifier-edl-sortie.py` (neuf sur
 les pages réellement imprimées) suivent la même méthode. Chacun écrit sa
 sauvegarde dans `.verif/sauvegardes/` — jamais **à côté de sa source**, où elle
 apparaîtrait dans `git status` comme si elle faisait partie du projet — et
 **prouve la restauration sur les octets**, jamais sur la couleur des tests : une
 source laissée mutée peut rendre les tests verts par chance.
+
+`.verif/falsifier-inventaire.py` va plus loin sur un point : il **imprime** le
+banc deux fois — une fois sur la source saine, une fois sous mutation — et exige
+de la première qu'elle passe, sans quoi « le banc tombe » se confondrait avec
+« le banc ne tourne pas ». Il relit aussi le compte des mesures annoncées :
+`node --test` sort en `0` quand aucun test ne correspond au motif, et un banc qui
+n'a rien mesuré ne doit pas être pris pour un banc qui a tout validé.
 
 ### Ce que seule une page imprimée peut dire
 
@@ -855,6 +990,24 @@ cinq mutations, aucune muette. L'une d'elles — intervertir les deux sections d
 sortie dans `sectionsEdl` — ne touche **pas** les douze sections communes, si
 bien que le contrôle des douze reste vert pendant que celui des quinze tombe :
 c'est ce qui prouve que le second ne double pas le premier.
+
+`.verif/mesurer-inventaire.py` fait le même travail pour l'inventaire du mobilier,
+sur trois témoins — un court, un complet de six pièces et trente-sept meubles, et
+un de sortie. Onze mesures : le plancher de pages du cas complet, le témoin
+négatif du cas court, l'ordre des onze sections d'une entrée **et** des treize
+d'une sortie, la photo qui reste sous son meuble, le portrait sous le plafond de
+hauteur — plafond **lu dans la source**, et non cité de mémoire —, le dernier
+meuble, la dernière signature sur la même feuille que les sources, les réserves,
+et les deux teintes distinctes de la paire avant / après.
+
+`.verif/falsifier-inventaire.py` l'éprouve : la mutation fait résoudre le côté
+entrée contre l'index de la sortie, et le banc tombe — **0 pixel** de la teinte
+« avant », 242 788 de la teinte « après ». Le fichier est restauré **à l'octet**,
+empreinte SHA-256 avant et après, et c'est une leçon : une première version lisait
+et écrivait en texte, si bien que Python traduisait les fins de ligne au retour
+(`\n` → `\r\n`). Le fichier restauré portait 636 retours chariot de plus,
+l'empreinte avait changé, et rien dans le dépôt ne le disait — le fichier étant
+nouveau, `git status` ne voyait qu'un ajout.
 
 `scripts/check-workflows.mjs` valide les flux GitHub avant de pousser : YAML
 analysé, chaque script `run:` passé à `bash -n`, actions épinglées, permissions

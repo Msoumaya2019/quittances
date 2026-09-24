@@ -114,6 +114,26 @@ function Coquille() {
           name="etat-des-lieux/succes"
           options={{ presentation: 'card', animation: 'fade' }}
         />
+        {/* L'inventaire du mobilier suit exactement le parcours de l'état des
+            lieux : choisir, remplir, vérifier, établir. C'est le même geste —
+            on parcourt un logement pièce par pièce — et il ne justifiait pas un
+            second parcours, avec ses propres conventions de retour. */}
+        <Stack.Screen
+          name="inventaire/choisir"
+          options={{ presentation: 'card', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="inventaire/nouveau"
+          options={{ presentation: 'card', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="inventaire/verification"
+          options={{ presentation: 'card', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="inventaire/succes"
+          options={{ presentation: 'card', animation: 'fade' }}
+        />
       </Stack>
     </>
   );

@@ -64,9 +64,9 @@ Pour l'instant, on peut **ranger** un document : un bail signé scanné, un
 diagnostic, une attestation d'assurance, une facture de travaux. L'application
 **copie** le fichier chez elle — il reste lisible même si l'original est
 déplacé ou supprimé — et le range sous le bon logement, sous le bon locataire,
-dans la bonne catégorie. Les **baux** et les **états des lieux**, d'entrée comme de
-sortie, sont désormais **produits** par l'application et viennent s'ajouter au même
-endroit ; les inventaires les y rejoindront.
+dans la bonne catégorie. Les **baux**, les **états des lieux** — d'entrée comme de
+sortie — et les **inventaires du mobilier** sont désormais **produits** par
+l'application et viennent s'ajouter au même endroit.
 
 ### Les baux de location
 
@@ -222,7 +222,9 @@ Points de fond :
   déjà produit.
 - **Mentions légales françaises** incluses dans les documents.
 - **Sauvegarde chiffrée** par mot de passe (AES-256-GCM), exportable et
-  restaurable, entièrement hors ligne. Elle porte aussi le dossier documentaire.
+  restaurable, entièrement hors ligne. Elle porte **les fichiers eux-mêmes** —
+  les PDF, et les photos des états des lieux et des inventaires, qui n'existent
+  nulle part ailleurs — chiffrés avec le reste.
 - **Verrou biométrique** optionnel à l'ouverture.
 - **Rappel mensuel local** pour ne pas oublier d'encaisser, programmé par le
   système du téléphone, sans serveur.
@@ -230,6 +232,46 @@ Points de fond :
   locataires, les paiements, les quittances, les pièces du dossier, les fichiers
   et les préférences, et ramène l'application à son état d'installation. Il faut
   recopier un mot pour la confirmer, et **il n'y a ni corbeille ni annulation**.
+
+### L'inventaire du mobilier
+
+C'est le constat d'une location **meublée**. On part d'un logement — depuis sa
+fiche, **« Inventaire du mobilier d'entrée »** ou **« Inventaire du mobilier de
+sortie »** — ou depuis l'onglet **Documents**, catégorie **Inventaires**. Le
+parcours est le même que celui d'un état des lieux : on choisit, on remplit, on
+vérifie, on établit.
+
+**Le formulaire compte cinq étapes** — le logement, les pièces, le mobilier pièce
+par pièce, les observations, les signatures — et il **s'enregistre tout seul**
+pendant la saisie, photos comprises.
+
+**Chaque meuble reçoit un nombre et un état.** Le nombre est facultatif, et son
+absence **empêche d'établir le document** : compter un meuble que personne n'a
+compté serait un inventaire inventé. Mais **`0` a un sens** — « il n'y en a
+plus » — et c'est ainsi qu'un inventaire de sortie signale qu'une chaise a
+disparu, sans aucun vocabulaire d'accusation. L'état se choisit parmi les mêmes
+sept valeurs que pour un état des lieux.
+
+**Un inventaire de sortie ne recopie pas celui d'entrée.** Il en reprend les
+pièces, les meubles et leurs noms, mais **pas les quantités ni les états** :
+chaque meuble est compté et constaté à nouveau. La quantité relevée à l'entrée
+s'affiche à côté du champ vide, comme **rappel** — un rappel se lit, il ne se
+valide pas. Le raccourci « reprendre les quantités de l'entrée » ne remplit que
+les meubles laissés vides, jamais un comptage déjà fait.
+
+**Le document met les deux constats en regard**, photos avant et après côte à
+côte, et **n'impute rien à personne** : il constate les écarts, et sa section sur
+la vétusté rappelle que l'appréciation d'une responsabilité ne lui appartient
+pas.
+
+**Le mobilier obligatoire d'un logement meublé** — les onze éléments que la loi
+énumère — est imprimé avec ce que l'inventaire en trouve. Un élément non trouvé
+est signalé sans bloquer : le meuble peut être rangé ailleurs, ou porter un autre
+nom. La déclaration « loué meublé » est faite par vous, jamais supposée ; pour une
+sortie, c'est celle de l'entrée qui fait foi, et l'application refuse de la
+contredire en silence.
+
+Le PDF peut être **annexé au bail**.
 
 ## Installer sur Android
 

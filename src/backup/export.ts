@@ -7,9 +7,17 @@
  * réglages, une restauration perdrait le modèle choisi et la signature, et les
  * documents suivants ne seraient plus conformes à ceux d'avant.
  *
+ * Elle contient aussi **les fichiers eux-mêmes**, et c'est un changement de
+ * promesse, décidé par la mesure : les photos d'un état des lieux ou d'un
+ * inventaire n'existent **que** sous forme de fichiers. La base ne porte que
+ * leur chemin. Une sauvegarde sans eux laissait donc un bailleur restaurer son
+ * dossier et découvrir des constats sans images — sans recours, puisque rien ne
+ * les reconstitue.
+ *
  * Le fichier produit est chiffré. Une simple copie de la base SQLite ne serait
  * pas une sauvegarde sûre : elle serait lisible par quiconque met la main sur
- * le téléphone.
+ * le téléphone. Les fichiers sont chiffrés avec le reste, et non joints en
+ * clair : des photos de logement sont des données personnelles.
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
@@ -26,6 +34,7 @@ import { tousLesPaiements } from '@/db/repositories/payments';
 import { tousLesDocuments } from '@/db/repositories/documents';
 import { toutesLesPieces } from '@/db/repositories/pieces';
 import { dateDuJour, maintenantISO } from '@/db/ids';
+import { DOSSIER_DOCUMENTS } from '@/db/reinitialisation';
 import type {
   Bail,
   Document,
@@ -44,8 +53,31 @@ import {
   type EnveloppeSauvegarde,
 } from './crypto';
 
-/** Version du contenu sauvegardé, distincte de la version du format de fichier. */
-export const VERSION_CONTENU = 1;
+/**
+ * Version du contenu sauvegardé, distincte de la version du format de fichier.
+ *
+ * 1 → 2 : les fichiers du dossier documentaire sont joints. Le changement est
+ * **purement additif** — une sauvegarde de version 1 se restaure sans fichiers,
+ * ce qui est exactement ce qu'elle contenait — et le sens de lecture reste le
+ * même : le champ nouveau est facultatif, jamais exigé.
+ */
+export const VERSION_CONTENU = 2;
+
+/**
+ * Un fichier du dossier documentaire, dans la sauvegarde.
+ *
+ * `chemin` est **relatif au dossier de l'application**, et non absolu : le
+ * chemin absolu d'une application change à chaque installation, et une
+ * sauvegarde restaurée sur un autre téléphone ne retrouverait rien. C'est
+ * exactement le piège que la restauration évitait déjà en interrogeant le
+ * fichier plutôt que le chemin.
+ */
+export interface FichierSauvegarde {
+  /** Chemin relatif au dossier de l'application, par exemple `documents/photos/a.jpg`. */
+  chemin: string;
+  /** Le contenu du fichier, encodé en base64. */
+  donnees: string;
+}
 
 /**
  * Contenu d'une sauvegarde, en clair avant chiffrement.
@@ -75,6 +107,12 @@ export interface ContenuSauvegarde {
      * se restaure donc sans pièces, ce qui est exactement ce qu'elle contenait.
      */
     pieces?: PieceDossier[];
+    /**
+     * Les fichiers du dossier documentaire : PDF émis, photos des constats,
+     * documents scannés. Facultatif pour la même raison que `pieces` — une
+     * sauvegarde de version 1 n'en a pas.
+     */
+    fichiers?: FichierSauvegarde[];
     reglages: Reglages;
   };
   /** Décompte, pour afficher ce que contient la sauvegarde avant de restaurer. */
@@ -87,8 +125,25 @@ export interface ContenuSauvegarde {
     paiements: number;
     documents: number;
     pieces?: number;
+    /** Nombre de fichiers joints. */
+    fichiers?: number;
+    /** Poids des fichiers joints, en octets, avant encodage. */
+    octetsFichiers?: number;
   };
 }
+
+/**
+ * Ce que la sauvegarde accepte d'embarquer, en octets de fichiers.
+ *
+ * Un plafond, et il se dit : au-delà, l'application refuse et l'explique, au
+ * lieu de laisser le téléphone manquer de mémoire au milieu du chiffrement. Une
+ * sauvegarde qui échoue en silence serait pire qu'un refus annoncé.
+ *
+ * 64 Mo couvrent largement un dossier réel : plusieurs centaines de photos
+ * compressées, et les PDF qui les accompagnent.
+ */
+export const TAILLE_MAXIMALE_FICHIERS = 64 * 1024 * 1024;
+
 
 /**
  * Rassemble toutes les données de l'application.
@@ -140,12 +195,13 @@ export async function rassemblerDonnees(): Promise<ContenuSauvegarde['donnees']>
 /** Prépare le contenu de sauvegarde, en clair. */
 export async function preparerContenu(): Promise<ContenuSauvegarde> {
   const donnees = await rassemblerDonnees();
+  const fichiers = await rassemblerFichiers();
 
   return {
     version: VERSION_CONTENU,
     creeLe: maintenantISO(),
     application: 'Quittances',
-    donnees,
+    donnees: { ...donnees, fichiers },
     resume: {
       proprietaires: donnees.proprietaires.length,
       logements: donnees.logements.length,
@@ -155,8 +211,88 @@ export async function preparerContenu(): Promise<ContenuSauvegarde> {
       paiements: donnees.paiements.length,
       documents: donnees.documents.length,
       pieces: (donnees.pieces ?? []).length,
+      fichiers: fichiers.length,
+      octetsFichiers: fichiers.reduce(
+        // Le base64 gonfle d'environ un tiers : le décompte annoncé à
+        // l'utilisateur doit être celui des fichiers, pas celui de leur
+        // encodage.
+        (total, f) => total + Math.floor((f.donnees.length * 3) / 4),
+        0,
+      ),
     },
   };
+}
+
+/**
+ * Les fichiers du dossier documentaire, encodés pour la sauvegarde.
+ *
+ * Le parcours est **récursif** : les photos des constats vivent dans
+ * `documents/photos/`, les pièces dans `documents/`. Ne lire que le premier
+ * niveau laisserait les photos de côté, et c'est précisément ce qu'on ne peut
+ * pas reconstituer.
+ *
+ * Le dossier des sauvegardes n'est jamais parcouru : il vit à côté, et
+ * l'embarquer ferait entrer une sauvegarde dans la suivante.
+ *
+ * Lève quand le dossier dépasse le plafond, avec une phrase qui dit quoi faire.
+ * Un refus annoncé vaut mieux qu'un manque de mémoire au milieu du chiffrement.
+ */
+export async function rassemblerFichiers(): Promise<FichierSauvegarde[]> {
+  const racine = `${FileSystem.documentDirectory}${DOSSIER_DOCUMENTS}`;
+  const info = await FileSystem.getInfoAsync(racine);
+  if (!info.exists) return [];
+
+  const fichiers: FichierSauvegarde[] = [];
+  let octets = 0;
+
+  const parcourir = async (dossier: string): Promise<void> => {
+    let noms: string[];
+    try {
+      noms = await FileSystem.readDirectoryAsync(dossier);
+    } catch {
+      // Un sous-dossier illisible ne doit pas faire échouer toute la
+      // sauvegarde : ce qui est lisible est sauvegardé, et le reste est signalé
+      // par son absence au moment de la restauration.
+      return;
+    }
+
+    for (const nom of noms) {
+      const chemin = `${dossier}${nom}`;
+      // `getInfoAsync` rend la taille d'un fichier sans qu'on la demande : la
+      // seule option qu'il connaisse est l'empreinte MD5.
+      const fiche = await FileSystem.getInfoAsync(chemin);
+      if (!fiche.exists) continue;
+      if (fiche.isDirectory) {
+        await parcourir(`${chemin}/`);
+        continue;
+      }
+
+      octets += fiche.size ?? 0;
+      if (octets > TAILLE_MAXIMALE_FICHIERS) {
+        throw new ErreurSauvegarde(
+          `Le dossier documentaire dépasse ${Math.floor(
+            TAILLE_MAXIMALE_FICHIERS / (1024 * 1024),
+          )} Mo, ce que cette sauvegarde ne peut pas embarquer d’un coup. ` +
+            'Rangez ou déplacez les documents les plus anciens depuis la fiche du logement, ' +
+            'puis relancez la sauvegarde.',
+        );
+      }
+
+      const donnees = await FileSystem.readAsStringAsync(chemin, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      // Le chemin enregistré est relatif au dossier de l'application : le
+      // chemin absolu change à chaque installation, et le restaurer tel quel
+      // désignerait un dossier qui n'existe pas sur l'autre téléphone.
+      fichiers.push({
+        chemin: chemin.slice(FileSystem.documentDirectory!.length),
+        donnees,
+      });
+    }
+  };
+
+  await parcourir(`${racine}/`);
+  return fichiers;
 }
 
 /** Dossier des sauvegardes, dans le stockage de l'application. */
