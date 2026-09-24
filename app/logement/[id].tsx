@@ -405,7 +405,20 @@ export default function EcranLogement() {
                   onPress={() =>
                     router.push({
                       pathname: '/etat-des-lieux/nouveau',
-                      params: { logementId: logement.id },
+                      params: { logementId: logement.id, type: 'entree' },
+                    })
+                  }
+                />
+                {/* La sortie se compare à l'entrée : le formulaire la retrouve
+                    tout seul, et refuse de s'ouvrir s'il n'y en a pas. Le dire
+                    ici évite d'ouvrir un écran pour n'y lire qu'un refus. */}
+                <Bouton
+                  libelle="État des lieux de sortie"
+                  variante="secondaire"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/etat-des-lieux/nouveau',
+                      params: { logementId: logement.id, type: 'sortie' },
                     })
                   }
                 />

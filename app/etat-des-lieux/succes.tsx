@@ -186,6 +186,13 @@ export default function EcranSuccesEtatDesLieux() {
                     libelle="Signatures recueillies"
                     valeur={String(donnees.signatures.length)}
                   />
+                  {donnees.type === 'sortie' ? (
+                    <LigneDetail
+                      libelle="Évolutions constatées"
+                      valeur={String(donnees.evolutions)}
+                      accentuee
+                    />
+                  ) : null}
                 </>
               ) : null}
               <Text style={styles.note}>

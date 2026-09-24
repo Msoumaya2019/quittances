@@ -33,20 +33,23 @@ import {
   trouverLogement,
 } from '../db/repositories/properties';
 import { trouverProprietaire } from '../db/repositories/owners';
-import { enregistrerPiece } from '../db/repositories/pieces';
+import { enregistrerPiece, trouverPiece } from '../db/repositories/pieces';
 import { supprimerBrouillon } from '../db/repositories/brouillons';
 import { lireReglages } from '../db/repositories/settings';
 import { aujourdHui, depuisCle } from '../domain/period';
 import { periodeLoyerApplicable } from '../domain/rent';
+import { analyserDonnees, brouillonDeLEdl } from '../domain/brouillon';
 import {
   LIBELLE_TYPE_EDL,
   avertissementsDeLEdl,
+  comparerEdl,
   manquesDeLEdl,
+  reprendreBrouillonEdl,
   signatairesAttendusDeLEdl,
   syntheseEdl,
   titreDeLEdl,
 } from '../domain/etat-des-lieux';
-import type { BrouillonEdl, TypeEdl } from '../domain/etat-des-lieux';
+import type { BrouillonEdl, PieceEdl, ReleveCompteur, TypeEdl } from '../domain/etat-des-lieux';
 import type { Signature } from '../domain/signature';
 import type { PieceDossier, TypePiece } from '../domain/types';
 import { contenuEdlDepuis, rendreEtatDesLieux } from './etat-des-lieux';
@@ -85,6 +88,11 @@ export interface DonneesEdl {
   reserves: string[];
   /** Pour une sortie : la date de l'état des lieux d'entrée. */
   dateEntree: string | null;
+  /** Pour une sortie : la pièce d'entrée comparée, et le nombre d'évolutions. */
+  entreeId: string | null;
+  evolutions: number;
+  /** L'adresse du nouveau domicile du locataire, telle qu'elle a été imprimée. */
+  nouveauDomicile: string | null;
   etabliLe: string;
 }
 
@@ -100,13 +108,22 @@ export interface EdlEmis {
  * document doit pouvoir dire « cette photo existe mais je ne sais plus la
  * lire ». Les confondre ferait disparaître la mention, et le lecteur croirait
  * qu'aucune photo n'avait été prise.
+ *
+ * La source est décrite par sa seule forme — des pièces et des compteurs — et
+ * non par un brouillon entier : l'émission d'un état des lieux de sortie relit
+ * ainsi, avec **la même fonction**, les photos de l'entrée et celles de la
+ * sortie. Deux lectures séparées finiraient par traiter différemment une photo
+ * illisible, et le « avant » du document ne serait plus comparable au « après ».
  */
-async function chargerPhotos(brouillon: BrouillonEdl): Promise<PhotosEdl> {
+async function chargerPhotos(source: {
+  pieces?: BrouillonEdl['pieces'];
+  compteurs?: BrouillonEdl['compteurs'];
+}): Promise<PhotosEdl> {
   const photos: PhotosEdl = {};
   const aLire: { id: string; chemin: string; legende: string; largeur?: number; hauteur?: number }[] =
     [];
 
-  for (const piece of brouillon.pieces ?? []) {
+  for (const piece of source.pieces ?? []) {
     for (const p of piece.photos) {
       aLire.push({ id: p.id, chemin: p.chemin, legende: p.legende, largeur: p.largeur, hauteur: p.hauteur });
     }
@@ -116,7 +133,7 @@ async function chargerPhotos(brouillon: BrouillonEdl): Promise<PhotosEdl> {
       }
     }
   }
-  for (const compteur of brouillon.compteurs ?? []) {
+  for (const compteur of source.compteurs ?? []) {
     if (compteur.photo) {
       aLire.push({
         id: compteur.photo.id,
@@ -145,6 +162,61 @@ async function chargerPhotos(brouillon: BrouillonEdl): Promise<PhotosEdl> {
   }
 
   return photos;
+}
+
+/**
+ * Relit l'état des lieux d'entrée auquel une sortie se compare.
+ *
+ * Rend `null` — et non une comparaison vide — quand le contenu de l'entrée n'a
+ * pas été conservé sous forme structurée. Un état des lieux rangé par une
+ * version antérieure n'a qu'un PDF : ses pièces ne sont pas lisibles, et
+ * imprimer « aucun élément n'a évolué » serait une affirmation que rien ne
+ * fonde. Le document dit alors qu'il renvoie à l'autre, ce qui est vrai.
+ *
+ * Lève quand la pièce nommée n'existe plus : se rabattre en silence sur un
+ * autre état des lieux d'entrée ferait comparer la sortie d'un locataire à
+ * l'entrée d'un autre, et le document affirmerait une évolution qui n'a jamais
+ * eu lieu.
+ */
+async function lireLEntree(
+  logementId: string,
+  entreeId: string | undefined,
+  dateEntree: string | undefined,
+): Promise<{ pieces: PieceEdl[]; compteurs: ReleveCompteur[] } | null> {
+  if (!entreeId) return null;
+
+  const entree = await trouverPiece(entreeId);
+  if (!entree || entree.logementId !== logementId) {
+    throw new ErreurEmission(
+      "L'état des lieux d'entrée auquel celui-ci se compare est introuvable. " +
+        'Il a peut-être été supprimé : reprenez la sortie et désignez-le à nouveau.',
+    );
+  }
+  if (entree.type !== 'edl_entree') {
+    throw new ErreurEmission(
+      "L'état des lieux désigné comme référence n'est pas un état des lieux d'entrée. " +
+        'Un état des lieux de sortie se compare à une entrée, pas à une autre sortie.',
+    );
+  }
+  if (dateEntree && entree.dateDocument !== dateEntree) {
+    throw new ErreurEmission(
+      `L'état des lieux d'entrée enregistré porte la date du ${entree.dateDocument}, ` +
+        `et non celle du ${dateEntree} que ce brouillon annonce. Reprenez la sortie : ` +
+        'le document doit nommer la date qu’il compare.',
+    );
+  }
+
+  const donnees = analyserDonnees(entree.donnees);
+  if (!Array.isArray(donnees.pieces)) return null;
+
+  const lues = reprendreBrouillonEdl(donnees, {
+    logementId,
+    bailId: '',
+    type: 'entree',
+    pieces: [],
+  });
+
+  return { pieces: lues.pieces ?? [], compteurs: lues.compteurs ?? [] };
 }
 
 /**
@@ -235,6 +307,23 @@ export async function emettreEtatDesLieux(params: {
   // --- 4. Les photos ------------------------------------------------------
   const photos = await chargerPhotos(brouillon);
 
+  // --- 4 bis. La comparaison, pour une sortie ------------------------------
+  // L'état des lieux d'entrée est relu ici, et non par l'écran : un document
+  // doit se comparer à ce que la base porte réellement, même si l'écran qui l'a
+  // préparé a été fermé entre-temps. Ses photos sont chargées par la **même**
+  // fonction que celles de la sortie, dans un index séparé : les deux documents
+  // numérotent leurs photos à partir de `ph1`, et un index commun ferait
+  // imprimer la photo de l'entrée à la place de celle de la sortie.
+  let comparaison: ReturnType<typeof comparerEdl> | undefined;
+  let photosEntree: PhotosEdl | undefined;
+  if (brouillon.type === 'sortie') {
+    const entree = await lireLEntree(logement.id, brouillon.entreeId, brouillon.dateEntree);
+    if (entree) {
+      comparaison = comparerEdl(entree.pieces, brouillon.pieces ?? []);
+      photosEntree = await chargerPhotos({ pieces: entree.pieces, compteurs: entree.compteurs });
+    }
+  }
+
   // --- 5. L'assemblage ---------------------------------------------------
   const contenu = contenuEdlDepuis({
     type: brouillon.type,
@@ -269,7 +358,9 @@ export async function emettreEtatDesLieux(params: {
     compteursIndividuels: brouillon.compteursIndividuels,
     dateEntree: brouillon.dateEntree,
     nouveauDomicile: brouillon.nouveauDomicile,
+    comparaison,
     photos,
+    photosEntree,
     reserves,
   });
 
@@ -328,6 +419,9 @@ export async function emettreEtatDesLieux(params: {
     synthese: syntheseEdl(brouillon),
     reserves,
     dateEntree: brouillon.dateEntree ?? null,
+    entreeId: brouillon.entreeId ?? null,
+    evolutions: comparaison?.evolutions ?? 0,
+    nouveauDomicile: brouillon.nouveauDomicile?.trim() ? brouillon.nouveauDomicile : null,
     etabliLe,
   };
 
@@ -354,8 +448,10 @@ export async function emettreEtatDesLieux(params: {
 
   // Le brouillon a abouti : le laisser ferait proposer de reprendre un travail
   // terminé. Son retrait vient en dernier — si une étape précédente échoue, le
-  // bailleur doit retrouver sa saisie.
-  await supprimerBrouillon(logement.id, 'etat_des_lieux');
+  // bailleur doit retrouver sa saisie. Le type est celui de la **nature** du
+  // document : une entrée et une sortie ont deux brouillons distincts, et
+  // effacer le mauvais ferait disparaître une saisie que personne n'a terminée.
+  await supprimerBrouillon(logement.id, brouillonDeLEdl(contenu.type));
 
   return { piece, donnees };
 }

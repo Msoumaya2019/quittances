@@ -1,33 +1,41 @@
 /**
- * Faire un état des lieux : choisir le logement.
+ * Faire un état des lieux : choisir le logement, et la nature du document.
  *
  * Depuis l'onglet DOCUMENTS, on ne part pas d'un logement mais d'un besoin —
  * « je veux faire un état des lieux ». Il faut donc d'abord désigner les lieux,
  * et cet écran le fait en une liste.
  *
- * Il ne montre que les logements **qui peuvent recevoir un état des lieux** :
- * ceux dont la location est en cours, donc avec un locataire nommé. Un état des
- * lieux constate l'état d'un logement **pour quelqu'un** : sans locataire, il
- * ne constate rien pour personne. Les logements sans locataire ne sont pas
- * filtrés en silence — ils sont listés à part, avec la raison et le geste qui
- * débloque, parce qu'une liste filtrée ferait croire que le logement a disparu.
+ * Il ne montre que les logements **qui peuvent recevoir l'état des lieux
+ * demandé**. Pour une entrée : ceux dont la location est en cours, donc avec un
+ * locataire nommé — un état des lieux constate l'état d'un logement **pour
+ * quelqu'un**, et sans locataire il ne constate rien pour personne. Pour une
+ * sortie, il faut en plus qu'un état des lieux d'entrée existe : c'est à lui
+ * que la sortie se compare, et le domaine refuse d'établir une sortie qui ne
+ * nomme pas son entrée. Les logements écartés ne disparaissent pas en silence :
+ * ils sont listés à part, avec la raison et le geste qui débloque, parce qu'une
+ * liste filtrée ferait croire que le logement a disparu.
  *
  * Cet écran ne fabrique rien : il désigne. Le formulaire guidé en six étapes
  * prend le relais, et il reprend du logement tout ce qui est déjà enregistré —
- * adresse, propriétaire, locataire, loyer.
+ * adresse, propriétaire, locataire, loyer — et, pour une sortie, les pièces,
+ * les compteurs et les clés de l'entrée.
  */
 
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
-import { BandeauMessage, Carte, EcranVide, EnTeteEcran } from '@/ui/components';
+import { BandeauMessage, Carte, EcranVide, EnTeteEcran, Segments } from '@/ui/components';
 import { espaces, rayons, typographie } from '@/ui/tokens';
 import { adresseEnLignes, nomComplet } from '@/domain/types';
-import type { Bail, Logement, TitulaireBail } from '@/domain/types';
+import type { Bail, Logement, PieceDossier, TitulaireBail } from '@/domain/types';
 import { LIBELLE_TYPE_EDL } from '@/domain/etat-des-lieux';
+import type { TypeEdl } from '@/domain/etat-des-lieux';
+import { brouillonDeLEdl } from '@/domain/brouillon';
+import { formaterDateFr } from '@/domain/period';
 import { lireBrouillon } from '@/db/repositories/brouillons';
+import { piecesDuLogement } from '@/db/repositories/pieces';
 import {
   bailEnCours,
   listerLogements,
@@ -40,14 +48,31 @@ interface Ligne {
   logement: Logement;
   bail: Bail | null;
   titulaires: TitulaireBail[];
-  /** Vrai quand un brouillon d'état des lieux attend d'être repris. */
+  /** Le plus récent état des lieux d'entrée, pour une sortie. */
+  entree: PieceDossier | null;
+  /** Vrai quand un brouillon attend d'être repris, pour la nature demandée. */
   enCours: boolean;
+}
+
+/** Pourquoi ce logement ne peut pas recevoir l'état des lieux demandé. */
+function raisonDuRefus(l: Ligne, type: TypeEdl): string | null {
+  if (!l.bail || l.titulaires.length === 0) {
+    return 'Aucun locataire en place';
+  }
+  if (type === 'sortie' && !l.entree) {
+    return "Aucun état des lieux d'entrée";
+  }
+  return null;
 }
 
 export default function EcranChoisirLogementEtatDesLieux() {
   const styles = useStyles(creerStyles);
   const insets = useSafeAreaInsets();
   const { cleRafraichissement } = useApplication();
+
+  const params = useLocalSearchParams<{ type?: string }>();
+  const typeInitial: TypeEdl = params.type === 'sortie' ? 'sortie' : 'entree';
+  const [type, setType] = useState<TypeEdl>(typeInitial);
 
   const [lignes, setLignes] = useState<Ligne[]>([]);
   const [chargement, setChargement] = useState(true);
@@ -59,11 +84,23 @@ export default function EcranChoisirLogementEtatDesLieux() {
       const lues = await Promise.all(
         logements.map(async (logement) => {
           const bail = await bailEnCours(logement.id);
-          const [titulaires, brouillon] = await Promise.all([
+          const [titulaires, pieces, brouillonEntree, brouillonSortie] = await Promise.all([
             bail ? titulairesDuBail(bail.id) : Promise.resolve([]),
-            lireBrouillon(logement.id, 'etat_des_lieux'),
+            piecesDuLogement(logement.id),
+            lireBrouillon(logement.id, brouillonDeLEdl('entree')),
+            lireBrouillon(logement.id, brouillonDeLEdl('sortie')),
           ]);
-          return { logement, bail, titulaires, enCours: brouillon !== null };
+          // Les pièces sont rendues du plus récent au plus ancien : la première
+          // entrée est bien la dernière en date, et c'est celle à laquelle une
+          // sortie doit se comparer.
+          const entree = pieces.find((p) => p.type === 'edl_entree') ?? null;
+          return {
+            logement,
+            bail,
+            titulaires,
+            entree,
+            enCours: brouillonEntree !== null || brouillonSortie !== null,
+          };
         }),
       );
       setLignes(lues);
@@ -81,16 +118,30 @@ export default function EcranChoisirLogementEtatDesLieux() {
     }, [charger, cleRafraichissement]),
   );
 
-  // Un état des lieux nomme le locataire : seuls les logements dont la location
-  // est en cours peuvent en recevoir un.
-  const prets = useMemo(
-    () => lignes.filter((l) => l.bail !== null && l.titulaires.length > 0),
-    [lignes],
-  );
+  const prets = useMemo(() => lignes.filter((l) => raisonDuRefus(l, type) === null), [lignes, type]);
   const incomplets = useMemo(
-    () => lignes.filter((l) => l.bail === null || l.titulaires.length === 0),
-    [lignes],
+    () =>
+      lignes
+        .map((l) => ({ ligne: l, raison: raisonDuRefus(l, type) }))
+        .filter((x): x is { ligne: Ligne; raison: string } => x.raison !== null),
+    [lignes, type],
   );
+
+  /** Le geste qui débloque un logement écarté. */
+  function debloquer(l: Ligne) {
+    if (!l.bail || l.titulaires.length === 0) {
+      router.push({
+        pathname: '/logement/[id]/locataires',
+        params: { id: l.logement.id },
+      });
+      return;
+    }
+    // Il manque l'état des lieux d'entrée : c'est lui qu'on va faire.
+    router.push({
+      pathname: '/etat-des-lieux/nouveau',
+      params: { logementId: l.logement.id, type: 'entree' },
+    });
+  }
 
   return (
     <View style={styles.plein}>
@@ -102,10 +153,19 @@ export default function EcranChoisirLogementEtatDesLieux() {
         showsVerticalScrollIndicator={false}
       >
         <EnTeteEcran
-          titre={LIBELLE_TYPE_EDL.entree}
+          titre={LIBELLE_TYPE_EDL[type]}
           sousTitre="Choisissez le logement"
           actionLibelle="Fermer"
           actionOnPress={() => router.back()}
+        />
+
+        <Segments
+          segments={[
+            { valeur: 'entree', libelle: "Entrée" },
+            { valeur: 'sortie', libelle: 'Sortie' },
+          ]}
+          valeur={type}
+          onChanger={(valeur) => setType(valeur === 'sortie' ? 'sortie' : 'entree')}
         />
 
         {erreur ? (
@@ -131,9 +191,14 @@ export default function EcranChoisirLogementEtatDesLieux() {
                   {prets.length > 1 ? 's' : ''}
                 </Text>
                 <Text style={styles.aide}>
-                  L’état des lieux reprendra l’adresse, le propriétaire, les locataires et le loyer
-                  sans que vous ayez à les ressaisir. Les pièces et leurs éléments sont proposés par
-                  défaut, et vous pourrez les modifier.
+                  {type === 'entree'
+                    ? 'L’état des lieux reprendra l’adresse, le propriétaire, les locataires et le ' +
+                      'loyer sans que vous ayez à les ressaisir. Les pièces et leurs éléments sont ' +
+                      'proposés par défaut, et vous pourrez les modifier.'
+                    : 'L’état des lieux de sortie reprendra les pièces, les compteurs et les clés de ' +
+                      'l’état des lieux d’entrée, et mettra les deux constats en regard — photos ' +
+                      'avant et après comprises. Les états relevés à l’entrée ne sont pas recopiés : ' +
+                      'chaque élément est constaté à nouveau.'}
                 </Text>
 
                 {prets.map((l) => (
@@ -142,11 +207,13 @@ export default function EcranChoisirLogementEtatDesLieux() {
                     onPress={() =>
                       router.push({
                         pathname: '/etat-des-lieux/nouveau',
-                        params: { logementId: l.logement.id },
+                        params: { logementId: l.logement.id, type },
                       })
                     }
                     accessibilityRole="button"
-                    accessibilityLabel={`Faire l’état des lieux du logement ${l.logement.nom}`}
+                    accessibilityLabel={`Faire l’${LIBELLE_TYPE_EDL[
+                      type
+                    ].toLowerCase()} du logement ${l.logement.nom}`}
                     accessibilityHint="Ouvre le formulaire guidé en six étapes."
                     style={({ pressed }) => [styles.ligne, pressed && styles.ligneAppuyee]}
                   >
@@ -160,10 +227,13 @@ export default function EcranChoisirLogementEtatDesLieux() {
                       <Text style={[typographie.petit, styles.detail]}>
                         {adresseEnLignes(l.logement).slice(-1)[0]}
                       </Text>
+                      {type === 'sortie' && l.entree ? (
+                        <Text style={[typographie.petit, styles.detail]}>
+                          Comparé à l’entrée du {formaterDateFr(l.entree.dateDocument)}
+                        </Text>
+                      ) : null}
                     </View>
-                    {l.enCours ? (
-                      <Text style={styles.reprise}>Brouillon en cours</Text>
-                    ) : null}
+                    {l.enCours ? <Text style={styles.reprise}>Brouillon en cours</Text> : null}
                   </Pressable>
                 ))}
               </Carte>
@@ -171,31 +241,33 @@ export default function EcranChoisirLogementEtatDesLieux() {
 
             {incomplets.length > 0 ? (
               <Carte>
-                <Text style={styles.section}>Sans locataire en place</Text>
+                <Text style={styles.section}>Logements indisponibles</Text>
                 <Text style={styles.aide}>
-                  Un état des lieux constate l’état du logement pour les personnes qui l’occupent.
-                  Ces logements n’ont pas de location en cours : enregistrez le locataire, puis
-                  l’état des lieux reprendra son identité.
+                  {type === 'entree'
+                    ? 'Un état des lieux constate l’état du logement pour les personnes qui ' +
+                      'l’occupent. Ces logements n’ont pas de location en cours : enregistrez le ' +
+                      'locataire, puis l’état des lieux reprendra son identité.'
+                    : 'Un état des lieux de sortie se compare à celui d’entrée. Ces logements n’en ' +
+                      'ont pas : faites d’abord l’état des lieux d’entrée, et la sortie s’y ' +
+                      'comparera élément par élément.'}
                 </Text>
-                {incomplets.map((l) => (
+                {incomplets.map(({ ligne, raison }) => (
                   <Pressable
-                    key={l.logement.id}
-                    onPress={() =>
-                      router.push({
-                        pathname: '/logement/[id]/locataires',
-                        params: { id: l.logement.id },
-                      })
-                    }
+                    key={ligne.logement.id}
+                    onPress={() => debloquer(ligne)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Ajouter un locataire au logement ${l.logement.nom}`}
+                    accessibilityLabel={`${raison} pour le logement ${ligne.logement.nom}`}
                     style={({ pressed }) => [styles.ligne, pressed && styles.ligneAppuyee]}
                   >
                     <View style={styles.textes}>
                       <Text style={[typographie.corpsAppuye, styles.titre]}>
-                        {l.logement.nom}
+                        {ligne.logement.nom}
                       </Text>
-                      <Text style={[typographie.petit, styles.detail]}>
-                        Ajouter un locataire
+                      <Text style={[typographie.petit, styles.detail]}>{raison}</Text>
+                      <Text style={[typographie.petit, styles.geste]}>
+                        {ligne.bail && ligne.titulaires.length > 0
+                          ? "Faire l’état des lieux d’entrée"
+                          : 'Ajouter un locataire'}
                       </Text>
                     </View>
                   </Pressable>
@@ -256,6 +328,9 @@ const creerStyles = (couleurs: Couleurs) =>
     },
     detail: {
       color: couleurs.texteSecondaire,
+    },
+    geste: {
+      color: couleurs.accentFonce,
     },
     reprise: {
       ...typographie.minuscule,

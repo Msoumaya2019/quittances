@@ -45,6 +45,7 @@ import {
 import { espaces, rayons, tailles, typographie } from '@/ui/tokens';
 import { aujourdHui, formaterDateFr } from '@/domain/period';
 import { adresseEnLignes, nomComplet } from '@/domain/types';
+import type { PieceDossier } from '@/domain/types';
 import {
   COMPTEURS,
   ETAPES_EDL,
@@ -52,9 +53,12 @@ import {
   LIBELLE_TYPE_EDL,
   ajouterElement,
   ajouterPhoto,
+  ajouterPhotoDePiece,
   avertissementsDeLEdl,
   etapePrecedenteEdl,
   etapeSuivanteEdl,
+  identifiantsDePhotos,
+  libelleEtat,
   manquesDeLEdl,
   manquesDeLEtapeEdl,
   numeroEtapeEdl,
@@ -62,6 +66,7 @@ import {
   piecesInitiales,
   premierePieceARenseigner,
   reprendreBrouillonEdl,
+  sortieDepuisLEntree,
   syntheseEdl,
   toutEnBonEtat,
   viderEtats,
@@ -75,13 +80,15 @@ import type {
   PieceEdl,
   ReleveCompteur,
   TypeCompteur,
+  TypeEdl,
 } from '@/domain/etat-des-lieux';
 import type { Signature } from '@/domain/signature';
-import { analyserDonnees, brouillonRecent } from '@/domain/brouillon';
+import { analyserDonnees, brouillonDeLEdl, brouillonRecent } from '@/domain/brouillon';
 import { traceEnDataUri } from '@/pdf/bail';
 import { formatMontant } from '@/domain/money';
 import { useApplication } from '@/state/ApplicationContext';
 import { enregistrerBrouillon, lireBrouillon } from '@/db/repositories/brouillons';
+import { piecesDuLogement } from '@/db/repositories/pieces';
 import { chargerContexteBail, type ContexteBail } from '@/documents/bail-contexte';
 import { choisirPhoto, estRefus, prendrePhoto } from '@/documents/photos';
 import { useStyles, type Couleurs } from '@/ui/theme';
@@ -94,14 +101,29 @@ export default function EcranNouvelEtatDesLieux() {
   const insets = useSafeAreaInsets();
   const { rafraichir } = useApplication();
 
-  const params = useLocalSearchParams<{ logementId?: string }>();
+  const params = useLocalSearchParams<{ logementId?: string; type?: string }>();
   const logementId = typeof params.logementId === 'string' ? params.logementId : null;
+  // La nature du document est **donnée** par l'écran qui ouvre celui-ci, et
+  // jamais devinée : c'est elle qui décide des sections imprimées, du brouillon
+  // repris, et de la comparaison à établir.
+  const type: TypeEdl = params.type === 'sortie' ? 'sortie' : 'entree';
+  const typeBrouillon = brouillonDeLEdl(type);
 
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [avertissement, setAvertissement] = useState<string | null>(null);
   const [contexte, setContexte] = useState<ContexteBail | null>(null);
   const [brouillon, setBrouillon] = useState<BrouillonEdl | null>(null);
+  /**
+   * Les pièces de l'état des lieux d'entrée, pour une sortie.
+   *
+   * Elles servent à deux choses, et à rien d'autre : afficher l'état relevé à
+   * l'entrée en regard de celui qu'on relève, et empêcher qu'un élément ajouté
+   * reprenne l'identifiant d'un élément de l'entrée retiré entre-temps — ce qui
+   * apparierait deux choses différentes dans le document comparatif.
+   */
+  const [entreePieces, setEntreePieces] = useState<PieceEdl[] | null>(null);
+  const [entreeDate, setEntreeDate] = useState<string | null>(null);
   const [etape, setEtape] = useState<EtapeEdl>('logement');
   const [reprisLe, setReprisLe] = useState<string | null>(null);
   const [pieceActive, setPieceActive] = useState(0);
@@ -128,29 +150,85 @@ export default function EcranNouvelEtatDesLieux() {
       try {
         const charge = await chargerContexteBail(logementId);
 
+        // Pour une sortie, l'état des lieux d'entrée est lu **avant** de
+        // construire le socle : les pièces, les compteurs et les clés en
+        // viennent. C'est ce qui évite au bailleur de ressaisir un logement
+        // qu'il a déjà décrit, et c'est aussi ce qui rend la comparaison
+        // possible — les deux documents partagent alors les mêmes
+        // identifiants, et l'appariement se fait par égalité.
+        let entree: PieceDossier | null = null;
+        let lueEntree: BrouillonEdl | null = null;
+        if (type === 'sortie') {
+          const pieces = await piecesDuLogement(charge.logement.id);
+          // Les pièces sont rendues de la plus récente à la plus ancienne :
+          // la première entrée est la dernière en date.
+          entree = pieces.find((p) => p.type === 'edl_entree') ?? null;
+          if (!entree) {
+            throw new Error(
+              "Ce logement n'a pas d'état des lieux d'entrée. Une sortie se compare à une " +
+                "entrée : faites d'abord l'état des lieux d'entrée, et la sortie reprendra " +
+                'ensuite ses pièces, ses compteurs et ses clés.',
+            );
+          }
+
+          lueEntree = reprendreBrouillonEdl(analyserDonnees(entree.donnees), {
+            logementId: charge.logement.id,
+            bailId: charge.bail?.id ?? '',
+            type: 'entree',
+            pieces: [],
+          });
+
+          if (!lueEntree.pieces || lueEntree.pieces.length === 0) {
+            // Un état des lieux rangé par une version antérieure n'a qu'un PDF :
+            // ses pièces ne sont pas lisibles. Repartir d'une liste par défaut
+            // donnerait une comparaison vide, c'est-à-dire un document qui
+            // affirme que rien n'a changé. Le dire est plus honnête.
+            throw new Error(
+              "L'état des lieux d'entrée de ce logement ne contient pas le détail de ses " +
+                'pièces : il a été rangé par une version antérieure de l’application, qui ne ' +
+                'conservait que le PDF. Une sortie ne peut pas s’y comparer. Refaites un état ' +
+                'des lieux d’entrée, ou rangez la sortie comme un autre document.',
+            );
+          }
+        }
+
+        const derive = lueEntree
+          ? sortieDepuisLEntree({
+              pieces: lueEntree.pieces,
+              compteurs: lueEntree.compteurs,
+              cles: lueEntree.cles,
+            })
+          : null;
+
         // Le socle : ce que la location porte déjà. Un brouillon repris ne peut
         // pas le contredire, il ne peut que le compléter.
         const base: BrouillonEdl = {
           logementId: charge.logement.id,
           bailId: charge.bail?.id ?? '',
-          type: 'entree',
+          type,
           dateEdl: aujourdHui(),
-          pieces: piecesInitiales(charge.logement.type),
-          compteurs: [],
-          cles: [],
+          pieces: derive ? derive.pieces : piecesInitiales(charge.logement.type),
+          compteurs: derive ? derive.compteurs : [],
+          cles: derive ? derive.cles : [],
           observations: '',
           mandataire: '',
-          compteursIndividuels: undefined,
+          // Une installation individuelle déclarée à l'entrée l'est toujours à
+          // la sortie : c'est le même logement, et la déclaration vient de lui.
+          compteursIndividuels: lueEntree?.compteursIndividuels,
           signatures: [],
+          entreeId: entree?.id,
+          dateEntree: entree?.dateDocument,
         };
 
-        const enregistre = await lireBrouillon(charge.logement.id, 'etat_des_lieux');
+        const enregistre = await lireBrouillon(charge.logement.id, typeBrouillon);
         const repris = enregistre
           ? reprendreBrouillonEdl(analyserDonnees(JSON.stringify(enregistre.donnees)), base)
           : base;
 
         if (!actif) return;
         setContexte(charge);
+        setEntreePieces(lueEntree?.pieces ?? null);
+        setEntreeDate(entree?.dateDocument ?? null);
         setBrouillon(repris);
 
         if (enregistre && brouillonRecent(enregistre.majLe, aujourdHui())) {
@@ -174,7 +252,7 @@ export default function EcranNouvelEtatDesLieux() {
     return () => {
       actif = false;
     };
-  }, [logementId]);
+  }, [logementId, type, typeBrouillon]);
 
   // -------------------------------------------------------------------------
   // Enregistrement automatique
@@ -189,7 +267,7 @@ export default function EcranNouvelEtatDesLieux() {
     try {
       await enregistrerBrouillon({
         logementId,
-        type: 'etat_des_lieux',
+        type: typeBrouillon,
         etape: enAttente.e,
         donnees: enAttente.b,
       });
@@ -203,7 +281,7 @@ export default function EcranNouvelEtatDesLieux() {
           'quittez cet écran ; réessayez dans un instant.',
       );
     }
-  }, [logementId]);
+  }, [logementId, typeBrouillon]);
 
   useEffect(() => {
     if (!brouillon) return;
@@ -257,6 +335,22 @@ export default function EcranNouvelEtatDesLieux() {
     return liste;
   }, [contexte]);
 
+  /**
+   * L'état relevé à l'entrée, par pièce et par élément.
+   *
+   * La clé mêle l'identifiant de la pièce et celui de l'élément : les
+   * identifiants d'éléments sont locaux à leur pièce — `e1` existe dans
+   * plusieurs pièces — et une clé qui n'utiliserait que l'identifiant de
+   * l'élément ferait lire l'état d'une autre pièce.
+   */
+  const etatsEntree = useMemo(() => {
+    const map = new Map<string, EtatElement | undefined>();
+    for (const p of entreePieces ?? []) {
+      for (const e of p.elements) map.set(`${p.id}/${e.id}`, e.etat);
+    }
+    return map;
+  }, [entreePieces]);
+
   function changer(partiel: Partial<BrouillonEdl>) {
     setBrouillon((actuel) => (actuel ? { ...actuel, ...partiel } : actuel));
   }
@@ -303,14 +397,21 @@ export default function EcranNouvelEtatDesLieux() {
         hauteur: resultat.hauteur,
       };
 
+      // Les identifiants de photos sont rendus uniques **dans tout le
+      // document**, et non dans le seul élément qui reçoit la photo :
+      // l'impression indexe les images par identifiant, si bien que deux
+      // éléments portant chacun un `ph1` n'en faisaient dessiner qu'une seule,
+      // et la seconde photo disparaissait sans que rien ne le signale.
+      const prises = identifiantsDePhotos(pieces);
+
       if (elementId === null) {
-        changerPiece({ ...piece, photos: [...piece.photos, photo] });
+        changerPiece(ajouterPhotoDePiece(piece, photo, prises));
         return;
       }
       changerPiece({
         ...piece,
         elements: piece.elements.map((e) =>
-          e.id === elementId ? ajouterPhoto(e, photo) : e,
+          e.id === elementId ? ajouterPhoto(e, photo, prises) : e,
         ),
       });
     } finally {
@@ -399,7 +500,7 @@ export default function EcranNouvelEtatDesLieux() {
       await sauvegarder();
       router.push({
         pathname: '/etat-des-lieux/verification',
-        params: { logementId: brouillon?.logementId },
+        params: { logementId: brouillon?.logementId, type },
       });
     })();
   }
@@ -573,6 +674,47 @@ export default function EcranNouvelEtatDesLieux() {
               aide="La date à laquelle vous constatez l’état du logement."
               obligatoire
             />
+
+            {/* Une sortie se compare à une entrée : le document doit nommer
+                laquelle, et l'article 2, 2°, b) du décret l'exige. La date
+                n'est pas saisissable ici — elle vient de l'état des lieux
+                d'entrée lui-même, et une date tapée à la main pourrait désigner
+                un document qui n'existe pas. */}
+            {type === 'sortie' ? (
+              <>
+                <Carte>
+                  <Text style={styles.titreCarte}>L’état des lieux d’entrée comparé</Text>
+                  <LigneDetail
+                    libelle="Établi le"
+                    valeur={entreeDate ? formaterDateFr(entreeDate) : '—'}
+                  />
+                  <LigneDetail
+                    libelle="Pièces reprises"
+                    valeur={String(entreePieces?.length ?? 0)}
+                  />
+                  <LigneDetail
+                    libelle="Éléments à constater à nouveau"
+                    valeur={String(
+                      (entreePieces ?? []).reduce((n, p) => n + p.elements.length, 0),
+                    )}
+                  />
+                  <Text style={styles.aide}>
+                    Les pièces, les compteurs et les clés viennent de cet état des lieux : vous
+                    n’avez rien à ressaisir. Les états relevés à l’entrée ne sont pas recopiés —
+                    chaque élément est constaté à nouveau, et c’est la comparaison des deux
+                    constats qui s’imprimera.
+                  </Text>
+                </Carte>
+
+                <Champ
+                  libelle="Nouveau domicile du locataire"
+                  valeur={brouillon.nouveauDomicile ?? ''}
+                  onChangement={(v) => changer({ nouveauDomicile: v })}
+                  placeholder="Adresse ou lieu d’hébergement"
+                  aide="Mention obligatoire de l’état des lieux de sortie. Si le locataire ne la connaît pas encore, laissez vide : le document le signalera."
+                />
+              </>
+            ) : null}
 
             <Champ
               libelle="Mandataire (facultatif)"
@@ -843,86 +985,115 @@ export default function EcranNouvelEtatDesLieux() {
                       />
                     </View>
 
-                    {piece.elements.map((element) => (
-                      <Carte key={element.id} style={styles.carteElement}>
-                        <Text style={styles.nomElement}>{element.nom}</Text>
+                    {piece.elements.map((element) => {
+                      // L'état relevé à l'entrée, quand il est connu : le
+                      // bailleur constate la sortie en ayant la référence sous
+                      // les yeux, sans avoir à rouvrir l'autre document.
+                      const cle = `${piece.id}/${element.id}`;
+                      const etatEntree = etatsEntree.get(cle);
+                      return (
+                        <Carte key={element.id} style={styles.carteElement}>
+                          <Text style={styles.nomElement}>{element.nom}</Text>
 
-                        <View style={styles.etats}>
-                          {ETATS_ELEMENT.map((etat) => {
-                            const actif = element.etat === etat.valeur;
-                            return (
-                              <Pressable
-                                key={etat.valeur}
-                                onPress={() =>
-                                  changerPiece({
-                                    ...piece,
-                                    elements: piece.elements.map((e) =>
-                                      e.id === element.id
-                                        ? { ...e, etat: actif ? undefined : etat.valeur }
-                                        : e,
-                                    ),
-                                  })
-                                }
-                                accessibilityRole="button"
-                                accessibilityState={{ selected: actif }}
-                                accessibilityLabel={`${element.nom} : ${etat.libelle}`}
-                                style={[styles.puceEtat, actif && styles.puceEtatActive]}
-                              >
-                                <Text
-                                  style={[styles.textePuce, actif && styles.textePuceActive]}
+                          {type === 'sortie' && etatsEntree.has(cle) ? (
+                            <Text style={styles.rappelEntree}>
+                              À l’entrée{entreeDate ? ` du ${formaterDateFr(entreeDate)}` : ''} :{' '}
+                              <Text style={styles.rappelEntreeValeur}>{libelleEtat(etatEntree)}</Text>
+                            </Text>
+                          ) : null}
+
+                          <View style={styles.etats}>
+                            {ETATS_ELEMENT.map((etat) => {
+                              const actif = element.etat === etat.valeur;
+                              return (
+                                <Pressable
+                                  key={etat.valeur}
+                                  onPress={() =>
+                                    changerPiece({
+                                      ...piece,
+                                      elements: piece.elements.map((e) =>
+                                        e.id === element.id
+                                          ? { ...e, etat: actif ? undefined : etat.valeur }
+                                          : e,
+                                      ),
+                                    })
+                                  }
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected: actif }}
+                                  accessibilityLabel={`${element.nom} : ${etat.libelle}`}
+                                  style={[styles.puceEtat, actif && styles.puceEtatActive]}
                                 >
-                                  {etat.court}
-                                </Text>
-                              </Pressable>
-                            );
-                          })}
-                        </View>
+                                  <Text
+                                    style={[styles.textePuce, actif && styles.textePuceActive]}
+                                  >
+                                    {etat.court}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
 
-                        <Champ
-                          libelle="Observation (facultatif)"
-                          valeur={element.commentaire}
-                          onChangement={(commentaire) =>
-                            changerPiece({
-                              ...piece,
-                              elements: piece.elements.map((e) =>
-                                e.id === element.id ? { ...e, commentaire } : e,
-                              ),
-                            })
-                          }
-                          multiligne
-                          nombreDeLignes={2}
-                          placeholder="Une précision sur cet élément"
-                        />
+                          <Champ
+                            libelle="Observation (facultatif)"
+                            valeur={element.commentaire}
+                            onChangement={(commentaire) =>
+                              changerPiece({
+                                ...piece,
+                                elements: piece.elements.map((e) =>
+                                  e.id === element.id ? { ...e, commentaire } : e,
+                                ),
+                              })
+                            }
+                            multiligne
+                            nombreDeLignes={2}
+                            placeholder="Une précision sur cet élément"
+                          />
 
-                        <PhotosDunElement
-                          photos={element.photos}
-                          styles={styles}
-                          occupe={photoEnCours === element.id}
-                          onPrendre={() => void ajouterUnePhoto(element.id, 'camera')}
-                          onChoisir={() => void ajouterUnePhoto(element.id, 'galerie')}
-                          onRetirer={(photoId) => retirerPhoto(element.id, photoId)}
-                          onLegender={(photoId, legende) =>
-                            legenderPhoto(element.id, photoId, legende)
-                          }
-                        />
+                          <PhotosDunElement
+                            photos={element.photos}
+                            styles={styles}
+                            occupe={photoEnCours === element.id}
+                            onPrendre={() => void ajouterUnePhoto(element.id, 'camera')}
+                            onChoisir={() => void ajouterUnePhoto(element.id, 'galerie')}
+                            onRetirer={(photoId) => retirerPhoto(element.id, photoId)}
+                            onLegender={(photoId, legende) =>
+                              legenderPhoto(element.id, photoId, legende)
+                            }
+                          />
 
-                        <Bouton
-                          libelle="Retirer cet élément"
-                          variante="discret"
-                          compact
-                          onPress={() =>
-                            changerPiece({
-                              ...piece,
-                              elements: piece.elements.filter((e) => e.id !== element.id),
-                            })
-                          }
-                        />
-                      </Carte>
-                    ))}
+                          <Bouton
+                            libelle="Retirer cet élément"
+                            variante="discret"
+                            compact
+                            onPress={() =>
+                              changerPiece({
+                                ...piece,
+                                elements: piece.elements.filter((e) => e.id !== element.id),
+                              })
+                            }
+                          />
+                        </Carte>
+                      );
+                    })}
 
                     <AjoutElement
                       styles={styles}
-                      onAjouter={(nom) => changerPiece(ajouterElement(piece, nom))}
+                      onAjouter={(nom) =>
+                        changerPiece(
+                          ajouterElement(
+                            piece,
+                            nom,
+                            // Les identifiants de l'entrée restent réservés :
+                            // réattribuer celui d'un élément retiré apparierait
+                            // le nouvel élément avec l'ancien dans le document
+                            // comparatif, qui affirmerait alors une évolution
+                            // qui n'a pas eu lieu.
+                            (entreePieces?.find((p) => p.id === piece.id)?.elements ?? []).map(
+                              (e) => e.id,
+                            ),
+                          ),
+                        )
+                      }
                     />
 
                     <Text style={styles.titreSection}>Vue d’ensemble de la pièce</Text>
@@ -1207,6 +1378,15 @@ function creerStyles(couleurs: Couleurs) {
 
     carteElement: { gap: espaces.sm },
     nomElement: { ...typographie.corps, fontWeight: '600', color: couleurs.texte },
+    // Le rappel de l'entrée se lit **avant** les sept états, et dans une teinte
+    // discrète : c'est une référence, pas le constat qu'on est en train de
+    // faire. La valeur, elle, est mise en avant — c'est elle qu'on compare.
+    rappelEntree: {
+      ...typographie.petit,
+      color: couleurs.texteSecondaire,
+      marginTop: espaces.xs,
+    },
+    rappelEntreeValeur: { ...typographie.petitAppuye, color: couleurs.texte },
     etats: { flexDirection: 'row', flexWrap: 'wrap', gap: espaces.xs },
     puceEtat: {
       paddingHorizontal: espaces.md,

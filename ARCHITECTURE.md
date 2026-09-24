@@ -32,9 +32,9 @@ app/                        # routes Expo Router (une route = un fichier)
     verification.tsx        # relecture avant génération
     succes.tsx              # confirmation, partage
   etat-des-lieux/
-    choisir.tsx             # désigner le logement à constater
+    choisir.tsx             # désigner le logement, et la nature : entrée ou sortie
     nouveau.tsx             # formulaire guidé en six étapes, photos et signatures
-    verification.tsx        # relecture avant établissement
+    verification.tsx        # relecture avant établissement, comparaison comprise
     succes.tsx              # confirmation, partage, exemplaires à remettre
   logement/
     nouveau.tsx             # assistant de création en 4 étapes
@@ -67,7 +67,7 @@ src/
     payments.ts             # cumul des paiements, solde, statut, action contextuelle
     dossier.ts              # ordre du dossier, rattachement des pièces, saisie
     bail.ts                 # règles du bail : catégories, durée, dépôt, annexes
-    etat-des-lieux.ts       # pièces, éléments, états, compteurs, clés, contrôle
+    etat-des-lieux.ts       # pièces, éléments, états, compteurs, clés, contrôle, comparaison
     signature.ts            # une seule forme de signature, partagée
     numbering.ts            # numérotation unique et stable des documents
     rappels.ts              # texte des rappels, sans mois figé
@@ -94,7 +94,7 @@ src/
     encodage.ts             # échappement du texte inséré dans le HTML
     trace.ts                # tracé de signature en URI, dimensions de photo
     bail.ts                 # rendu du bail
-    etat-des-lieux.ts       # rendu de l'état des lieux, paginé et illustré
+    etat-des-lieux.ts       # rendu paginé, photos sous leur élément, paires avant/après
     emettre-bail.ts         # contrôle, assemblage, impression, rangement du bail
     emettre-etat-des-lieux.ts # idem pour l'état des lieux
     legal.ts                # mentions légales françaises obligatoires
@@ -412,7 +412,91 @@ l'attribut `src`, et Chromium imprimait le texte de remplacement **plus le
 balisage restant** à la place de l'image. Défaut trouvé par le banc de
 pagination, corrigé aux deux endroits, et tenu par deux tests.
 
+### L'état des lieux de sortie, et la comparaison
+
+Une sortie **se compare** à une entrée : c'est ce que l'article 3 du décret
+demande à la forme du document. Trois pièces s'y emploient.
+
+**`sortieDepuisLEntree`** reprend de l'entrée trois listes, et les traite
+différemment — c'est là que se joue la vérité du document :
+
+| Ce qui est repris | Ce qui est gardé | Ce qui est vidé |
+| --- | --- | --- |
+| Pièces et éléments | identifiants, noms | états, commentaires, photos |
+| Compteurs | type, précision | **l'index** |
+| Clés | libellé, destination, quantité | — |
+
+Les **identifiants** sont la raison d'être de la reprise : c'est par eux que
+l'appariement se fait, sans deviner quelles « Chambre » se correspondent. Les
+**états** sont vidés parce qu'une sortie constate à nouveau : recopier le constat
+d'entrée ferait signer au locataire un document décrivant une visite qu'il n'a
+pas faite. L'**index** d'un compteur est vidé pour la même raison, en plus
+radicale : un index recopié est un relevé inventé, et le domaine refuse
+d'établir le document tant qu'il est vide. Les clés sont une **proposition** —
+le cas courant est que les mêmes reviennent — que l'écran montre remplie et
+modifiable.
+
+**`comparerEdl(entree, sortie)`** met les deux constats en regard. Deux règles y
+comptent plus que les autres :
+
+- **`evolution` n'est vrai que si les deux états sont *constatés* et diffèrent.**
+  Un élément « non vérifié » à l'entrée puis « bon » à la sortie n'a pas évolué :
+  personne ne l'avait regardé. C'est `etatConstate` qui tranche, et
+  `incomparables` compte ces éléments à part pour que le document puisse le dire
+  au lieu de les annoncer comme inchangés.
+- **Rien ne qualifie l'écart.** Ni dégradation, ni responsabilité : le tableau
+  porte deux constats et pas une colonne de plus, et la phrase qui suit rappelle
+  que le document n'impute rien au locataire. Elle est répétée **dans la section
+  des évolutions**, et pas seulement dans celle sur la vétusté : c'est là que le
+  lecteur voit les écarts.
+
+Un élément présent d'un seul côté est **listé quand même**, avec « Non décrit à
+l'entrée » ou « Non décrit à la sortie ». Le taire ferait croire que le logement
+a été regardé là, et le confondre avec « non renseigné » ferait lire un oubli de
+saisie là où il n'y en a pas.
+
+**Deux index de photos, jamais un.** Les deux documents numérotent leurs photos à
+partir de `ph1` ; `contenuEdlDepuis` reçoit donc `photos` (la sortie) **et**
+`photosEntree`, et `paireEnHtml` lit chacune de son côté. Un index unique ferait
+dessiner deux fois la photo de l'entrée, et la colonne « Sortie » montrerait le
+logement d'avant — un document faux que **rien dans le texte ne signalerait**. Le
+banc de pagination le prouve par les pixels, avec deux teintes témoins distinctes.
+
+**`emettreEtatDesLieux` relit l'entrée, il ne la reçoit pas.** Pour une sortie, il
+retrouve la pièce nommée par `brouillon.entreeId` et relit son contenu structuré.
+Trois refus explicites, plutôt qu'un repli silencieux : la pièce a disparu, la
+pièce n'est pas une entrée, ou sa date ne correspond pas à celle que le brouillon
+annonce. Se rabattre sur un autre état des lieux d'entrée ferait comparer la
+sortie d'un locataire à l'entrée d'un autre. Si le contenu structuré n'existe pas
+— un état des lieux rangé par une version antérieure n'a qu'un PDF — la
+comparaison reste **absente**, et la section le dit au lieu d'imprimer un tableau
+vide.
+
+**Un état des lieux d'entrée et un état des lieux de sortie ont deux brouillons
+distincts.** La clé primaire de `brouillons` est le couple (logement, type) :
+avec une seule clé, commencer une sortie pendant qu'une entrée est en cours
+écraserait l'entrée, en silence. `brouillonDeLEdl(type)` donne la clé, et le nom
+`etat_des_lieux` reste celui de **l'entrée** — le renommer en
+`etat_des_lieux_entree` serait plus symétrique et rendrait orphelin tout
+brouillon déjà enregistré sur un téléphone.
+
+**Les identifiants de photos sont uniques dans tout le document.** Ils ne
+l'étaient que dans l'élément : `ajouterPhoto` cherchait un identifiant libre dans
+la seule liste de l'élément, et l'écran empilait les vues d'ensemble **sans leur
+en donner un**. L'impression indexant les images par identifiant, deux `ph1` — ou
+deux chaînes vides — n'en faisaient dessiner qu'une, et la seconde disparaissait
+sans que rien ne le signale. `identifiantsDePhotos` fournit la liste
+documentaire, `ajouterPhotoDePiece` donne un identifiant aux vues d'ensemble, et
+`reprendreBrouillonEdl` rend uniques ceux lus d'une sauvegarde abîmée.
+
 ### Le parcours
+
+`app/etat-des-lieux/choisir.tsx` désigne le logement **et la nature** du document
+— un `Segments` entrée / sortie. Pour une entrée, seuls les logements dont la
+location est en cours sont proposés ; pour une sortie, il faut en plus qu'un
+état des lieux d'entrée existe, puisque c'est à lui que la sortie se compare. Les
+logements écartés ne disparaissent pas en silence : ils sont listés à part, avec
+la raison et le geste qui débloque.
 
 `app/etat-des-lieux/nouveau.tsx` est le formulaire guidé en six étapes
 (logement, pièces, compteurs et clés, visite, observations, signatures). Il
@@ -717,26 +801,29 @@ une mutation **vivante** est comptée muette. Mesuré sur les bancs du bail :
 
 `.verif/falsifier-bail.py` (vingt mutations du domaine),
 `.verif/falsifier-bail-rendu.py` (quatorze du rendu),
-`.verif/falsifier-brouillon.py` (six de la reprise de brouillon) et
-`.verif/falsifier-etat-des-lieux.py` (vingt-huit, domaine et rendu) suivent la
-même méthode. Chacun écrit sa sauvegarde dans `.verif/sauvegardes/` — jamais
-**à côté de sa source**, où elle apparaîtrait dans `git status` comme si elle
-faisait partie du projet — et **prouve la restauration sur les octets**, jamais
-sur la couleur des tests : une source laissée mutée peut rendre les tests verts
-par chance.
+`.verif/falsifier-brouillon.py` (six de la reprise de brouillon),
+`.verif/falsifier-etat-des-lieux.py` (vingt-huit, domaine et rendu) et
+`.verif/falsifier-edl-pagination.py` / `.verif/falsifier-edl-sortie.py` (neuf sur
+les pages réellement imprimées) suivent la même méthode. Chacun écrit sa
+sauvegarde dans `.verif/sauvegardes/` — jamais **à côté de sa source**, où elle
+apparaîtrait dans `git status` comme si elle faisait partie du projet — et
+**prouve la restauration sur les octets**, jamais sur la couleur des tests : une
+source laissée mutée peut rendre les tests verts par chance.
 
 ### Ce que seule une page imprimée peut dire
 
 `.verif/mesurer-edl.py` ne lit ni sources ni constantes : il **imprime**. Le banc
-de rendu `.verif/rendre-etat-des-lieux.ts` produit deux témoins — un court, un
-complet de cinq pièces, vingt-huit éléments et quatre photos — puis Chromium
-`--headless=new --print-to-pdf` les imprime et `pypdfium2` compte les pages. Dix
-mesures, dont celles qu'aucun test unitaire ne peut porter :
+de rendu `.verif/rendre-etat-des-lieux.ts` produit trois témoins — un court, un
+complet de cinq pièces, vingt-huit éléments et quatre photos, et une **sortie**
+avec sa comparaison et ses paires avant / après — puis Chromium
+`--headless=new --print-to-pdf` les imprime et `pypdfium2` compte les pages.
+Quinze mesures, dont celles qu'aucun test unitaire ne peut porter :
 
 - le document complet **ouvre plus d'une feuille**, et le court en ouvre
   strictement moins — sans ce témoin négatif, « au moins trois pages » pourrait
   être satisfait par un rendu qui répète son contenu ;
-- les douze sections s'impriment dans l'ordre du domaine ;
+- les douze sections s'impriment dans l'ordre du domaine, et les **quinze** de la
+  sortie dans l'ordre de lecture ;
 - une photo s'imprime **entre son élément et le suivant**, dans sa pièce ;
 - l'image est **réellement dessinée** — et c'est un compte de pixels de la teinte
   témoin, pas une lecture de texte, qui le dit : quand une URI casse l'attribut
@@ -745,13 +832,29 @@ mesures, dont celles qu'aucun test unitaire ne peut porter :
 - la photo en portrait **tient sur une seule page**, sous le plafond de hauteur ;
 - les sources ne se coupent pas entre deux feuilles ;
 - la fin du document est imprimée — dernier élément, dernière signature,
-  dernière source.
+  dernière source ;
+- le tableau comparatif imprime ses trois colonnes, et la section des évolutions
+  rappelle qu'elle n'impute rien au locataire ;
+- **les deux colonnes d'une paire portent deux images distinctes** : les deux
+  documents numérotant leurs photos à partir de `ph1`, un index unique
+  dessinerait deux fois la photo de l'entrée. Le banc compte les pixels des
+  **deux** teintes — un contrôle qui n'en regarderait qu'une serait vert dans les
+  deux cas ;
+- **les deux colonnes sont côte à côte**, et non l'une sous l'autre : la boîte de
+  chaque teinte est mesurée **page par page**, et l'entrée doit être entièrement à
+  gauche de la sortie, dans la même bande verticale.
 
 `.verif/falsifier-edl-pagination.py` éprouve ce banc : quatre mutations, une par
 mesure, et aucune muette. Deux d'entre elles ont d'abord été **muettes**, ce qui
 a révélé deux vrais trous : la mesure de hauteur mélangeait les systèmes de
 coordonnées de deux pages, et le contrôle d'ordre ne distinguait pas une section
 absente d'une section déplacée.
+
+`.verif/falsifier-edl-sortie.py` éprouve les cinq mesures propres à la sortie :
+cinq mutations, aucune muette. L'une d'elles — intervertir les deux sections de
+sortie dans `sectionsEdl` — ne touche **pas** les douze sections communes, si
+bien que le contrôle des douze reste vert pendant que celui des quinze tombe :
+c'est ce qui prouve que le second ne double pas le premier.
 
 `scripts/check-workflows.mjs` valide les flux GitHub avant de pousser : YAML
 analysé, chaque script `run:` passé à `bash -n`, actions épinglées, permissions

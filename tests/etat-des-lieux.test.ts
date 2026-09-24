@@ -18,12 +18,15 @@ import {
   SOURCES_EDL,
   ajouterElement,
   ajouterPhoto,
+  ajouterPhotoDePiece,
   avertissementsDeLEdl,
+  comparerEdl,
   elementsParDefaut,
   etapePrecedenteEdl,
   etapeSuivanteEdl,
   etatConstate,
   exemplairesNecessaires,
+  identifiantsDePhotos,
   manquesDeLEdl,
   manquesDeLEtapeEdl,
   numeroEtapeEdl,
@@ -36,12 +39,14 @@ import {
   reprendreBrouillonEdl,
   sectionsEdl,
   signatairesAttendusDeLEdl,
+  sortieDepuisLEntree,
   syntheseEdl,
   titreDeLEdl,
   toutEnBonEtat,
   viderEtats,
 } from '../src/domain/etat-des-lieux.ts';
 import type { BrouillonEdl, EtatElement, PieceEdl } from '../src/domain/etat-des-lieux.ts';
+import { LIBELLE_BROUILLON, brouillonDeLEdl } from '../src/domain/brouillon.ts';
 import { dateCivileValide } from '../src/domain/period.ts';
 
 // ---------------------------------------------------------------------------
@@ -935,4 +940,427 @@ test('le formulaire et l’émission exigent les mêmes signatures', () => {
     manques[0].includes('Karim Bernard'),
     'le manque doit nommer le signataire absent',
   );
+});
+
+// ---------------------------------------------------------------------------
+// L'état des lieux de sortie, dérivé de celui d'entrée
+// ---------------------------------------------------------------------------
+
+/** Une entrée complète : deux pièces, des états, des photos, des compteurs, des clés. */
+function entreeRenseignee(): {
+  pieces: PieceEdl[];
+  compteurs: { id: string; type: 'electricite'; valeur: string; precision: string }[];
+  cles: { id: string; libelle: string; destination: string; quantite: number }[];
+} {
+  const sejour: PieceEdl = {
+    id: 'p1',
+    nom: 'Séjour',
+    commentaire: 'Vue sur cour.',
+    photos: [
+      { id: 'ph9', chemin: 'documents/photos/ensemble.jpg', legende: 'Ensemble', priseLe: '2026-01-02' },
+    ],
+    elements: [
+      {
+        id: 'e1',
+        nom: 'Sol',
+        etat: 'bon',
+        commentaire: 'Parquet neuf.',
+        photos: [
+          { id: 'ph1', chemin: 'documents/photos/sol.jpg', legende: 'Sol', priseLe: '2026-01-02' },
+        ],
+      },
+      { id: 'e2', nom: 'Mur', etat: 'usage', commentaire: '', photos: [] },
+    ],
+  };
+  const chambre: PieceEdl = {
+    id: 'p2',
+    nom: 'Chambre',
+    commentaire: '',
+    photos: [],
+    elements: [{ id: 'e1', nom: 'Sol', etat: 'tres_bon', commentaire: '', photos: [] }],
+  };
+
+  return {
+    pieces: [sejour, chambre],
+    compteurs: [{ id: 'c1', type: 'electricite', valeur: '007412', precision: 'Linky' }],
+    cles: [{ id: 'k1', libelle: 'Clé d’entrée', destination: 'Mme Nguyen', quantite: 2 }],
+  };
+}
+
+test('une sortie reprend les identifiants de l’entrée, et rien d’autre', () => {
+  // C'est par les identifiants que la comparaison apparie une pièce à la même
+  // pièce. Les recopier est donc la seule façon d'obtenir un appariement juste ;
+  // recopier les **états** serait la faute grave, parce qu'elle ferait signer au
+  // locataire un constat qu'il n'a pas fait.
+  const entree = entreeRenseignee();
+  const sortie = sortieDepuisLEntree(entree);
+
+  assert.deepEqual(
+    sortie.pieces.map((p) => p.id),
+    ['p1', 'p2'],
+    'les pièces doivent garder leurs identifiants',
+  );
+  assert.deepEqual(
+    sortie.pieces.map((p) => p.elements.map((e) => e.id)),
+    [
+      ['e1', 'e2'],
+      ['e1'],
+    ],
+    'les éléments doivent garder leurs identifiants, pièce par pièce',
+  );
+  assert.deepEqual(
+    sortie.pieces.map((p) => p.nom),
+    ['Séjour', 'Chambre'],
+    'les noms sont repris : le bailleur n’a pas à les ressaisir',
+  );
+
+  for (const piece of sortie.pieces) {
+    assert.equal(piece.commentaire, '', `« ${piece.nom} » ne doit pas garder son commentaire`);
+    assert.deepEqual(piece.photos, [], `« ${piece.nom} » ne doit pas garder ses photos`);
+    for (const element of piece.elements) {
+      assert.equal(element.etat, undefined, `${piece.nom} — ${element.nom} : aucun état recopié`);
+      assert.equal(element.commentaire, '');
+      assert.deepEqual(element.photos, []);
+    }
+  }
+});
+
+test('une sortie reprend les compteurs sans leur index, et les clés telles quelles', () => {
+  // L'index est ce qu'on **lit**. Le recopier ferait un relevé inventé, et le
+  // champ vide oblige à regarder le compteur — le domaine refuse d'établir le
+  // document tant qu'il l'est. Les clés, elles, sont une proposition : le cas
+  // courant est que les mêmes reviennent, et le bailleur les corrige.
+  const entree = entreeRenseignee();
+  const sortie = sortieDepuisLEntree(entree);
+
+  assert.equal(sortie.compteurs.length, 1);
+  assert.equal(sortie.compteurs[0].type, 'electricite', 'le type de compteur est repris');
+  assert.equal(sortie.compteurs[0].precision, 'Linky', 'la précision est reprise');
+  assert.equal(sortie.compteurs[0].valeur, '', 'l’index ne doit jamais être recopié');
+
+  assert.deepEqual(sortie.cles, entree.cles);
+  assert.notEqual(sortie.cles[0], entree.cles[0], 'les clés sont copiées, pas partagées');
+});
+
+test('une sortie sans entrée ne fabrique aucune pièce', () => {
+  const vide = sortieDepuisLEntree({});
+  assert.deepEqual(vide.pieces, []);
+  assert.deepEqual(vide.compteurs, []);
+  assert.deepEqual(vide.cles, []);
+});
+
+// ---------------------------------------------------------------------------
+// La comparaison
+// ---------------------------------------------------------------------------
+
+/** Une pièce courte, pour comparer deux états. */
+function pieceAvec(
+  id: string,
+  nom: string,
+  elements: { id: string; nom: string; etat?: EtatElement; photos?: string[] }[],
+): PieceEdl {
+  return {
+    id,
+    nom,
+    commentaire: '',
+    photos: [],
+    elements: elements.map((e) => ({
+      id: e.id,
+      nom: e.nom,
+      etat: e.etat,
+      commentaire: '',
+      photos: (e.photos ?? []).map((pid) => ({
+        id: pid,
+        chemin: `documents/photos/${pid}.jpg`,
+        legende: pid,
+        priseLe: '2026-01-02',
+      })),
+    })),
+  };
+}
+
+test('la comparaison apparie par identifiant, pas par nom', () => {
+  // Renommer une pièce ne doit pas la faire disparaître de la comparaison : le
+  // bailleur qui écrit « Chambre d'amis » à la sortie décrit la même pièce.
+  const entree = [pieceAvec('p1', 'Chambre 2', [{ id: 'e1', nom: 'Sol', etat: 'bon' }])];
+  const sortie = [pieceAvec('p1', 'Chambre d’amis', [{ id: 'e1', nom: 'Parquet', etat: 'usage' }])];
+
+  const comparaison = comparerEdl(entree, sortie);
+  assert.equal(comparaison.pieces.length, 1);
+  assert.equal(comparaison.pieces[0].nom, 'Chambre d’amis', 'le nom lu est celui de la sortie');
+  assert.equal(comparaison.pieces[0].elements.length, 1, 'un seul élément, apparié par identifiant');
+  assert.equal(comparaison.evolutions, 1, 'bon → usage est une évolution');
+  assert.equal(comparaison.nouveaux, 0);
+  assert.equal(comparaison.disparus, 0);
+});
+
+test('un élément « non vérifié » à l’entrée ne compte pas comme une évolution', () => {
+  // C'est la distinction que porte `etatConstate` : « non vérifié » et
+  // « non applicable » décrivent ce qui a été **fait**, pas ce qui a été **vu**.
+  // Les confondre ferait dire au document que quelque chose a changé là où il
+  // n'y a qu'un trou comblé.
+  const entree = [
+    pieceAvec('p1', 'Séjour', [
+      { id: 'e1', nom: 'Sol', etat: 'non_verifie' },
+      { id: 'e2', nom: 'Mur', etat: 'non_applicable' },
+      { id: 'e3', nom: 'Plafond', etat: 'bon' },
+    ]),
+  ];
+  const sortie = [
+    pieceAvec('p1', 'Séjour', [
+      { id: 'e1', nom: 'Sol', etat: 'bon' },
+      { id: 'e2', nom: 'Mur', etat: 'usage' },
+      { id: 'e3', nom: 'Plafond', etat: 'bon' },
+    ]),
+  ];
+
+  const comparaison = comparerEdl(entree, sortie);
+  assert.equal(comparaison.evolutions, 0, 'aucune évolution : rien n’avait été constaté');
+  assert.equal(comparaison.incomparables, 2, 'deux éléments ne se comparent pas');
+  assert.equal(comparaison.pieces[0].elements[2].incomparable, false, 'bon → bon se compare');
+});
+
+test('un élément absent d’un côté est dit, jamais compté comme une évolution', () => {
+  const entree = [
+    pieceAvec('p1', 'Séjour', [
+      { id: 'e1', nom: 'Sol', etat: 'bon' },
+      { id: 'e2', nom: 'Mur', etat: 'bon' },
+    ]),
+  ];
+  const sortie = [
+    pieceAvec('p1', 'Séjour', [
+      { id: 'e1', nom: 'Sol', etat: 'bon' },
+      { id: 'e3', nom: 'Climatisation', etat: 'neuf' },
+    ]),
+  ];
+
+  const comparaison = comparerEdl(entree, sortie);
+  assert.equal(comparaison.evolutions, 0);
+  assert.equal(comparaison.nouveaux, 1, 'la climatisation est nouvelle');
+  assert.equal(comparaison.disparus, 1, 'le mur n’est plus décrit');
+
+  const mur = comparaison.pieces[0].elements.find((e) => e.id === 'e2');
+  assert.ok(mur, 'un élément disparu reste listé : le taire ferait croire qu’il a été constaté');
+  assert.equal(mur?.aLEntree, true);
+  assert.equal(mur?.aLaSortie, false);
+  assert.equal(mur?.evolution, false);
+});
+
+test('une pièce absente de la sortie garde ses éléments dans la comparaison', () => {
+  const entree = [
+    pieceAvec('p1', 'Séjour', [{ id: 'e1', nom: 'Sol', etat: 'bon' }]),
+    pieceAvec('p2', 'Cave', [{ id: 'e1', nom: 'Sol', etat: 'usage' }]),
+  ];
+  const sortie = [pieceAvec('p1', 'Séjour', [{ id: 'e1', nom: 'Sol', etat: 'bon' }])];
+
+  const comparaison = comparerEdl(entree, sortie);
+  assert.equal(comparaison.pieces.length, 2, 'la pièce retirée reste visible');
+  const cave = comparaison.pieces.find((p) => p.id === 'p2');
+  assert.equal(cave?.aLEntree, true);
+  assert.equal(cave?.elements.length, 1);
+  assert.equal(cave?.elements[0].aLaSortie, false);
+  assert.equal(comparaison.disparus, 1);
+});
+
+test('la comparaison rapporte les photos de chaque côté, séparément', () => {
+  // Les deux états des lieux numérotent leurs photos à partir de `ph1` : sans
+  // deux listes distinctes, l'impression dessinerait la photo de l'entrée là où
+  // celle de la sortie doit figurer.
+  const entree = [
+    pieceAvec('p1', 'Salle de bain', [
+      { id: 'e1', nom: 'Baignoire', etat: 'usage', photos: ['ph1'] },
+    ]),
+  ];
+  const sortie = [
+    pieceAvec('p1', 'Salle de bain', [
+      { id: 'e1', nom: 'Baignoire', etat: 'mauvais', photos: ['ph1', 'ph2'] },
+    ]),
+  ];
+
+  const comparaison = comparerEdl(entree, sortie);
+  const element = comparaison.pieces[0].elements[0];
+  assert.deepEqual(element.photosEntree, ['ph1'], 'le « avant » vient de l’entrée');
+  assert.deepEqual(element.photosSortie, ['ph1', 'ph2'], 'le « après » vient de la sortie');
+  assert.equal(comparaison.illustres, 1);
+});
+
+test('une comparaison vide ne rapporte rien plutôt que d’inventer', () => {
+  const comparaison = comparerEdl([], []);
+  assert.deepEqual(comparaison.pieces, []);
+  assert.equal(comparaison.evolutions, 0);
+  assert.equal(comparaison.nouveaux, 0);
+  assert.equal(comparaison.disparus, 0);
+  assert.equal(comparaison.incomparables, 0);
+  assert.equal(comparaison.illustres, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Les identifiants de photos, uniques dans tout le document
+// ---------------------------------------------------------------------------
+
+test('deux photos de deux éléments différents ne portent jamais le même identifiant', () => {
+  // Mesuré : les identifiants étaient cherchés libres dans le seul élément, si
+  // bien que deux éléments portaient chacun un `ph1`. L'impression indexe les
+  // images par identifiant : la seconde photo n'était pas dessinée, et rien ne
+  // le signalait.
+  const sejour = pieceVide('Séjour', []);
+  const chambre = pieceVide('Chambre', []);
+  const photo = { id: '', chemin: 'documents/photos/a.jpg', legende: '', priseLe: '2026-01-02' };
+
+  const premier = ajouterPhoto(sejour.elements[0], photo, []);
+  const second = ajouterPhoto(
+    chambre.elements[0],
+    photo,
+    premier.photos.map((p) => p.id),
+  );
+
+  assert.equal(premier.photos[0].id, 'ph1');
+  assert.equal(second.photos[0].id, 'ph2', 'le second élément ne peut pas reprendre `ph1`');
+});
+
+test('une vue d’ensemble de pièce reçoit un identifiant, elle aussi', () => {
+  // L'écran empilait cette photo sans lui en donner un : toutes les vues
+  // d'ensemble portaient la chaîne vide, s'écrasaient dans l'index, et une
+  // seule était imprimée.
+  const piece = pieceVide('Séjour', []);
+  const photo = { id: '', chemin: 'documents/photos/a.jpg', legende: '', priseLe: '2026-01-02' };
+
+  const une = ajouterPhotoDePiece(piece, photo, []);
+  assert.equal(une.photos[0].id, 'ph1');
+
+  const deux = ajouterPhotoDePiece(une, photo, identifiantsDePhotos([une]));
+  assert.equal(deux.photos[1].id, 'ph2');
+  assert.deepEqual(identifiantsDePhotos([deux]), ['ph1', 'ph2']);
+});
+
+test('la relecture d’un contenu enregistré rend les identifiants de photos uniques', () => {
+  // Deux `ph1` peuvent venir d'une version antérieure, ou d'une sauvegarde
+  // abîmée. Le lecteur tolérant les sépare, parce que l'impression, elle,
+  // suppose l'unicité.
+  const repris = reprendreBrouillonEdl(
+    {
+      pieces: [
+        {
+          id: 'p1',
+          nom: 'Séjour',
+          elements: [
+            { id: 'e1', nom: 'Sol', photos: [{ id: 'ph1', chemin: 'a.jpg' }] },
+            { id: 'e2', nom: 'Mur', photos: [{ id: 'ph1', chemin: 'b.jpg' }] },
+          ],
+        },
+      ],
+    },
+    { logementId: 'l', bailId: 'b', type: 'entree', pieces: [] },
+  );
+
+  const ids = identifiantsDePhotos(repris.pieces ?? []);
+  assert.equal(ids.length, 2);
+  assert.equal(new Set(ids).size, 2, `identifiants confondus : ${JSON.stringify(ids)}`);
+  assert.deepEqual(ids, ['ph1', 'ph2']);
+});
+
+test('un élément ajouté ne reprend pas l’identifiant d’un élément de l’entrée retiré', () => {
+  // Le formulaire d'une sortie passe les identifiants de l'entrée : sans eux,
+  // retirer « Fenêtre » puis ajouter un élément réattribuerait `e3`, et le
+  // document comparerait le nouvel élément avec l'ancien — en affirmant une
+  // évolution qui n'a pas eu lieu.
+  const piece: PieceEdl = {
+    id: 'p1',
+    nom: 'Séjour',
+    commentaire: '',
+    photos: [],
+    elements: [{ id: 'e2', nom: 'Mur', commentaire: '', photos: [] }],
+  };
+
+  const sansEviter = ajouterElement(piece, 'Climatisation');
+  assert.equal(sansEviter.elements[1].id, 'e1', 'sans liste, l’identifiant `e1` est libre');
+
+  const avecEviter = ajouterElement(piece, 'Climatisation', ['e1', 'e2', 'e3']);
+  assert.equal(avecEviter.elements[1].id, 'e4', 'avec la liste, `e1` reste réservé à l’entrée');
+});
+
+// ---------------------------------------------------------------------------
+// La sortie dans les règles
+// ---------------------------------------------------------------------------
+
+test('une sortie sans état des lieux d’entrée nommé ne peut pas être établie', () => {
+  const sejour = pieceVide('Séjour', []);
+  sejour.elements = sejour.elements.map((e) => ({ ...e, etat: 'bon' as const }));
+
+  const base: BrouillonEdl = {
+    logementId: 'l',
+    bailId: 'b',
+    type: 'sortie',
+    dateEdl: '2026-09-24',
+    pieces: [sejour],
+    signatures: [{ signataire: 'bailleur', nom: 'X', date: '2026-09-24', trace: 'data:,a' }],
+  };
+
+  const sansEntree = manquesDeLEdl(base);
+  assert.ok(
+    sansEntree.some((m) => m.includes('doit nommer l’état des lieux d’entrée')),
+    `le manque doit nommer la référence absente, vu : ${JSON.stringify(sansEntree)}`,
+  );
+
+  const avecEntree = manquesDeLEdl({ ...base, entreeId: 'piece-1', dateEntree: '2026-01-02' });
+  assert.deepEqual(avecEntree, [], 'avec la référence, plus rien ne manque');
+});
+
+test('l’absence d’adresse du nouveau domicile se signale sans bloquer', () => {
+  // L'article 2, 2°, a) du décret en fait une mention obligatoire. Elle se
+  // signale pourtant sans bloquer : le locataire peut ne pas savoir encore où
+  // il habitera, et refuser d'établir la sortie pour cela laisserait le
+  // bailleur sans constat du tout.
+  const sejour = pieceVide('Séjour', []);
+  sejour.elements = sejour.elements.map((e) => ({ ...e, etat: 'bon' as const }));
+
+  const b: BrouillonEdl = {
+    logementId: 'l',
+    bailId: 'b',
+    type: 'sortie',
+    dateEdl: '2026-09-24',
+    pieces: [sejour],
+    entreeId: 'piece-1',
+    dateEntree: '2026-01-02',
+    signatures: [{ signataire: 'bailleur', nom: 'X', date: '2026-09-24', trace: 'data:,a' }],
+  };
+
+  const avertissements = avertissementsDeLEdl(b);
+  assert.ok(
+    avertissements.some((a) => a.includes('nouveau domicile')),
+    `l’avertissement doit nommer la mention, vu : ${JSON.stringify(avertissements)}`,
+  );
+  assert.deepEqual(manquesDeLEdl(b), [], 'et pourtant le document reste établissable');
+
+  const avec = avertissementsDeLEdl({ ...b, nouveauDomicile: '14 rue Basse, Lille' });
+  assert.equal(
+    avec.some((a) => a.includes('nouveau domicile')),
+    false,
+    'une adresse renseignée ne se signale pas',
+  );
+});
+
+test('une entrée ne réclame pas d’adresse de nouveau domicile', () => {
+  const sejour = pieceVide('Séjour', []);
+  sejour.elements = sejour.elements.map((e) => ({ ...e, etat: 'bon' as const }));
+  const avertissements = avertissementsDeLEdl({
+    logementId: 'l',
+    bailId: 'b',
+    type: 'entree',
+    dateEdl: '2026-09-24',
+    pieces: [sejour],
+    signatures: [{ signataire: 'bailleur', nom: 'X', date: '2026-09-24', trace: 'data:,a' }],
+  });
+  assert.equal(
+    avertissements.some((a) => a.includes('nouveau domicile')),
+    false,
+  );
+});
+
+test('l’entrée et la sortie ont deux brouillons distincts', () => {
+  // Une seule clé de brouillon ferait écraser l'entrée en cours par une sortie
+  // commencée, en silence et sans que personne ne l'ait demandé.
+  assert.notEqual(brouillonDeLEdl('entree'), brouillonDeLEdl('sortie'));
+  assert.equal(brouillonDeLEdl('entree'), 'etat_des_lieux');
+  assert.equal(LIBELLE_BROUILLON[brouillonDeLEdl('sortie')], 'État des lieux de sortie');
 });

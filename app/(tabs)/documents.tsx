@@ -75,10 +75,10 @@ const VIDE: Record<
   etats_des_lieux: {
     titre: 'Aucun état des lieux rangé',
     message:
-      'Faites l’état des lieux d’entrée depuis votre téléphone : l’application reprend l’adresse, ' +
-      'le locataire et le loyer déjà enregistrés, propose les pièces et leurs éléments, garde vos ' +
-      'photos, et produit un PDF signable. Un état des lieux signé sur papier peut aussi être ' +
-      'scanné et rangé ici.',
+      'Faites un état des lieux depuis votre téléphone : l’application reprend l’adresse, le ' +
+      'locataire et le loyer déjà enregistrés, propose les pièces et leurs éléments, garde vos ' +
+      'photos, et produit un PDF signable. Une sortie se compare à l’entrée, qu’elle retrouve ' +
+      'toute seule. Un état des lieux signé sur papier peut aussi être scanné et rangé ici.',
     action: 'Faire un état des lieux',
     vers: '/etat-des-lieux/choisir',
   },

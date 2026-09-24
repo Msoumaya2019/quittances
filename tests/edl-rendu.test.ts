@@ -14,10 +14,11 @@ import {
   ETATS_ELEMENT,
   SECTIONS_EDL,
   avertissementsDeLEdl,
+  comparerEdl,
   pieceVide,
   sectionsEdl,
 } from '../src/domain/etat-des-lieux.ts';
-import type { BrouillonEdl, EtatElement } from '../src/domain/etat-des-lieux.ts';
+import type { BrouillonEdl, EtatElement, PieceEdl } from '../src/domain/etat-des-lieux.ts';
 import {
   LARGEUR_PHOTO_MM,
   contenuEdlDepuis,
@@ -655,4 +656,270 @@ test('le tracé de signature est échappé comme la photo', () => {
     uri,
     'l’attribut src de la signature doit porter le tracé entier',
   );
+});
+
+// ---------------------------------------------------------------------------
+// L'état des lieux de sortie : les quinze sections et la comparaison
+// ---------------------------------------------------------------------------
+
+/** Les tracés témoins : deux images distinctes, reconnaissables à leur contenu. */
+const IMAGE_ENTREE = 'data:image/svg+xml;utf8,<svg>ENTREE</svg>';
+const IMAGE_SORTIE = 'data:image/svg+xml;utf8,<svg>SORTIE</svg>';
+
+/**
+ * Deux versions de la même pièce, avec **les mêmes identifiants**.
+ *
+ * C'est la situation réelle : la sortie est dérivée de l'entrée, donc `p1`/`e1`
+ * désignent la même chose des deux côtés. Les deux documents numérotent aussi
+ * leurs photos à partir de `ph1` — c'est ce qui rend l'index unique dangereux,
+ * et ce que le test des paires avant/après vérifie.
+ */
+function piecesEntree(): PieceEdl[] {
+  return [
+    {
+      id: 'p1',
+      nom: 'Séjour',
+      commentaire: '',
+      photos: [],
+      elements: [
+        {
+          id: 'e1',
+          nom: 'Sol',
+          etat: 'bon',
+          commentaire: '',
+          photos: [
+            {
+              id: 'ph1',
+              chemin: 'documents/photos/entree-sol.jpg',
+              legende: 'Sol à l’entrée',
+              priseLe: '2026-01-02',
+            },
+          ],
+        },
+        { id: 'e2', nom: 'Mur', etat: 'non_verifie', commentaire: '', photos: [] },
+      ],
+    },
+  ];
+}
+
+function piecesSortie(): PieceEdl[] {
+  return [
+    {
+      id: 'p1',
+      nom: 'Séjour',
+      commentaire: '',
+      photos: [],
+      elements: [
+        {
+          id: 'e1',
+          nom: 'Sol',
+          etat: 'usage',
+          commentaire: '',
+          photos: [
+            {
+              id: 'ph1',
+              chemin: 'documents/photos/sortie-sol.jpg',
+              legende: 'Sol à la sortie',
+              priseLe: '2026-09-24',
+            },
+          ],
+        },
+        { id: 'e2', nom: 'Mur', etat: 'bon', commentaire: '', photos: [] },
+      ],
+    },
+  ];
+}
+
+/** Les index de photos, tenus séparément — comme à l'émission. */
+function photosDeLEntree(): Record<string, { id: string; donnees: string; legende: string }> {
+  return { ph1: { id: 'ph1', donnees: IMAGE_ENTREE, legende: 'Sol à l’entrée' } };
+}
+
+function photosDeLaSortie(): Record<string, { id: string; donnees: string; legende: string }> {
+  return { ph1: { id: 'ph1', donnees: IMAGE_SORTIE, legende: 'Sol à la sortie' } };
+}
+
+/** Le document d'une sortie, comparaison comprise. */
+function documentSortie(
+  extra: Partial<Parameters<typeof contenuEdlDepuis>[0]> = {},
+): string {
+  const b: BrouillonEdl = {
+    ...brouillon(),
+    type: 'sortie',
+    pieces: piecesSortie(),
+    entreeId: 'piece-entree',
+    dateEntree: '2026-01-02',
+    nouveauDomicile: '14 rue Basse, 59000 Lille',
+  };
+  return document(b, {
+    comparaison: comparerEdl(piecesEntree(), piecesSortie()),
+    photos: photosDeLaSortie(),
+    photosEntree: photosDeLEntree(),
+    ...extra,
+  });
+}
+
+/** La portion du document consacrée aux évolutions, et elle seule. */
+function blocEvolutions(html: string): string {
+  const debut = html.indexOf('Évolutions depuis l’entrée</h2>');
+  assert.ok(debut >= 0, 'la section des évolutions doit exister');
+  const fin = html.indexOf('</section>', debut);
+  assert.ok(fin > debut, 'la section des évolutions doit se refermer');
+  return html.slice(debut, fin);
+}
+
+test('une sortie imprime les quinze sections, dans l’ordre du domaine', () => {
+  // Les trois sections propres à la sortie s'insèrent dans l'ordre de lecture :
+  // deux après le bail, dont elles dépendent, et une avant la synthèse, qu'elles
+  // nourrissent. Un document qui les rejetterait à la fin ferait lire la
+  // comparaison après le compte des éléments, et non avant.
+  const sections = sectionsEdl('sortie');
+  assert.equal(sections.length, 15, 'douze sections communes, plus trois propres à la sortie');
+
+  const html = texte(documentSortie());
+  const positions = sections.map((s) => position(html, `${s.titre}</h2>`));
+  for (let i = 1; i < positions.length; i += 1) {
+    assert.ok(
+      positions[i] > positions[i - 1],
+      `« ${sections[i].titre} » doit s’imprimer après « ${sections[i - 1].titre} »`,
+    );
+  }
+  assert.ok(!html.includes('16.</span>'), 'il ne doit pas y avoir de seizième section');
+});
+
+test('la comparaison met l’état d’entrée et l’état de sortie côte à côte', () => {
+  // C'est la forme que l'article 3 du décret demande : le document doit
+  // permettre la comparaison entre l'entrée et la sortie. Un tableau qui ne
+  // porterait que l'état de sortie obligerait le lecteur à tenir les deux
+  // documents côte à côte.
+  const bloc = texte(blocEvolutions(documentSortie()));
+
+  assert.ok(bloc.includes('<th>Entrée</th>'), 'la colonne de l’entrée doit exister');
+  assert.ok(bloc.includes('<th>Sortie</th>'), 'la colonne de la sortie doit exister');
+  // Le libellé vient du domaine — `État d'usage`, avec son apostrophe droite —
+  // et le document l'échappe avant de l'imprimer. C'est bien le libellé du
+  // domaine qu'on exige ici, et non une paraphrase.
+  assert.ok(
+    bloc.includes('Sol') && bloc.includes('Bon état') && bloc.includes("État d'usage"),
+    `le tableau doit porter les deux états du même élément, vu : ${bloc.slice(0, 900)}`,
+  );
+});
+
+test('un élément non constaté à l’entrée est dit non comparable, jamais « inchangé »', () => {
+  // Le mur est « non vérifié » à l'entrée et « bon » à la sortie : personne ne
+  // l'avait regardé. L'annoncer comme inchangé serait une invention, et
+  // l'annoncer comme une évolution aussi.
+  const bloc = texte(blocEvolutions(documentSortie()));
+  assert.ok(
+    bloc.includes('ne se comparent pas'),
+    `le document doit dire ce qui n’est pas comparable, vu : ${bloc.slice(0, 900)}`,
+  );
+  assert.ok(
+    bloc.includes('Non vérifié'),
+    'l’état relevé à l’entrée doit s’imprimer tel quel',
+  );
+});
+
+test('les photos avant / après sont imprimées côte à côte, chacune depuis son index', () => {
+  // Le test qui compte : les deux documents numérotent leurs photos à partir de
+  // `ph1`. Avec un index unique, la paire dessinerait **deux fois** la photo de
+  // l'entrée, et le « après » montrerait le logement d'avant. On compare donc
+  // les URI elles-mêmes, et pas seulement le nombre d'images.
+  const bloc = blocEvolutions(documentSortie());
+  const paires = bloc.split('<div class="e-paire">').slice(1);
+  assert.equal(paires.length, 1, `une seule paire attendue, vu ${paires.length}`);
+
+  const images = [...paires[0].matchAll(/<img src="([^"]*)"/g)].map((m) => m[1]);
+  assert.equal(images.length, 2, `la paire doit porter deux images, vu ${images.length}`);
+  assert.equal(texte(images[0]), IMAGE_ENTREE, 'la première colonne est la photo de l’entrée');
+  assert.equal(texte(images[1]), IMAGE_SORTIE, 'la seconde colonne est la photo de la sortie');
+  assert.notEqual(images[0], images[1], 'les deux colonnes ne peuvent pas porter la même image');
+});
+
+test('les deux colonnes d’une paire nomment leur date', () => {
+  // Deux photos de la même pièce prises à des années d'intervalle se
+  // distinguent par leur date. Une paire sans date ne dit pas laquelle est
+  // l'entrée.
+  const bloc = texte(blocEvolutions(documentSortie()));
+  assert.ok(bloc.includes('Entrée du 2 janvier 2026'), 'la colonne de gauche doit être datée');
+  assert.ok(bloc.includes('Sortie du 24 septembre 2026'), 'la colonne de droite doit être datée');
+});
+
+test('la section des évolutions rappelle qu’elle n’impute rien au locataire', () => {
+  // C'est là que le lecteur voit les écarts : la phrase doit être là, et pas
+  // seulement dans la section sur la vétusté, quatre pages plus loin.
+  const bloc = texte(blocEvolutions(documentSortie()));
+  assert.ok(
+    bloc.includes('n’impute aucune responsabilité au locataire'),
+    'la mention doit figurer dans la section des évolutions',
+  );
+});
+
+test('une sortie dont l’entrée n’a pas pu être relue le dit, sans tableau vide', () => {
+  // Imprimer un tableau comparatif sans comparaison ferait croire qu'aucun
+  // élément n'a évolué — une affirmation que rien ne fonde. Le document renvoie
+  // alors à l'autre état des lieux, ce qui est vrai.
+  const html = documentSortie({ comparaison: undefined, photosEntree: undefined });
+  const bloc = texte(blocEvolutions(html));
+
+  assert.ok(
+    bloc.includes('se lisent en confrontant ce document'),
+    'le renvoi à l’autre document doit être imprimé',
+  );
+  assert.equal(
+    bloc.includes('e-evol-piece'),
+    false,
+    'aucun bloc comparatif ne doit être imprimé sans comparaison',
+  );
+  assert.equal(bloc.includes('<th>Entrée</th>'), false, 'et aucune colonne « Entrée »');
+});
+
+test('un élément absent de l’entrée est dit absent, et non « non renseigné »', () => {
+  // « Non renseigné » et « non décrit à l'entrée » ne disent pas la même chose :
+  // le premier accuse un oubli de saisie, le second constate que le logement n'a
+  // pas été décrit là. Les confondre ferait lire un défaut du document.
+  const sortie = piecesSortie();
+  sortie[0].elements.push({
+    id: 'e3',
+    nom: 'Climatisation',
+    etat: 'neuf',
+    commentaire: '',
+    photos: [],
+  });
+
+  const html = documentSortie({ comparaison: comparerEdl(piecesEntree(), sortie) });
+  const bloc = texte(blocEvolutions(html));
+  assert.ok(
+    bloc.includes('Non décrit à l’entrée'),
+    `l’absence doit être dite, vu : ${bloc.slice(0, 900)}`,
+  );
+});
+
+test('une pièce absente de la sortie est imprimée avec ses éléments', () => {
+  // Le logement n'a pas été regardé là : le taire ferait croire qu'il l'a été.
+  const entree = piecesEntree();
+  entree.push({
+    id: 'p2',
+    nom: 'Cave',
+    commentaire: '',
+    photos: [],
+    elements: [{ id: 'e1', nom: 'Sol', etat: 'usage', commentaire: '', photos: [] }],
+  });
+
+  const html = documentSortie({ comparaison: comparerEdl(entree, piecesSortie()) });
+  const bloc = texte(blocEvolutions(html));
+  assert.ok(bloc.includes('Cave'), 'la pièce retirée doit rester lisible');
+  assert.ok(
+    bloc.includes('Non décrit à la sortie'),
+    'ses éléments doivent être dits non décrits à la sortie',
+  );
+});
+
+test('l’en-tête d’une sortie nomme l’état des lieux d’entrée comparé', () => {
+  const html = texte(documentSortie());
+  assert.ok(
+    html.includes('État des lieux d&#39;entrée') || html.includes("État des lieux d'entrée"),
+    'l’objet doit rappeler la référence',
+  );
+  assert.ok(html.includes('2 janvier 2026'), 'et sa date');
 });

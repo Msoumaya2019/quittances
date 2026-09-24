@@ -46,6 +46,7 @@ import {
   LIBELLE_TYPE_EDL,
   SOURCES_EDL,
   avertissementsDeLEdl,
+  comparerEdl,
   exemplairesNecessaires,
   libelleEtat,
   manquesDeLEdl,
@@ -55,11 +56,12 @@ import {
   signatairesAttendusDeLEdl,
   syntheseEdl,
 } from '@/domain/etat-des-lieux';
-import type { BrouillonEdl } from '@/domain/etat-des-lieux';
-import { analyserDonnees } from '@/domain/brouillon';
+import type { BrouillonEdl, PieceEdl, TypeEdl } from '@/domain/etat-des-lieux';
+import { analyserDonnees, brouillonDeLEdl } from '@/domain/brouillon';
 import { formatMontant } from '@/domain/money';
 import { chargerContexteBail, type ContexteBail } from '@/documents/bail-contexte';
 import { lireBrouillon } from '@/db/repositories/brouillons';
+import { trouverPiece } from '@/db/repositories/pieces';
 import { emettreEtatDesLieux } from '@/pdf/emettre-etat-des-lieux';
 import { useApplication } from '@/state/ApplicationContext';
 import { useStyles, type Couleurs } from '@/ui/theme';
@@ -72,13 +74,26 @@ export default function EcranVerifierEtatDesLieux() {
   const insets = useSafeAreaInsets();
   const { rafraichir } = useApplication();
 
-  const params = useLocalSearchParams<{ logementId?: string }>();
+  const params = useLocalSearchParams<{ logementId?: string; type?: string }>();
   const logementId = typeof params.logementId === 'string' ? params.logementId : null;
+  // La nature du document est donnée par l'écran précédent : c'est elle qui
+  // décide du brouillon relu, des sections montrées et des signatures.
+  const type: TypeEdl = params.type === 'sortie' ? 'sortie' : 'entree';
+  const typeBrouillon = brouillonDeLEdl(type);
 
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [contexte, setContexte] = useState<ContexteBail | null>(null);
   const [brouillon, setBrouillon] = useState<BrouillonEdl | null>(null);
+  /**
+   * Les pièces de l'état des lieux d'entrée, pour une sortie.
+   *
+   * Elles servent à montrer la comparaison **avant** l'établissement, comme le
+   * reste de l'écran montre ce qui sera imprimé. La comparaison elle-même est
+   * recalculée à l'émission, par le domaine : cet écran ne fait que la donner à
+   * lire.
+   */
+  const [entreePieces, setEntreePieces] = useState<PieceEdl[] | null>(null);
   const [travail, setTravail] = useState(false);
 
   useEffect(() => {
@@ -94,30 +109,49 @@ export default function EcranVerifierEtatDesLieux() {
       }
       try {
         const charge = await chargerContexteBail(logementId);
-        const enregistre = await lireBrouillon(charge.logement.id, 'etat_des_lieux');
+        const enregistre = await lireBrouillon(charge.logement.id, typeBrouillon);
         if (!actif) return;
         setContexte(charge);
 
         // On relit par le lecteur tolérant, celui du formulaire : l'écran montre
         // ainsi ce qui sera **réellement** imprimé, et non le contenu brut de la
         // base, qui peut porter des valeurs d'une version antérieure.
-        setBrouillon(
-          enregistre
-            ? reprendreBrouillonEdl(analyserDonnees(JSON.stringify(enregistre.donnees)), {
-                logementId: charge.logement.id,
-                bailId: charge.bail?.id ?? '',
-                type: 'entree',
-                dateEdl: aujourdHui(),
-                pieces: piecesInitiales(charge.logement.type),
-                compteurs: [],
-                cles: [],
-                observations: '',
-                mandataire: '',
-                compteursIndividuels: undefined,
-                signatures: [],
-              })
-            : null,
-        );
+        const repris = enregistre
+          ? reprendreBrouillonEdl(analyserDonnees(JSON.stringify(enregistre.donnees)), {
+              logementId: charge.logement.id,
+              bailId: charge.bail?.id ?? '',
+              type,
+              dateEdl: aujourdHui(),
+              pieces: piecesInitiales(charge.logement.type),
+              compteurs: [],
+              cles: [],
+              observations: '',
+              mandataire: '',
+              compteursIndividuels: undefined,
+              signatures: [],
+            })
+          : null;
+        setBrouillon(repris);
+
+        // La comparaison montrée ici est **celle qui sera imprimée** : elle est
+        // calculée à partir de l'état des lieux d'entrée réellement désigné par
+        // le brouillon, et non d'une pièce choisie par cet écran. Une
+        // comparaison d'aperçu qui ne serait pas celle du document serait pire
+        // que pas d'aperçu du tout.
+        let piecesEntree: PieceEdl[] | null = null;
+        if (repris?.type === 'sortie' && repris.entreeId) {
+          const entree = await trouverPiece(repris.entreeId);
+          if (entree) {
+            const lue = reprendreBrouillonEdl(analyserDonnees(entree.donnees), {
+              logementId: charge.logement.id,
+              bailId: charge.bail?.id ?? '',
+              type: 'entree',
+              pieces: [],
+            });
+            piecesEntree = lue.pieces ?? null;
+          }
+        }
+        if (actif) setEntreePieces(piecesEntree);
 
         if (!enregistre) {
           setErreur(
@@ -139,7 +173,7 @@ export default function EcranVerifierEtatDesLieux() {
     return () => {
       actif = false;
     };
-  }, [logementId]);
+  }, [logementId, type, typeBrouillon]);
 
   // Les signataires attendus viennent du domaine : c'est la même liste que
   // celle qui sera imprimée, donc les manques calculés ici sont ceux qui
@@ -163,6 +197,17 @@ export default function EcranVerifierEtatDesLieux() {
   const avertissements = useMemo(
     () => (brouillon ? avertissementsDeLEdl(brouillon) : []),
     [brouillon],
+  );
+
+  // La comparaison est calculée par le domaine, la même fonction que celle
+  // appelée à l'émission : ce que l'écran montre est exactement ce que le
+  // document imprimera.
+  const comparaison = useMemo(
+    () =>
+      brouillon?.type === 'sortie' && entreePieces
+        ? comparerEdl(entreePieces, brouillon.pieces ?? [])
+        : null,
+    [brouillon, entreePieces],
   );
   const synthese = useMemo(() => (brouillon ? syntheseEdl(brouillon) : null), [brouillon]);
   const sections = useMemo(
@@ -199,7 +244,7 @@ export default function EcranVerifierEtatDesLieux() {
           contentContainerStyle={[styles.contenu, { paddingTop: insets.top + espaces.sm }]}
         >
           <EnTeteEcran
-            titre="Vérifier l’état des lieux"
+            titre={`Vérifier : ${LIBELLE_TYPE_EDL[type]}`}
             actionLibelle="Fermer"
             actionOnPress={() => router.back()}
           />
@@ -216,7 +261,7 @@ export default function EcranVerifierEtatDesLieux() {
           contentContainerStyle={[styles.contenu, { paddingTop: insets.top + espaces.sm }]}
         >
           <EnTeteEcran
-            titre="Vérifier l’état des lieux"
+            titre={`Vérifier : ${LIBELLE_TYPE_EDL[type]}`}
             actionLibelle="Fermer"
             actionOnPress={() => router.back()}
           />
@@ -228,7 +273,7 @@ export default function EcranVerifierEtatDesLieux() {
             actionOnPress={() =>
               router.replace({
                 pathname: '/etat-des-lieux/nouveau',
-                params: { logementId: logementId ?? '' },
+                params: { logementId: logementId ?? '', type },
               })
             }
           />
@@ -252,13 +297,13 @@ export default function EcranVerifierEtatDesLieux() {
         showsVerticalScrollIndicator={false}
       >
         <EnTeteEcran
-          titre="Vérifier l’état des lieux"
+          titre={`Vérifier : ${LIBELLE_TYPE_EDL[type]}`}
           sousTitre="Ce qui sera imprimé, dans l’ordre"
           actionLibelle="Modifier"
           actionOnPress={() =>
             router.replace({
               pathname: '/etat-des-lieux/nouveau',
-              params: { logementId: logement.id },
+              params: { logementId: logement.id, type },
             })
           }
         />
@@ -324,6 +369,19 @@ export default function EcranVerifierEtatDesLieux() {
             valeur={LIBELLE_TYPE_EDL[brouillon.type]}
           />
           <LigneDetail libelle="Date" valeur={formaterDateFr(brouillon.dateEdl ?? '')} />
+          {brouillon.type === 'sortie' ? (
+            <>
+              <LigneDetail
+                libelle="État des lieux d’entrée"
+                valeur={brouillon.dateEntree ? formaterDateFr(brouillon.dateEntree) : '—'}
+                accentuee
+              />
+              <LigneDetail
+                libelle="Nouveau domicile"
+                valeur={brouillon.nouveauDomicile?.trim() || 'Non renseigné'}
+              />
+            </>
+          ) : null}
         </Carte>
 
         {/* --- 3. Le bail ------------------------------------------------- */}
@@ -410,6 +468,72 @@ export default function EcranVerifierEtatDesLieux() {
             ) : null}
           </Carte>
         ))}
+
+        {/* --- Les évolutions, pour une sortie ---------------------------- */}
+        {brouillon.type === 'sortie' ? (
+          <Carte>
+            <Text style={styles.section}>Évolutions depuis l’entrée</Text>
+            {!comparaison ? (
+              <Text style={styles.note}>
+                L’état des lieux d’entrée n’a pas pu être relu : ses pièces ne sont pas
+                conservées sous forme lisible. Le document renverra à l’autre état des lieux au
+                lieu d’imprimer un tableau comparatif vide.
+              </Text>
+            ) : (
+              <>
+                <LigneDetail
+                  libelle="Éléments comparés"
+                  valeur={String(comparaison.pieces.reduce((n, p) => n + p.elements.length, 0))}
+                  accentuee
+                />
+                <LigneDetail
+                  libelle="Évolutions constatées"
+                  valeur={String(comparaison.evolutions)}
+                />
+                <LigneDetail libelle="Éléments nouveaux" valeur={String(comparaison.nouveaux)} />
+                <LigneDetail
+                  libelle="Non décrits à la sortie"
+                  valeur={String(comparaison.disparus)}
+                />
+                <LigneDetail
+                  libelle="Non comparables"
+                  valeur={String(comparaison.incomparables)}
+                />
+                <LigneDetail
+                  libelle="Éléments photographiés"
+                  valeur={String(comparaison.illustres)}
+                />
+
+                {comparaison.evolutions > 0 ? (
+                  <Text style={styles.titreSousGroupe}>Ce qui a changé</Text>
+                ) : null}
+                {comparaison.pieces
+                  .filter((p) => p.elements.some((e) => e.evolution))
+                  .map((p) => (
+                    <View key={p.id} style={styles.blocElement}>
+                      <Text style={styles.nomPiece}>{p.nom}</Text>
+                      {p.elements
+                        .filter((e) => e.evolution)
+                        .map((e) => (
+                          <View key={e.id} style={styles.ligneElement}>
+                            <Text style={styles.nomElement}>{e.nom}</Text>
+                            <Text style={styles.etatElement}>
+                              {libelleEtat(e.etatEntree)} → {libelleEtat(e.etatSortie)}
+                            </Text>
+                          </View>
+                        ))}
+                    </View>
+                  ))}
+
+                <Text style={styles.note}>
+                  Un élément n’est comparé que si l’entrée et la sortie ont toutes deux constaté
+                  son état. Le document met les deux constats en regard, et rappelle qu’il n’impute
+                  aucune dégradation au locataire.
+                </Text>
+              </>
+            )}
+          </Carte>
+        ) : null}
 
         {/* --- 6. Compteurs ----------------------------------------------- */}
         <Carte>
@@ -617,8 +741,20 @@ const creerStyles = (couleurs: Couleurs) =>
       borderRadius: rayons.md,
       backgroundColor: couleurs.fondSourdine,
     },
-    blocElement: {
-      paddingVertical: espaces.sm,
+    titreSousGroupe: {
+      ...typographie.petitAppuye,
+      color: couleurs.texteSecondaire,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginTop: espaces.md,
+      marginBottom: espaces.xs,
+    },
+    nomPiece: {
+      ...typographie.corpsAppuye,
+      color: couleurs.texte,
+      marginBottom: espaces.xs,
+    },
+    blocElement: {      paddingVertical: espaces.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: couleurs.bordure,
     },

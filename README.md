@@ -64,9 +64,9 @@ Pour l'instant, on peut **ranger** un document : un bail signé scanné, un
 diagnostic, une attestation d'assurance, une facture de travaux. L'application
 **copie** le fichier chez elle — il reste lisible même si l'original est
 déplacé ou supprimé — et le range sous le bon logement, sous le bon locataire,
-dans la bonne catégorie. Les **baux** sont désormais **produits** par
-l'application et viennent s'ajouter au même endroit ; les états des lieux et les
-inventaires les y rejoindront.
+dans la bonne catégorie. Les **baux** et les **états des lieux**, d'entrée comme de
+sortie, sont désormais **produits** par l'application et viennent s'ajouter au même
+endroit ; les inventaires les y rejoindront.
 
 ### Les baux de location
 
@@ -121,18 +121,20 @@ certificat, ni horodatage, ni cachet de tiers de confiance.
 
 ### Les états des lieux
 
-On part d'un logement : depuis sa fiche, **« État des lieux d'entrée »**, ou
-depuis l'onglet **Documents**, catégorie **États des lieux**. L'application
-reprend l'adresse, le propriétaire, le locataire et le loyer déjà enregistrés, et
-**propose les pièces et leurs éléments** selon le type de logement — cuisine,
-salle de bain, séjour, chambres, entrée. La liste s'ajuste : on renomme, on
-ajoute, on retire.
+On part d'un logement : depuis sa fiche, **« État des lieux d'entrée »** ou
+**« État des lieux de sortie »**, ou depuis l'onglet **Documents**, catégorie
+**États des lieux** — où l'on choisit d'abord s'il s'agit d'une entrée ou d'une
+sortie. L'application reprend l'adresse, le propriétaire, le locataire et le
+loyer déjà enregistrés, et **propose les pièces et leurs éléments** selon le type
+de logement — cuisine, salle de bain, séjour, chambres, entrée. La liste
+s'ajuste : on renomme, on ajoute, on retire.
 
 **Le formulaire compte six étapes**, avec « Étape 3/6 » affiché, et il
 **s'enregistre tout seul** pendant la saisie — pas seulement à la fermeture. Un
 état des lieux interrompu, ou repris trois jours plus tard, repart exactement où
 il s'était arrêté, **photos comprises**. Un brouillon oublié depuis plus de trente
-jours reste accessible sans être imposé.
+jours reste accessible sans être imposé. Une entrée et une sortie ont **deux
+brouillons distincts** : commencer une sortie n'efface pas une entrée en cours.
 
 **Chaque élément reçoit un état**, choisi d'un appui parmi sept : Neuf, Très bon
 état, Bon état, État d'usage, Mauvais état, **Non vérifié**, **Non applicable**.
@@ -169,12 +171,45 @@ et il est composé pour cela : un titre ne reste pas seul en bas de page, un
 Il est rangé automatiquement dans le dossier du logement, sous le locataire en
 place, et un bouton **« Partager le PDF »** l'envoie où vous voulez.
 
+#### L'état des lieux de sortie se compare à celui d'entrée
+
+C'est ce qui distingue une sortie d'une simple seconde visite. L'application
+**retrouve toute seule** l'état des lieux d'entrée du logement et en reprend les
+pièces, les éléments, les compteurs et les clés : **rien n'est à ressaisir**.
+
+Ce qui est repris, et ce qui ne l'est pas, est une décision, pas un détail :
+
+- les **états relevés à l'entrée ne sont pas recopiés** — une sortie constate à
+  nouveau, et vous constatez chaque élément en ayant **l'état d'entrée affiché
+  juste au-dessus** des sept choix ;
+- les **index des compteurs ne sont pas recopiés** : un index recopié serait un
+  relevé inventé, et le document refuse de s'établir tant qu'ils sont vides ;
+- les **clés** reviennent pré-remplies avec leur quantité, à corriger si besoin.
+
+Le PDF de sortie **met les deux constats en regard** : un tableau élément par
+élément — état d'entrée, état de sortie — et, pour chaque élément photographié,
+**les deux photos côte à côte**, la colonne de gauche datée de l'entrée et celle
+de droite datée de la sortie.
+
+Deux principes y sont tenus avec soin :
+
+- **Un écart n'est jamais présenté comme une faute.** Le document met deux
+  constats côte à côte et **n'impute aucune dégradation au locataire** ; c'est
+  écrit dans la section même où les écarts se lisent.
+- **Rien n'est inventé sur ce qui n'a pas été vu.** Un élément « non vérifié » à
+  l'entrée puis « bon » à la sortie n'a **pas** évolué : personne ne l'avait
+  regardé. Le document le dit, et compte ces éléments à part. Un élément qui
+  n'existe que d'un côté est imprimé comme « non décrit », jamais comme
+  « inchangé ».
+
 **Aucune exigence n'est inventée.** Les douze sections du document suivent le
 décret n° 2016-382 du 30 mars 2016 et l'article 3-2 de la loi du 6 juillet 1989,
-lus à Légifrance. Chaque section dit son fondement, et les sources sont imprimées
-en fin de document avec leur date de consultation. Le document rappelle aussi que
-la vétusté s'entend comme l'usure du temps ou de l'usage normal, et qu'il
-**n'impute aucune dégradation au locataire**.
+lus à Légifrance — quinze à la sortie, les trois supplémentaires venant de
+l'article 2, 2° : la date de l'état des lieux d'entrée, l'adresse du nouveau
+domicile du locataire, et les évolutions constatées. Chaque section dit son
+fondement, et les sources sont imprimées en fin de document avec leur date de
+consultation. Le document rappelle aussi que la vétusté s'entend comme l'usure du
+temps ou de l'usage normal.
 
 Points de fond :
 

@@ -755,14 +755,27 @@ export function piecesInitiales(typeLogement: string): PieceEdl[] {
   return pieces;
 }
 
-/** Ajoute un élément à une pièce, avec un identifiant libre dans cette pièce. */
-export function ajouterElement(piece: PieceEdl, nom: string): PieceEdl {
+/**
+ * Ajoute un élément à une pièce, avec un identifiant libre dans cette pièce.
+ *
+ * `eviter` porte des identifiants qu'il ne faut **pas** réattribuer. Un état
+ * des lieux de sortie dérive de celui d'entrée : si le bailleur retire un
+ * élément puis en ajoute un autre, `premierLibre` rendrait l'identifiant laissé
+ * libre — et la comparaison apparierait le nouvel élément avec celui de
+ * l'entrée qu'il remplace, en imprimant une évolution qui n'a pas eu lieu. Le
+ * formulaire passe donc les identifiants de l'entrée.
+ */
+export function ajouterElement(
+  piece: PieceEdl,
+  nom: string,
+  eviter: readonly string[] = [],
+): PieceEdl {
   return {
     ...piece,
     elements: [
       ...piece.elements,
       {
-        id: premierLibre('e', piece.elements.map((e) => e.id)),
+        id: premierLibre('e', [...piece.elements.map((e) => e.id), ...eviter]),
         nom,
         commentaire: '',
         photos: [],
@@ -771,11 +784,66 @@ export function ajouterElement(piece: PieceEdl, nom: string): PieceEdl {
   };
 }
 
-/** Ajoute une photo à un élément. */
-export function ajouterPhoto(element: ElementEdl, photo: PhotoEdl): ElementEdl {
+/**
+ * Tous les identifiants de photos d'un document, pièces et éléments mêlés.
+ *
+ * Sert à en fabriquer un qui soit libre **dans tout le document**, et non
+ * seulement dans l'élément qui reçoit la photo. La distinction n'est pas
+ * théorique : les photos sont indexées par identifiant au moment de
+ * l'impression, si bien que deux `ph1` — l'un dans le séjour, l'autre dans la
+ * chambre — ne donnaient **qu'une seule image imprimée**, celle du premier, et
+ * la seconde disparaissait du document sans que rien ne le signale. Mesuré.
+ */
+export function identifiantsDePhotos(pieces: readonly PieceEdl[]): string[] {
+  const ids: string[] = [];
+  for (const piece of pieces) {
+    for (const p of piece.photos) if (p.id) ids.push(p.id);
+    for (const element of piece.elements) {
+      for (const p of element.photos) if (p.id) ids.push(p.id);
+    }
+  }
+  return ids;
+}
+
+/**
+ * Ajoute une photo à un élément.
+ *
+ * `prises` porte les identifiants déjà employés **dans le document**. Sans
+ * cette liste, l'identifiant est cherché libre dans le seul élément, et deux
+ * éléments finissent par porter le même : l'impression n'en garde alors qu'un.
+ */
+export function ajouterPhoto(
+  element: ElementEdl,
+  photo: PhotoEdl,
+  prises: readonly string[] = [],
+): ElementEdl {
   return {
     ...element,
-    photos: [...element.photos, { ...photo, id: premierLibre('ph', element.photos.map((p) => p.id)) }],
+    photos: [
+      ...element.photos,
+      { ...photo, id: premierLibre('ph', [...element.photos.map((p) => p.id), ...prises]) },
+    ],
+  };
+}
+
+/**
+ * Ajoute une photo à une pièce — une vue d'ensemble, sans élément désigné.
+ *
+ * Cette fonction existe parce que l'écran, lui, empilait la photo sans lui
+ * donner d'identifiant : toutes les vues d'ensemble portaient la chaîne vide,
+ * s'écrasaient dans l'index de l'impression, et une seule était dessinée.
+ */
+export function ajouterPhotoDePiece(
+  piece: PieceEdl,
+  photo: PhotoEdl,
+  prises: readonly string[] = [],
+): PieceEdl {
+  return {
+    ...piece,
+    photos: [
+      ...piece.photos,
+      { ...photo, id: premierLibre('ph', [...piece.photos.map((p) => p.id), ...prises]) },
+    ],
   };
 }
 
@@ -841,6 +909,203 @@ export interface BrouillonEdl {
   /** Le logement comporte-t-il un chauffage ou un chauffe-eau individuel ? */
   compteursIndividuels?: boolean;
   signatures?: Signature[];
+}
+
+// ---------------------------------------------------------------------------
+// Un état des lieux de sortie, dérivé de celui d'entrée
+// ---------------------------------------------------------------------------
+
+export interface SortieDerivee {
+  /** Les pièces de l'entrée, à constater à nouveau. */
+  pieces: PieceEdl[];
+  /** Les compteurs de l'entrée, **sans leur index**. */
+  compteurs: ReleveCompteur[];
+  /** Les clés remises, telles qu'elles l'ont été. */
+  cles: CleRemise[];
+}
+
+/**
+ * Ce qu'un état des lieux de sortie reprend de celui d'entrée.
+ *
+ * Trois listes, et trois traitements différents — c'est là que se joue la
+ * vérité du document :
+ *
+ *  1. **Les pièces et leurs éléments** reprennent leurs **identifiants** et
+ *     leurs **noms**, mais rien d'autre. C'est par les identifiants que la
+ *     comparaison apparie une chambre à la même chambre, sans deviner. Les
+ *     états, les commentaires et les photos sont **vidés** : un état des lieux
+ *     de sortie constate à nouveau, et recopier le constat d'entrée ferait
+ *     signer au locataire un document qui décrit une visite qu'il n'a pas
+ *     faite.
+ *  2. **Les compteurs** gardent leur type et leur précision, et perdent leur
+ *     **index**. Recopier `007412` à la sortie serait un relevé inventé : le
+ *     champ vide oblige à lire le compteur, et le domaine refuse d'établir le
+ *     document tant qu'il l'est.
+ *  3. **Les clés** gardent leur libellé, leur destination et leur quantité.
+ *     C'est une **proposition** — le cas courant est que les mêmes clés
+ *     reviennent — que l'écran montre remplie et modifiable, jamais un constat
+ *     déjà signé.
+ */
+export function sortieDepuisLEntree(entree: {
+  pieces?: readonly PieceEdl[];
+  compteurs?: readonly ReleveCompteur[];
+  cles?: readonly CleRemise[];
+}): SortieDerivee {
+  return {
+    pieces: (entree.pieces ?? []).map((piece) => ({
+      id: piece.id,
+      nom: piece.nom,
+      commentaire: '',
+      photos: [],
+      elements: piece.elements.map((element) => ({
+        id: element.id,
+        nom: element.nom,
+        commentaire: '',
+        photos: [],
+      })),
+    })),
+    compteurs: (entree.compteurs ?? []).map((compteur) => ({
+      id: compteur.id,
+      type: compteur.type,
+      valeur: '',
+      precision: compteur.precision,
+    })),
+    cles: (entree.cles ?? []).map((cle) => ({ ...cle })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Comparaison entrée / sortie
+// ---------------------------------------------------------------------------
+
+/**
+ * Un élément, vu à l'entrée et à la sortie.
+ *
+ * `evolution` n'est vrai que si les **deux** états sont *constatés* et
+ * diffèrent. Un élément marqué « non vérifié » à l'entrée puis « bon » à la
+ * sortie n'a pas évolué : personne ne l'avait regardé. Le confondre avec une
+ * évolution ferait dire au document que quelque chose a changé là où il n'y a
+ * qu'un trou comblé — c'est la distinction que porte `etatConstate`.
+ *
+ * Rien ici ne qualifie l'évolution : ni dégradation, ni responsabilité. Le
+ * document imprime le constat, et `corpsVetuste` rappelle qu'il n'impute rien.
+ */
+export interface ComparaisonElement {
+  id: string;
+  nom: string;
+  /** L'élément est décrit dans l'état des lieux d'entrée. */
+  aLEntree: boolean;
+  /** L'élément est décrit dans l'état des lieux de sortie. */
+  aLaSortie: boolean;
+  etatEntree: EtatElement | undefined;
+  etatSortie: EtatElement | undefined;
+  /** Les deux états sont constatés et diffèrent. */
+  evolution: boolean;
+  /** L'un des deux états manque ou n'est pas un constat : rien à comparer. */
+  incomparable: boolean;
+  /** Identifiants des photos de l'entrée, pour l'impression « avant ». */
+  photosEntree: string[];
+  /** Identifiants des photos de la sortie, pour l'impression « après ». */
+  photosSortie: string[];
+}
+
+export interface ComparaisonPiece {
+  id: string;
+  /** Le nom retenu : celui de la sortie, qui est le document qu'on lit. */
+  nom: string;
+  /** La pièce existait-elle dans l'état des lieux d'entrée ? */
+  aLEntree: boolean;
+  elements: ComparaisonElement[];
+}
+
+export interface ComparaisonEdl {
+  pieces: ComparaisonPiece[];
+  /** Éléments dont l'état a changé entre les deux constats. */
+  evolutions: number;
+  /** Éléments présents à la sortie et absents de l'entrée. */
+  nouveaux: number;
+  /** Éléments présents à l'entrée et absents de la sortie. */
+  disparus: number;
+  /** Éléments dont l'un des deux états manque : ils ne se comparent pas. */
+  incomparables: number;
+  /** Éléments portant au moins une photo d'un côté ou de l'autre. */
+  illustres: number;
+}
+
+/**
+ * Met en regard l'état relevé à l'entrée et celui relevé à la sortie.
+ *
+ * L'appariement se fait **par identifiant**, jamais par nom ni par rang. Les
+ * deux états des lieux partagent les mêmes identifiants par construction —
+ * `sortieDepuisLEntree` les reprend — et c'est la seule règle qui résiste à un
+ * renommage : une pièce rebaptisée « Chambre d'amis » reste la même pièce, et
+ * deux pièces qui portent le même nom ne se confondent pas.
+ *
+ * Une pièce présente à l'entrée et absente de la sortie **n'est pas oubliée** :
+ * ses éléments sont listés comme disparus. Ne pas les montrer laisserait croire
+ * qu'ils ont été constatés, alors que le logement n'a pas été regardé là.
+ */
+export function comparerEdl(
+  entree: readonly PieceEdl[],
+  sortie: readonly PieceEdl[],
+): ComparaisonEdl {
+  const piecesEntree = new Map(entree.map((p) => [p.id, p]));
+  const piecesSortie = new Map(sortie.map((p) => [p.id, p]));
+
+  const comparer = (
+    elementEntree: ElementEdl | undefined,
+    elementSortie: ElementEdl | undefined,
+    id: string,
+    nom: string,
+  ): ComparaisonElement => {
+    const etatEntree = elementEntree?.etat;
+    const etatSortie = elementSortie?.etat;
+    const constate = etatConstate(etatEntree) && etatConstate(etatSortie);
+    return {
+      id,
+      nom,
+      aLEntree: elementEntree !== undefined,
+      aLaSortie: elementSortie !== undefined,
+      etatEntree,
+      etatSortie,
+      evolution: constate && etatEntree !== etatSortie,
+      incomparable: elementEntree !== undefined && elementSortie !== undefined && !constate,
+      photosEntree: (elementEntree?.photos ?? []).map((p) => p.id),
+      photosSortie: (elementSortie?.photos ?? []).map((p) => p.id),
+    };
+  };
+
+  const ordre = [
+    ...sortie.map((p) => p.id),
+    ...entree.filter((p) => !piecesSortie.has(p.id)).map((p) => p.id),
+  ];
+
+  const pieces: ComparaisonPiece[] = ordre.map((id) => {
+    const a = piecesEntree.get(id);
+    const b = piecesSortie.get(id);
+    const nom = (b?.nom ?? a?.nom ?? '').trim();
+
+    const elementsSortie = (b?.elements ?? []).map((e) =>
+      comparer(a?.elements.find((x) => x.id === e.id), e, e.id, e.nom),
+    );
+    // Les éléments de l'entrée que la sortie ne décrit plus : le logement n'a
+    // pas été regardé là, et le document doit le dire plutôt que de les taire.
+    const disparus = (a?.elements ?? [])
+      .filter((e) => !(b?.elements ?? []).some((x) => x.id === e.id))
+      .map((e) => comparer(e, undefined, e.id, e.nom));
+
+    return { id, nom, aLEntree: a !== undefined, elements: [...elementsSortie, ...disparus] };
+  });
+
+  const tous = pieces.flatMap((p) => p.elements);
+  return {
+    pieces,
+    evolutions: tous.filter((e) => e.evolution).length,
+    nouveaux: tous.filter((e) => !e.aLEntree).length,
+    disparus: tous.filter((e) => !e.aLaSortie).length,
+    incomparables: tous.filter((e) => e.incomparable).length,
+    illustres: tous.filter((e) => e.photosEntree.length > 0 || e.photosSortie.length > 0).length,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1053,6 +1318,18 @@ export function avertissementsDeLEdl(b: BrouillonEdl): string[] {
       'Le locataire peut demander à compléter l’état des lieux d’entrée dans les dix jours ' +
         'suivant son établissement.',
     );
+  } else {
+    // L'adresse du nouveau domicile est une mention obligatoire de l'état des
+    // lieux de sortie (article 2, 2°, a) du décret). Elle se signale sans
+    // bloquer : le locataire peut légitimement ne pas savoir encore où il
+    // habitera, et refuser d'établir la sortie pour cela laisserait le
+    // bailleur sans constat du tout.
+    if (!b.nouveauDomicile || !b.nouveauDomicile.trim()) {
+      avertissements.push(
+        'L’adresse du nouveau domicile du locataire n’est pas renseignée. L’état des lieux de ' +
+          'sortie doit la comporter : demandez-la, ou établissez le document en le signalant.',
+      );
+    }
   }
 
   if (!b.mandataire || !b.mandataire.trim()) {
@@ -1199,16 +1476,19 @@ function reprendrePhoto(valeur: unknown, prises: string[]): PhotoEdl | null {
   return photo;
 }
 
-function reprendrePhotos(valeur: unknown): PhotoEdl[] {
+function reprendrePhotos(valeur: unknown, prises: string[]): PhotoEdl[] {
   const photos: PhotoEdl[] = [];
   for (const brut of tableau(valeur)) {
-    const photo = reprendrePhoto(brut, photos.map((p) => p.id));
-    if (photo) photos.push(photo);
+    const photo = reprendrePhoto(brut, prises);
+    if (photo) {
+      photos.push(photo);
+      prises.push(photo.id);
+    }
   }
   return photos;
 }
 
-function reprendreElement(valeur: unknown, pris: string[]): ElementEdl | null {
+function reprendreElement(valeur: unknown, pris: string[], photosPrises: string[]): ElementEdl | null {
   const o = objet(valeur);
   if (!o) return null;
   const nom = texteOuVide(o.nom).trim();
@@ -1223,11 +1503,11 @@ function reprendreElement(valeur: unknown, pris: string[]): ElementEdl | null {
     // élément que l'utilisateur croirait avoir renseigné.
     etat: ETATS_VALIDES.has(etat) ? (etat as EtatElement) : undefined,
     commentaire: texteOuVide(o.commentaire),
-    photos: reprendrePhotos(o.photos),
+    photos: reprendrePhotos(o.photos, photosPrises),
   };
 }
 
-function reprendrePiece(valeur: unknown, pris: string[]): PieceEdl | null {
+function reprendrePiece(valeur: unknown, pris: string[], photosPrises: string[]): PieceEdl | null {
   const o = objet(valeur);
   if (!o) return null;
   const nom = texteOuVide(o.nom).trim();
@@ -1235,7 +1515,7 @@ function reprendrePiece(valeur: unknown, pris: string[]): PieceEdl | null {
 
   const elements: ElementEdl[] = [];
   for (const brut of tableau(o.elements)) {
-    const element = reprendreElement(brut, elements.map((e) => e.id));
+    const element = reprendreElement(brut, elements.map((e) => e.id), photosPrises);
     if (element) elements.push(element);
   }
 
@@ -1243,7 +1523,7 @@ function reprendrePiece(valeur: unknown, pris: string[]): PieceEdl | null {
     id: identifiantRepris(o.id, 'p', pris),
     nom,
     commentaire: texteOuVide(o.commentaire),
-    photos: reprendrePhotos(o.photos),
+    photos: reprendrePhotos(o.photos, photosPrises),
     elements,
   };
 }
@@ -1327,8 +1607,13 @@ export function reprendreBrouillonEdl(
 
   if (Array.isArray(donnees.pieces)) {
     const pieces: PieceEdl[] = [];
+    // Les identifiants de photos sont rendus uniques **dans tout le
+    // document** : c'est ce que l'impression suppose, en indexant les images
+    // par identifiant. Deux listes séparées — une par élément — laisseraient
+    // passer deux `ph1`, et la seconde photo ne serait pas imprimée.
+    const photosPrises: string[] = [];
     for (const brut of donnees.pieces) {
-      const piece = reprendrePiece(brut, pieces.map((p) => p.id));
+      const piece = reprendrePiece(brut, pieces.map((p) => p.id), photosPrises);
       if (piece) pieces.push(piece);
     }
     resultat.pieces = pieces;

@@ -28,11 +28,15 @@ import {
   LIBELLE_TYPE_EDL,
   SOURCES_EDL,
   etatConstate,
+  libelleEtat,
   sectionsEdl,
   syntheseEdl,
 } from '../domain/etat-des-lieux.ts';
 import type {
   CleRemise,
+  ComparaisonEdl,
+  ComparaisonElement,
+  ComparaisonPiece,
   EtatElement,
   PieceEdl,
   ReleveCompteur,
@@ -142,6 +146,16 @@ export interface ContenuEdl {
   dateEntree?: string;
   /** Pour une sortie : l'adresse du nouveau domicile du locataire. */
   nouveauDomicile?: string;
+  /**
+   * Pour une sortie : la mise en regard des deux constats.
+   *
+   * Absente quand l'état des lieux d'entrée n'a pas pu être relu — la section
+   * le dit alors en clair, plutôt que d'imprimer un tableau vide qui laisserait
+   * croire qu'aucun élément n'a évolué.
+   */
+  comparaison?: ComparaisonEdl;
+  /** Pour une sortie : les photos de l'entrée, indexées par identifiant. */
+  photosEntree?: PhotosEdl;
   photos: PhotosEdl;
   /** Les avertissements à imprimer, pour que le document dise ses limites. */
   reserves: string[];
@@ -384,6 +398,72 @@ export const STYLES_EDL = `
     page-break-inside: avoid;
   }
   .e-sources li { margin-bottom: 1mm; break-inside: avoid-page; page-break-inside: avoid; }
+
+  /* --- Comparaison entree / sortie ------------------------------------- */
+  /* Le tableau met les deux constats cote a cote, et rien d'autre : aucune
+     colonne ne qualifie l'ecart, parce que le document n'a pas a le faire.
+     (Les accents graves sont proscrits dans ce commentaire : il vit a
+     l'interieur d'un litteral de gabarit, et ils fermeraient la chaine.) */
+  .e-evol-piece {
+    margin-bottom: 5mm;
+  }
+  .e-evol-piece > h3 {
+    font-size: 10.5pt;
+    color: ${COULEURS_DOCUMENT.principaleFonce};
+    background: ${COULEURS_DOCUMENT.principaleTresClaire};
+    border-left: 1.2mm solid ${COULEURS_DOCUMENT.principale};
+    padding: 1.5mm 2.5mm;
+    margin: 0 0 2mm 0;
+    break-after: avoid-page;
+    page-break-after: avoid;
+  }
+  .e-evol-piece > h3 .e-evol-compte {
+    font-size: 8.5pt;
+    font-weight: 400;
+    color: ${COULEURS_DOCUMENT.texteSecondaire};
+  }
+  .e-evol { table-layout: fixed; }
+  .e-evol th { width: 34mm; }
+  .e-evol th:first-child { width: auto; }
+  .e-evol td.e-evol-element { font-weight: 600; }
+  .e-evol td.e-evol-etat { width: 34mm; }
+  .e-evol td.e-evol-etat .e-etat { font-size: 8pt; }
+  .e-evol-note { font-size: 8pt; color: ${COULEURS_DOCUMENT.texteTertiaire}; font-style: italic; }
+  /* Une ligne coupee entre deux feuilles ne se lit plus : on garde chaque
+     element d'un seul tenant. */
+  .e-evol tr { break-inside: avoid-page; page-break-inside: avoid; }
+
+  /* Avant / apres : deux photos du meme element, cote a cote. Une paire qui
+     se scinde en deux feuilles ne se compare plus — c'est tout l'objet de la
+     section. */
+  .e-paires { margin-top: 2mm; }
+  .e-paire {
+    border-top: 0.2mm solid ${COULEURS_DOCUMENT.bordureLegere};
+    padding: 2mm 0 1mm 0;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+  .e-paire-titre { font-size: 9pt; font-weight: 600; margin: 0 0 1.5mm 0; }
+  .e-paire-colonnes { display: flex; gap: 3mm; }
+  .e-paire-colonne { flex: 1 1 0; min-width: 0; }
+  .e-paire-etiquette {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.3mm;
+    color: ${COULEURS_DOCUMENT.principale};
+    margin: 0 0 1mm 0;
+  }
+  .e-paire-colonne .e-photo { width: 100%; margin: 0 0 1.5mm 0; }
+  .e-paire-colonne .e-photo-absente { width: 100%; }
+  .e-paire-sans {
+    font-size: 8pt;
+    font-style: italic;
+    color: ${COULEURS_DOCUMENT.texteTertiaire};
+    border: 0.25mm dashed ${COULEURS_DOCUMENT.bordure};
+    border-radius: 1.5mm;
+    padding: 8mm 2mm;
+    text-align: center;
+  }
 `;
 
 // ---------------------------------------------------------------------------
@@ -811,19 +891,183 @@ function corpsDeSection(valeur: string, contenu: ContenuEdl): string {
 }
 
 /**
+ * Une colonne d'une paire avant/après.
+ *
+ * La colonne porte son propre intitulé — « Entrée du 12 mars 2026 » — et non un
+ * simple « Avant » : deux photos de la même pièce prises à des années
+ * d'intervalle se distinguent par leur date, et une paire sans date ne dit pas
+ * au lecteur laquelle des deux est l'entrée.
+ */
+function colonneDePaire(
+  etiquette: string,
+  etat: EtatElement | undefined,
+  photos: PhotoImprimable[],
+): string {
+  const rendues = photos.map((p) => photo(p)).filter((h) => h.length > 0).join('');
+  return `<div class="e-paire-colonne">
+    <p class="e-paire-etiquette">${echapper(etiquette)} — ${echapper(libelleEtat(etat))}</p>
+    ${rendues || '<p class="e-paire-sans">Aucune photo</p>'}
+  </div>`;
+}
+
+/**
+ * Une paire avant / après, pour un élément.
+ *
+ * Les photos viennent de **deux index distincts** — celles de l'entrée et
+ * celles de la sortie — et ne peuvent pas être confondues : les deux états des
+ * lieux numérotent leurs photos `ph1`, `ph2`… par élément, si bien qu'un index
+ * unique ferait imprimer la photo de l'entrée à la place de celle de la sortie.
+ * C'est aussi la raison pour laquelle la paire est construite ici, et non
+ * déduite d'un tableau de photos commun.
+ */
+function paireEnHtml(
+  element: ComparaisonElement,
+  etiquetteEntree: string,
+  etiquetteSortie: string,
+  photosEntree: PhotosEdl,
+  photosSortie: PhotosEdl,
+): string {
+  const avant = element.photosEntree
+    .map((id) => photosEntree[id])
+    .filter((p): p is PhotoImprimable => p !== undefined);
+  const apres = element.photosSortie
+    .map((id) => photosSortie[id])
+    .filter((p): p is PhotoImprimable => p !== undefined);
+
+  return `<div class="e-paire">
+    <p class="e-paire-titre">${echapper(element.nom || 'Élément sans nom')}</p>
+    <div class="e-paire-colonnes">
+      ${colonneDePaire(etiquetteEntree, element.etatEntree, avant)}
+      ${colonneDePaire(etiquetteSortie, element.etatSortie, apres)}
+    </div>
+  </div>`;
+}
+
+/** La ligne d'un élément dans le tableau comparatif. */
+function ligneComparaison(element: ComparaisonElement): string {
+  // Un élément absent d'un côté n'est pas « non renseigné » : il n'y est pas.
+  // Confondre les deux ferait lire un oubli là où le logement n'a pas été
+  // regardé, et l'inverse.
+  const celluleEntree = element.aLEntree
+    ? pastille(element.etatEntree)
+    : '<span class="e-evol-note">Non décrit à l’entrée</span>';
+  const celluleSortie = element.aLaSortie
+    ? pastille(element.etatSortie)
+    : '<span class="e-evol-note">Non décrit à la sortie</span>';
+
+  return `<tr>
+    <td class="e-evol-element">${echapper(element.nom || 'Élément sans nom')}</td>
+    <td class="e-evol-etat">${celluleEntree}</td>
+    <td class="e-evol-etat">${celluleSortie}</td>
+  </tr>`;
+}
+
+function pieceCompareeEnHtml(
+  piece: ComparaisonPiece,
+  contenu: ContenuEdl,
+  etiquetteEntree: string,
+  etiquetteSortie: string,
+): string {
+  const evolutions = piece.elements.filter((e) => e.evolution).length;
+  const compte =
+    evolutions > 0
+      ? `<span class="e-evol-compte">— ${evolutions} évolution(s) constatée(s)</span>`
+      : `<span class="e-evol-compte">— aucun écart entre les deux constats</span>`;
+
+  const tableau = `<table class="e-table e-evol">
+    <thead><tr><th>Élément</th><th>Entrée</th><th>Sortie</th></tr></thead>
+    <tbody>${piece.elements.map(ligneComparaison).join('')}</tbody>
+  </table>`;
+
+  // Les paires ne sont imprimées que pour les éléments qui portent une photo
+  // d'un côté ou de l'autre : une paire de deux cadres vides n'apprend rien.
+  const illustres = piece.elements.filter(
+    (e) => e.photosEntree.length > 0 || e.photosSortie.length > 0,
+  );
+  const paires =
+    illustres.length > 0
+      ? `<div class="e-paires">${illustres
+          .map((e) =>
+            paireEnHtml(e, etiquetteEntree, etiquetteSortie, contenu.photosEntree ?? {}, contenu.photos),
+          )
+          .join('')}</div>`
+      : '';
+
+  const notePiece = piece.aLEntree
+    ? ''
+    : '<p class="e-evol-note">Cette pièce n’existait pas dans l’état des lieux d’entrée.</p>';
+
+  return `<div class="e-evol-piece">
+    <h3>${echapper(piece.nom || 'Pièce sans nom')} ${compte}</h3>
+    ${notePiece}
+    ${tableau}
+    ${paires}
+  </div>`;
+}
+
+/**
  * Les évolutions depuis l'entrée.
  *
- * À ce stade de l'application, la comparaison détaillée vit dans l'écran qui
- * prépare l'état des lieux de sortie ; le document, lui, se contente de rappeler
- * ce qu'il constate et de renvoyer à l'état des lieux d'entrée. Inventer ici un
- * tableau comparatif que rien n'a rempli serait le pire des deux mondes : une
- * section obligatoire qui affirme sans constater.
+ * Deux cas, et le second n'est pas un repli dégradé : quand l'état des lieux
+ * d'entrée n'a pas pu être relu, le document **le dit** et renvoie à l'autre
+ * document, dont la présentation est identique. Inventer un tableau comparatif
+ * que rien n'a rempli serait le pire des deux mondes : une section obligatoire
+ * qui affirme sans constater.
+ *
+ * Ce que la section ne fait jamais : qualifier un écart. Elle met deux constats
+ * côte à côte, et la phrase qui suit rappelle que le document n'impute aucune
+ * dégradation au locataire — c'est la même règle que la section sur la vétusté,
+ * répétée là où le lecteur voit les écarts.
  */
 function corpsEvolutions(contenu: ContenuEdl): string {
-  return `<p class="e-texte-libre">Le présent état des lieux constate l’état du logement à la sortie.
+  const comparaison = contenu.comparaison;
+  const dateEntree = contenu.dateEntree ? dateFr(contenu.dateEntree) : '';
+  const rappel = `<p class="e-mention">Les deux constats sont mis en regard, sans être qualifiés.
+  Un écart entre deux états n’est ni une dégradation ni une faute : le présent document
+  <strong>n’impute aucune responsabilité au locataire</strong>. L’appréciation d’une éventuelle
+  responsabilité, et l’application d’une grille de vétusté si les parties en ont convenu une,
+  relèvent des parties et le cas échéant de la juridiction compétente.</p>`;
+
+  if (!comparaison) {
+    return `<p class="e-texte-libre">Le présent état des lieux constate l’état du logement à la sortie.
 Les évolutions de chaque pièce et partie du logement depuis l’établissement de l’état des lieux
-d’entrée se lisent en confrontant ce document à celui du ${echapper(dateFr(contenu.dateEntree ?? ''))},
-dont la présentation est identique, comme le prévoit l’article 3 du décret n° 2016-382.</p>`;
+d’entrée${
+      dateEntree ? ` du ${echapper(dateEntree)}` : ''
+    } se lisent en confrontant ce document à celui-là, dont la présentation est identique,
+comme le prévoit l’article 3 du décret n° 2016-382.</p>
+    ${rappel}`;
+  }
+
+  const entete = `<p class="e-texte-libre">Le tableau ci-dessous met en regard l’état relevé à l’entrée${
+    dateEntree ? ` le ${echapper(dateEntree)}` : ''
+  } et l’état relevé à la sortie, élément par élément. Les deux documents partagent les mêmes pièces
+et les mêmes éléments : c’est leur identifiant, et non leur nom, qui les apparie.</p>
+  <table class="e-table">
+    ${ligne('Éléments comparés', String(comparaison.pieces.reduce((n, p) => n + p.elements.length, 0)))}
+    ${ligne('Évolutions constatées', String(comparaison.evolutions))}
+    ${ligne('Éléments nouveaux', String(comparaison.nouveaux))}
+    ${ligne('Éléments non décrits à la sortie', String(comparaison.disparus))}
+    ${ligne('Éléments non comparables', String(comparaison.incomparables))}
+  </table>`;
+
+  // La phrase qui suit n'est imprimée que si elle porte : un document sans
+  // élément incomparable n'a pas à expliquer ce qu'est un élément incomparable.
+  const surLesIncomparables =
+    comparaison.incomparables > 0
+      ? `<p class="e-mention">${comparaison.incomparables} élément(s) ne se comparent pas : l’un des
+deux constats manque, ou porte la mention « non vérifié ». Un élément que personne n’a regardé n’a
+pas évolué, et le dire ainsi vaut mieux que de l’annoncer comme inchangé.</p>`
+      : '';
+
+  const etiquetteEntree = `Entrée${dateEntree ? ` du ${dateEntree}` : ''}`;
+  const etiquetteSortie = `Sortie du ${dateFr(contenu.dateEdl)}`;
+
+  return `${entete}
+    ${surLesIncomparables}
+    ${comparaison.pieces
+      .map((p) => pieceCompareeEnHtml(p, contenu, etiquetteEntree, etiquetteSortie))
+      .join('')}
+    ${rappel}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -857,7 +1101,11 @@ export function contenuEdlDepuis(params: {
   compteursIndividuels?: boolean;
   dateEntree?: string;
   nouveauDomicile?: string;
+  /** La mise en regard des deux constats, quand l'entrée a pu être relue. */
+  comparaison?: ComparaisonEdl;
   photos?: PhotosEdl;
+  /** Les photos de l'entrée, indexées séparément de celles de la sortie. */
+  photosEntree?: PhotosEdl;
   reserves?: string[];
 }): ContenuEdl {
   const locataires = params.locataires;
@@ -897,7 +1145,9 @@ export function contenuEdlDepuis(params: {
     compteursIndividuels: params.compteursIndividuels === true,
     dateEntree: params.dateEntree,
     nouveauDomicile: params.nouveauDomicile,
+    comparaison: params.comparaison,
     photos: params.photos ?? {},
+    photosEntree: params.photosEntree,
     reserves: params.reserves ?? [],
   };
 }

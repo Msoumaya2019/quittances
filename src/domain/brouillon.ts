@@ -21,14 +21,32 @@
  *
  * C'est une liste **fermée** : elle nomme les brouillons que l'application sait
  * reprendre. Les inventaires y entreront avec leur écran.
+ *
+ * Un état des lieux d'entrée et un état des lieux de sortie ont **deux
+ * brouillons distincts**, et non un seul partagé. La clé primaire de la table
+ * est le couple (logement, type) : avec une seule clé, commencer une sortie
+ * pendant qu'une entrée est en cours écraserait l'entrée, en silence et sans
+ * que personne ne l'ait demandé.
+ *
+ * Le nom `etat_des_lieux` reste celui de **l'entrée**, alors qu'un nom
+ * symétrique (`etat_des_lieux_entree`) serait plus lisible : le renommer
+ * rendrait orphelin tout brouillon d'entrée déjà enregistré sur un téléphone.
+ * Ne pas perdre une saisie en cours vaut mieux qu'une paire de noms bien
+ * appariée.
  */
-export type TypeBrouillon = 'bail' | 'etat_des_lieux' | 'inventaire';
+export type TypeBrouillon = 'bail' | 'etat_des_lieux' | 'etat_des_lieux_sortie' | 'inventaire';
 
 export const LIBELLE_BROUILLON: Record<TypeBrouillon, string> = {
   bail: 'Bail de location',
   etat_des_lieux: 'État des lieux',
+  etat_des_lieux_sortie: 'État des lieux de sortie',
   inventaire: 'Inventaire du mobilier',
 };
+
+/** Le brouillon d'état des lieux correspondant à la nature du document. */
+export function brouillonDeLEdl(type: 'entree' | 'sortie'): TypeBrouillon {
+  return type === 'entree' ? 'etat_des_lieux' : 'etat_des_lieux_sortie';
+}
 
 /**
  * Lit le contenu d'un brouillon, sans jamais lever.
