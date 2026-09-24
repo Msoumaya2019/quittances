@@ -14,7 +14,7 @@
  * Version courante du schéma. À incrémenter en ajoutant une migration à
  * `MIGRATIONS`, jamais en modifiant une migration existante.
  */
-export const VERSION_SCHEMA = 1;
+export const VERSION_SCHEMA = 3;
 
 export interface Migration {
   version: number;
@@ -168,6 +168,86 @@ export const MIGRATIONS: Migration[] = [
       );`,
     ],
   },
+
+  // -------------------------------------------------------------------------
+  // Migration 2 — le dossier documentaire
+  // -------------------------------------------------------------------------
+  {
+    version: 2,
+    description:
+      'Dossier documentaire : baux, états des lieux, inventaires et autres pièces, rattachés au logement et au bail',
+    statements: [
+      /**
+       * Une pièce du dossier, hors quittance.
+       *
+       * Elle est **rattachée au logement** (`ON DELETE CASCADE` : supprimer un
+       * logement efface ses pièces, comme pour `documents`) et **au bail** quand
+       * elle concerne une location. Le lien au bail est facultatif et non
+       * destructeur : clôturer une location ne doit pas faire disparaître son
+       * état des lieux. `SET NULL` plutôt que `CASCADE` parce que le bail n'est
+       * jamais supprimé dans cette application — il est clôturé par une date de
+       * sortie — mais qu'une suppression manuelle ne doit pas emporter des
+       * documents signés.
+       *
+       * `donnees` porte le contenu structuré (pièces d'un état des lieux,
+       * relevés de compteurs, signatures) en JSON. Il est séparé du PDF parce
+       * que comparer une sortie à une entrée demande de lire des valeurs, pas
+       * un document.
+       */
+      `CREATE TABLE IF NOT EXISTS pieces (
+        id              TEXT PRIMARY KEY NOT NULL,
+        logement_id     TEXT NOT NULL REFERENCES logements(id) ON DELETE CASCADE,
+        bail_id         TEXT REFERENCES baux(id) ON DELETE SET NULL,
+        type            TEXT NOT NULL,
+        titre           TEXT NOT NULL,
+        date_document   TEXT NOT NULL,
+        chemin_fichier  TEXT NOT NULL DEFAULT '',
+        donnees         TEXT NOT NULL DEFAULT '{}',
+        cree_le         TEXT NOT NULL,
+        modifie_le      TEXT NOT NULL
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_pieces_logement ON pieces(logement_id, date_document);`,
+      `CREATE INDEX IF NOT EXISTS idx_pieces_bail ON pieces(bail_id);`,
+      `CREATE INDEX IF NOT EXISTS idx_pieces_type ON pieces(type, date_document);`,
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // Migration 3 — les brouillons
+  // -------------------------------------------------------------------------
+  {
+    version: 3,
+    description: 'Brouillons en cours : un formulaire guidé interrompu se reprend où il en était',
+    statements: [
+      /**
+       * Un formulaire commencé et non terminé.
+       *
+       * Un bail se remplit en neuf étapes, un état des lieux en six, avec des
+       * photos. Perdre cette saisie parce qu'on a reçu un appel, ou parce
+       * qu'Android a déchargé l'application, est le genre de défaut qui fait
+       * renoncer à se servir de l'outil. Le brouillon est donc enregistré à
+       * chaque étape franchie.
+       *
+       * Ce n'est **pas** une pièce : une pièce est un document établi, et une
+       * ligne de `pieces` sans fichier ferait apparaître dans le dossier un
+       * document qui n'existe pas. Deux choses différentes, deux tables — le
+       * même raisonnement que pour `documents` et `pieces`.
+       *
+       * `logement_id` est `ON DELETE CASCADE` : un brouillon qui parle d'un
+       * logement supprimé n'a plus d'objet. La clé primaire est le couple
+       * (logement, type) : il n'y a jamais deux brouillons de bail pour le même
+       * logement, le second remplaçant le premier.
+       */
+      `CREATE TABLE IF NOT EXISTS brouillons (
+        logement_id  TEXT NOT NULL REFERENCES logements(id) ON DELETE CASCADE,
+        type         TEXT NOT NULL,
+        etape        TEXT NOT NULL,
+        donnees      TEXT NOT NULL DEFAULT '{}',
+        maj_le       TEXT NOT NULL,
+        PRIMARY KEY (logement_id, type)
+      );`,
+    ],
+  },
 ];
 
 /** Ensemble des tables attendues, utilisé par les contrôles de cohérence. */
@@ -179,6 +259,8 @@ export const TABLES = [
   'periodes_loyer',
   'paiements',
   'documents',
+  'pieces',
+  'brouillons',
   'reglages',
 ] as const;
 
@@ -196,9 +278,11 @@ export type NomTable = (typeof TABLES)[number];
  * Les dépendances lues dans `MIGRATIONS` :
  *
  *   documents      -> logements, baux
+ *   pieces         -> logements, baux
  *   paiements      -> baux
  *   periodes_loyer -> baux
  *   titulaires     -> baux
+ *   brouillons     -> logements
  *   baux           -> logements
  *   logements      -> proprietaires   (RESTRICT)
  *   reglages       -> aucune
@@ -210,9 +294,11 @@ export type NomTable = (typeof TABLES)[number];
  */
 export const TABLES_A_VIDER: readonly NomTable[] = [
   'documents',
+  'pieces',
   'paiements',
   'periodes_loyer',
   'titulaires',
+  'brouillons',
   'baux',
   'logements',
   'proprietaires',

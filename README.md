@@ -32,13 +32,92 @@ Quatre onglets :
 
 - **Accueil** — le tableau de bord du mois : ce qui est encaissé, ce qui reste dû,
   et un bouton qui produit la quittance **directement**.
-- **Quittance** — trois vues : générer pour un logement en un appui, retrouver les
-  quittances **à rattraper** (les mois réglés dont la quittance n'a jamais été
-  produite, même il y a sept mois), et consulter tout ce qui a déjà été émis.
-- **Logement** — vos biens, leurs locataires, leurs loyers, avec l'historique
-  mois par mois.
+- **Documents** — le classeur, en cinq catégories : **quittances**, **baux de
+  location**, **états des lieux**, **inventaires**, **autres documents**. La
+  catégorie Quittances garde tout ce que faisait l'onglet précédent : générer
+  pour un logement en un appui, retrouver les quittances **à rattraper** (les
+  mois réglés dont la quittance n'a jamais été produite, même il y a sept mois),
+  et consulter tout ce qui a déjà été émis. Les autres catégories rassemblent les
+  pièces rangées dans les dossiers des logements, tous logements confondus, avec
+  le nom du logement sur chaque ligne.
+- **Logements** — vos biens, leurs locataires, leurs loyers, avec l'historique
+  mois par mois. Chaque fiche ouvre son **dossier documentaire**.
 - **Réglages** — thème, propriétaire, modèles de document, sauvegarde chiffrée,
   rappels, et la **remise à zéro** de l'application.
+
+### Le dossier documentaire d'un logement
+
+Chaque logement porte une **succession de locations**, et chacune a ses pièces.
+Le dossier les présente dans l'ordre où l'on cherche :
+
+```
+locataire en place → bail → état des lieux d'entrée → état des lieux de sortie
+                   → inventaire → quittances → autres documents
+```
+
+puis, en dessous, les locations terminées, repliées. **Rien ne disparaît quand un
+locataire part** : ses quittances, son bail et ses états des lieux restent dans
+son dossier, et l'écran les regroupe sous son nom. C'est la seule façon de
+répondre à une contestation portant sur une location terminée.
+
+Pour l'instant, on peut **ranger** un document : un bail signé scanné, un
+diagnostic, une attestation d'assurance, une facture de travaux. L'application
+**copie** le fichier chez elle — il reste lisible même si l'original est
+déplacé ou supprimé — et le range sous le bon logement, sous le bon locataire,
+dans la bonne catégorie. Les **baux** sont désormais **produits** par
+l'application et viennent s'ajouter au même endroit ; les états des lieux et les
+inventaires les y rejoindront.
+
+### Les baux de location
+
+On part d'un logement : depuis sa fiche, **« Créer le bail »**, ou depuis
+l'onglet **Documents**, catégorie **Baux de location**. L'application connaît
+**six types de bail** — vide, meublée, étudiant, mobilité, colocation, parking ou
+garage — et, pour chacun, la durée minimale, le plafond du dépôt de garantie, les
+préavis et les annexes obligatoires.
+
+**Le formulaire compte neuf étapes**, et les deux premières ne demandent **aucune
+saisie** : elles rappellent le logement et ses locataires, déjà enregistrés. Le
+loyer et la date d'effet non plus ne se ressaisissent pas — ils viennent de la
+location en cours, parce que c'est d'eux que les quittances sont calculées. Une
+information déjà donnée ne se redemande jamais.
+
+**La saisie se garde toute seule.** Un formulaire interrompu — un appel, une
+fermeture de l'application — se reprend là où il s'était arrêté, avec une bannière
+qui propose de continuer. Un brouillon oublié depuis plus de trente jours reste
+accessible sans être imposé.
+
+**Aucune clause n'est inventée.** Chaque règle chiffrée vient d'une source
+officielle : la loi du 6 juillet 1989 pour la durée et les préavis,
+service-public.gouv.fr pour le dépôt de garantie et le bail mobilité. Les
+sources sont imprimées en dernière page du document, avec leur date de
+consultation. Une règle qui n'a pas pu être lue dans un texte officiel est
+affichée **« à vérifier »** plutôt que présentée comme un fait.
+
+Ce que l'application **refuse** de faire :
+
+- établir un bail dont le dépôt de garantie dépasse le plafond légal — un mois de
+  loyer hors charges en location vide, deux en meublé ;
+- établir un bail mobilité avec un dépôt de garantie, qui y est **interdit** ;
+- établir un bail mobilité sans le motif du locataire, sans lequel il n'est pas
+  applicable ;
+- établir un bail d'une durée inférieure au minimum légal de sa catégorie — trois
+  ans pour un bailleur personne physique, six pour une personne morale.
+
+Ce qu'elle **signale sans bloquer** : une annexe obligatoire non jointe, un
+diagnostic périmé, un point de vigilance propre au type de bail. Le bailleur peut
+toujours joindre une annexe après coup.
+
+**Le droit change.** Les contrats types réglementaires ont changé au
+**1er octobre 2026** : clause résolutoire en cas d'impayés de loyer, de charges
+ou de dépôt de garantie, et mention de l'obligation de résidence principale. Un
+bail conclu à cette date ou après le rappelle dans ses points de vigilance.
+
+**Les signatures.** Elles se tracent au doigt sur l'écran, et le document dit ce
+qu'elles valent : elles matérialisent l'accord des parties, comme un exemplaire
+signé à la main puis numérisé. L'application écrit noir sur blanc qu'elles **ne
+constituent pas** une signature électronique qualifiée — elle ne délivre ni
+certificat, ni horodatage, ni cachet de tiers de confiance.
 
 Points de fond :
 
@@ -51,14 +130,14 @@ Points de fond :
   déjà produit.
 - **Mentions légales françaises** incluses dans les documents.
 - **Sauvegarde chiffrée** par mot de passe (AES-256-GCM), exportable et
-  restaurable, entièrement hors ligne.
+  restaurable, entièrement hors ligne. Elle porte aussi le dossier documentaire.
 - **Verrou biométrique** optionnel à l'ouverture.
 - **Rappel mensuel local** pour ne pas oublier d'encaisser, programmé par le
   système du téléphone, sans serveur.
 - **Remise à zéro complète** depuis les réglages : elle efface les logements, les
-  locataires, les paiements, les quittances, les fichiers PDF et les préférences,
-  et ramène l'application à son état d'installation. Il faut recopier un mot pour
-  la confirmer, et **il n'y a ni corbeille ni annulation**.
+  locataires, les paiements, les quittances, les pièces du dossier, les fichiers
+  et les préférences, et ramène l'application à son état d'installation. Il faut
+  recopier un mot pour la confirmer, et **il n'y a ni corbeille ni annulation**.
 
 ## Installer sur Android
 

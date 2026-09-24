@@ -351,3 +351,83 @@ export interface Document {
   signatureIncluse: boolean;
   creeLe: string;
 }
+
+// ---------------------------------------------------------------------------
+// Pièces du dossier documentaire
+// ---------------------------------------------------------------------------
+
+/**
+ * Les pièces qui vivent dans le dossier d'un logement, **hors quittances**.
+ *
+ * Une quittance est un document **émis** : elle porte un numéro, elle est
+ * numérotée par année, et elle atteste un règlement. Un bail, un état des lieux
+ * ou un inventaire ne sont rien de tout cela : ils sont **établis** une fois,
+ * signés, et rangés. Les mêler dans la même table obligerait à rendre nulles la
+ * moitié des colonnes de `documents` — le numéro, le mois, les montants — et
+ * c'est exactement le genre de schéma où une colonne nulle finit par être lue
+ * comme un zéro. Les deux tables restent donc distinctes, et le dossier les
+ * réunit à l'affichage.
+ */
+export type TypePiece = 'bail' | 'edl_entree' | 'edl_sortie' | 'inventaire' | 'autre';
+
+export const LIBELLE_PIECE: Record<TypePiece, string> = {
+  bail: 'Bail de location',
+  edl_entree: "État des lieux d'entrée",
+  edl_sortie: "État des lieux de sortie",
+  inventaire: 'Inventaire du mobilier',
+  autre: 'Autre document',
+};
+
+/**
+ * Une pièce rangée dans le dossier d'un logement.
+ *
+ * `donnees` porte les informations structurées propres au type — les pièces
+ * d'un état des lieux, les relevés de compteurs, les signatures — sous forme de
+ * JSON. Le PDF est la forme lisible ; `donnees` est la forme qui permet de
+ * **comparer** un état des lieux de sortie à celui d'entrée sans relire un PDF.
+ * Les deux sont conservés, et le PDF ne se reconstitue jamais depuis `donnees` :
+ * un document signé est figé.
+ */
+export interface PieceDossier {
+  id: string;
+  logementId: string;
+  /**
+   * Bail auquel la pièce se rattache, s'il y en a un.
+   *
+   * Nul pour un document qui concerne le bien et non une location : un
+   * diagnostic, un acte de propriété, une facture de travaux.
+   */
+  bailId?: string | null;
+  type: TypePiece;
+  titre: string;
+  /** Date portée par le document, `AAAA-MM-JJ`. */
+  dateDocument: string;
+  /** Chemin du PDF dans le stockage de l'application. Vide si aucun fichier. */
+  cheminFichier: string;
+  /** Informations structurées du type, en JSON. `'{}'` si aucune. */
+  donnees: string;
+  creeLe: string;
+  modifieLe: string;
+}
+
+/**
+ * Les cinq entrées de l'onglet DOCUMENTS.
+ *
+ * L'ordre est celui de l'affichage, et il suit la vie d'une location : ce qui
+ * fonde la location, ce qui la décrit, ce qui l'atteste au mois le mois, puis
+ * ce qui ne rentre nulle part ailleurs.
+ */
+export type CategorieDocument =
+  | 'quittances'
+  | 'baux'
+  | 'etats_des_lieux'
+  | 'inventaires'
+  | 'autres';
+
+export const CATEGORIES_DOCUMENT: { valeur: CategorieDocument; libelle: string }[] = [
+  { valeur: 'quittances', libelle: 'Quittances' },
+  { valeur: 'baux', libelle: 'Baux de location' },
+  { valeur: 'etats_des_lieux', libelle: 'États des lieux' },
+  { valeur: 'inventaires', libelle: 'Inventaires' },
+  { valeur: 'autres', libelle: 'Autres documents' },
+];

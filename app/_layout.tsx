@@ -62,8 +62,36 @@ function Coquille() {
           name="logement/nouveau"
           options={{ presentation: 'card', animation: 'slide_from_bottom' }}
         />
+        {/* Ranger un document se fait depuis un dossier ou depuis l'onglet
+            DOCUMENTS : l'écran monte du bas, comme un ajout, et se referme d'un
+            geste sans casser le fil de ce qu'on faisait. */}
+        <Stack.Screen
+          name="document/ajouter"
+          options={{ presentation: 'card', animation: 'slide_from_bottom' }}
+        />
         <Stack.Screen name="paiement/[propertyId]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="quittance/succes" options={{ presentation: 'modal' }} />
+        {/* Le bail : un formulaire guidé de neuf étapes, puis une vérification,
+            puis le document. Les trois montent du bas — c'est une fabrication,
+            pas une consultation — et le succès remplace la vérification, pour
+            qu'un retour arrière ne ramène pas sur un brouillon qui n'existe
+            plus. */}
+        <Stack.Screen
+          name="bail/choisir"
+          options={{ presentation: 'card', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="bail/nouveau"
+          options={{ presentation: 'card', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="bail/verification"
+          options={{ presentation: 'card', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="bail/succes"
+          options={{ presentation: 'card', animation: 'fade' }}
+        />
       </Stack>
     </>
   );

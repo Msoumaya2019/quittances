@@ -2,7 +2,7 @@
   "expo": {
     "name": "Quittances",
     "slug": "quittances-loyer",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "quittances",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "fr.montmagny.quittances",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "NSFaceIDUsageDescription": "L'application utilise Face ID pour protéger l'accès à vos données locatives. Vos données restent sur votre téléphone.",
         "CFBundleLocalizations": [
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "fr.montmagny.quittances",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#ECFDF5",
         "foregroundImage": "./assets/android-icon-foreground.png",

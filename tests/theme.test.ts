@@ -17,6 +17,8 @@ import assert from 'node:assert/strict';
 
 import {
   COULEURS_THEME,
+  COULEUR_PAR_DEFAUT,
+  MODE_PAR_DEFAUT,
   composerPalette,
   PALETTE_PAR_DEFAUT,
   type CouleurTheme,
@@ -206,4 +208,27 @@ test('Palette : la pastille annoncée est l’accent réellement appliqué', () 
       `${libelle} : la pastille annonce ${apercu}, or l'accent appliqué est ${accent}`,
     );
   }
+});
+
+test('Palette : la palette d’avant les réglages est celle des réglages par défaut', () => {
+  // `PALETTE_PAR_DEFAUT` s'affiche pendant que la base s'ouvre, avant que les
+  // réglages ne soient lus ; `REGLAGES_PAR_DEFAUT` décide de ce qui est écrit
+  // ensuite. Les deux doivent dire la même chose, sinon l'application s'ouvre
+  // sur une couleur puis bascule sur une autre — un clignotement que rien
+  // n'explique, et qu'aucun des deux fichiers ne peut voir seul.
+  //
+  // L'accord se lit ici, et non en important `settings.ts` : celui-ci charge
+  // `expo-sqlite` et ne se charge pas sous `node --test`. C'est pour cette raison
+  // que les deux valeurs par défaut sont déclarées dans `palette.ts`, qui est pur.
+  assert.deepEqual(
+    PALETTE_PAR_DEFAUT,
+    composerPalette(COULEUR_PAR_DEFAUT, MODE_PAR_DEFAUT),
+    'la palette affichée avant lecture des réglages n’est pas composée des valeurs par défaut',
+  );
+
+  // Le thème d'une installation neuve est le rose : c'est l'identité du bailleur.
+  // L'écrire ici rend un changement de défaut visible, au lieu de le laisser
+  // passer pour un détail.
+  assert.equal(COULEUR_PAR_DEFAUT, 'rose', 'le thème par défaut n’est plus le rose');
+  assert.equal(MODE_PAR_DEFAUT, 'clair', 'le mode par défaut n’est plus le mode clair');
 });

@@ -280,5 +280,27 @@ export function composerPalette(couleur: CouleurTheme, mode: ModeTheme): Palette
   };
 }
 
-/** Palette par défaut, avant que les réglages ne soient lus. */
-export const PALETTE_PAR_DEFAUT = composerPalette('vert', 'clair');
+/**
+ * Le thème d'une installation neuve.
+ *
+ * Déclaré **ici**, dans le module pur des couleurs, et non dans les réglages :
+ * c'est la seule façon de faire tenir l'accord entre la palette affichée pendant
+ * l'ouverture de la base et le réglage écrit ensuite. Les réglages, eux,
+ * importent `expo-sqlite` et ne se chargent pas sous `node --test` — un contrôle
+ * qui voudrait comparer les deux ne pourrait donc pas les lire.
+ *
+ * Le rose est l'identité sous laquelle le bailleur reconnaît son application.
+ */
+export const COULEUR_PAR_DEFAUT: CouleurTheme = 'rose';
+
+/** Le mode d'une installation neuve. */
+export const MODE_PAR_DEFAUT: ModeTheme = 'clair';
+
+/**
+ * Palette par défaut, avant que les réglages ne soient lus.
+ *
+ * Elle est composée des deux constantes ci-dessus : les deux ne peuvent donc pas
+ * dire autre chose que ce que les réglages écriront, et l'application ne
+ * s'ouvre pas sur un écran vert qui bascule au rose dès la lecture des réglages.
+ */
+export const PALETTE_PAR_DEFAUT = composerPalette(COULEUR_PAR_DEFAUT, MODE_PAR_DEFAUT);

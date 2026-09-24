@@ -10,14 +10,20 @@ import { useCouleurs } from '@/ui/theme';
 
 /**
  * Barre d'onglets inférieure, avec quatre entrées :
- * Accueil, Quittance, Logement, Réglages.
+ * Accueil, Documents, Logements, Réglages.
+ *
+ * Les quittances n'ont plus d'onglet à elles : elles sont devenues une
+ * **catégorie** de DOCUMENTS, à côté des baux, des états des lieux, des
+ * inventaires et des autres documents. C'est ce qui permet de ranger un bail et
+ * de le retrouver au même endroit que la quittance du mois, sans multiplier les
+ * onglets — une barre du bas à six entrées ne se lit plus d'un coup d'œil.
  *
  * L'ordre des `Tabs.Screen` est l'ordre affiché : on le lit de haut en bas.
  *
- * Les noms de fichiers, eux, n'ont pas suivi le renommage — `logements.tsx`,
- * `quittances.tsx` et `plus.tsx` — parce qu'un fichier `logement.tsx` entrerait
- * en collision avec le dossier `app/logement/`, qui porte les écrans de détail.
- * Seuls les libellés sont visibles du bailleur.
+ * Les noms de fichiers, eux, n'ont pas suivi le renommage — `logements.tsx` et
+ * `plus.tsx` — parce qu'un fichier `logement.tsx` entrerait en collision avec le
+ * dossier `app/logement/`, qui porte les écrans de détail. Seuls les libellés
+ * sont visibles du bailleur.
  *
  * Les icônes sont dessinées en SVG : elles restent nettes à toutes les tailles
  * et suivent la couleur de l'onglet actif, y compris en mode contraste élevé.
@@ -60,23 +66,24 @@ export default function OngletsLayout() {
         options={{
           title: 'Accueil',
           tabBarIcon: ({ color, focused }) => <IconeAccueil couleur={color} actif={focused} />,
-          tabBarAccessibilityLabel: 'Accueil',
+          tabBarAccessibilityLabel: 'Accueil, la situation du mois',
         }}
       />
       <Tabs.Screen
-        name="quittances"
+        name="documents"
         options={{
-          title: 'Quittance',
-          tabBarIcon: ({ color, focused }) => <IconeQuittances couleur={color} actif={focused} />,
-          tabBarAccessibilityLabel: 'Quittance, choisir un logement et générer',
+          title: 'Documents',
+          tabBarIcon: ({ color, focused }) => <IconeDocuments couleur={color} actif={focused} />,
+          tabBarAccessibilityLabel:
+            'Documents, quittances, baux, états des lieux, inventaires et autres documents',
         }}
       />
       <Tabs.Screen
         name="logements"
         options={{
-          title: 'Logement',
+          title: 'Logements',
           tabBarIcon: ({ color, focused }) => <IconeLogements couleur={color} actif={focused} />,
-          tabBarAccessibilityLabel: 'Logement, ajouter ou modifier un logement et ses locataires',
+          tabBarAccessibilityLabel: 'Logements, ajouter ou modifier un logement et ses locataires',
         }}
       />
       <Tabs.Screen
@@ -168,21 +175,27 @@ function IconeLogements({ couleur, actif }: PropsIcone) {
   );
 }
 
-function IconeQuittances({ couleur, actif }: PropsIcone) {
+/**
+ * DOCUMENTS : une chemise, et ce qu'elle contient.
+ *
+ * Une simple feuille aurait dit « un document » ; l'onglet en réunit cinq
+ * familles. La chemise dit le rangement, et les deux lignes intérieures
+ * rappellent qu'il y a plusieurs pièces dedans.
+ */
+function IconeDocuments({ couleur, actif }: PropsIcone) {
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24">
       <Path
-        d="M5.5 3.5 L14 3.5 L18.5 8 L18.5 20.5 L5.5 20.5 Z"
+        d="M4 6.6 L9.6 6.6 L11.6 9.2 L20 9.2 L20 19.4 L4 19.4 Z"
         stroke={couleur}
         strokeWidth={actif ? 2.2 : 1.9}
         strokeLinejoin="round"
         fill={actif ? avecAlpha(couleur, 0.09) : 'none'}
       />
-      <Path d="M14 3.5 L14 8 L18.5 8" stroke={couleur} strokeWidth={1.9} strokeLinejoin="round" fill="none" />
       <Path
-        d="M8.5 13 L15 13 M8.5 16.5 L12.5 16.5"
+        d="M8 13 L16 13 M8 16.4 L13 16.4"
         stroke={couleur}
-        strokeWidth={1.9}
+        strokeWidth={1.8}
         strokeLinecap="round"
       />
     </Svg>

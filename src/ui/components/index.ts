@@ -20,4 +20,5 @@ export { LigneDetail } from './LigneDetail';
 export { CarteLogementItem } from './CarteLogement';
 export { BoutonFlottant } from './BoutonFlottant';
 export { BarreActionFixe } from './BarreActionFixe';
+export { BlocSignature } from './BlocSignature';
 export { VerrouBiometrique } from './VerrouBiometrique';

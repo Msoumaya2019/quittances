@@ -24,6 +24,7 @@ import {
 } from '@/db/repositories/properties';
 import { tousLesPaiements } from '@/db/repositories/payments';
 import { tousLesDocuments } from '@/db/repositories/documents';
+import { toutesLesPieces } from '@/db/repositories/pieces';
 import { dateDuJour, maintenantISO } from '@/db/ids';
 import type {
   Bail,
@@ -31,6 +32,7 @@ import type {
   Logement,
   Paiement,
   PeriodeLoyer,
+  PieceDossier,
   Proprietaire,
   TitulaireBail,
 } from '@/domain/types';
@@ -63,6 +65,16 @@ export interface ContenuSauvegarde {
     periodesLoyer: PeriodeLoyer[];
     paiements: Paiement[];
     documents: Document[];
+    /**
+     * Les pièces du dossier documentaire : baux signés, états des lieux,
+     * inventaires, autres documents.
+     *
+     * Le champ est **facultatif**, et c'est délibéré : une sauvegarde écrite par
+     * la version 1.0.2 n'en contient pas, et la refuser ferait perdre à
+     * l'utilisateur l'accès à ses propres sauvegardes. Une sauvegarde ancienne
+     * se restaure donc sans pièces, ce qui est exactement ce qu'elle contenait.
+     */
+    pieces?: PieceDossier[];
     reglages: Reglages;
   };
   /** Décompte, pour afficher ce que contient la sauvegarde avant de restaurer. */
@@ -74,6 +86,7 @@ export interface ContenuSauvegarde {
     periodesLoyer: number;
     paiements: number;
     documents: number;
+    pieces?: number;
   };
 }
 
@@ -85,11 +98,12 @@ export interface ContenuSauvegarde {
  * locataires successifs qu'il faut tous conserver.
  */
 export async function rassemblerDonnees(): Promise<ContenuSauvegarde['donnees']> {
-  const [proprietaires, logements, paiements, documents, reglages] = await Promise.all([
+  const [proprietaires, logements, paiements, documents, pieces, reglages] = await Promise.all([
     listerProprietaires(),
     listerLogements(),
     tousLesPaiements(),
     tousLesDocuments(),
+    toutesLesPieces(),
     lireReglages(),
   ]);
 
@@ -110,7 +124,17 @@ export async function rassemblerDonnees(): Promise<ContenuSauvegarde['donnees']>
     periodesLoyer.push(...(await periodesLoyerDuBail(bail.id)));
   }
 
-  return { proprietaires, logements, baux, titulaires, periodesLoyer, paiements, documents, reglages };
+  return {
+    proprietaires,
+    logements,
+    baux,
+    titulaires,
+    periodesLoyer,
+    paiements,
+    documents,
+    pieces,
+    reglages,
+  };
 }
 
 /** Prépare le contenu de sauvegarde, en clair. */
@@ -130,6 +154,7 @@ export async function preparerContenu(): Promise<ContenuSauvegarde> {
       periodesLoyer: donnees.periodesLoyer.length,
       paiements: donnees.paiements.length,
       documents: donnees.documents.length,
+      pieces: (donnees.pieces ?? []).length,
     },
   };
 }

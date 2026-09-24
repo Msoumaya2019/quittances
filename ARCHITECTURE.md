@@ -18,14 +18,18 @@ Application de quittances de loyer, 100 % locale, hors ligne.
 app/                        # routes Expo Router (une route = un fichier)
   _layout.tsx               # pile racine + verrou biométrique + base de données
   (tabs)/
-    _layout.tsx             # barre d'onglets : Accueil, Quittance, Logement, Réglages
+    _layout.tsx             # barre d'onglets : Accueil, Documents, Logements, Réglages
     index.tsx               # ACCUEIL : tableau de bord + cartes logements
-    quittances.tsx          # QUITTANCE : générer, rattraper, consulter
-    logements.tsx           # LOGEMENT : ajouter, modifier, supprimer
+    documents.tsx           # DOCUMENTS : quittances, baux, états des lieux,
+                            #   inventaires, autres documents
+    logements.tsx           # LOGEMENTS : ajouter, modifier, supprimer
     plus.tsx                # RÉGLAGES : thème, propriétaire, modèles, sauvegarde
+  document/
+    ajouter.tsx             # ranger dans un dossier un fichier déjà sur le téléphone
   logement/
     nouveau.tsx             # assistant de création en 4 étapes
     [id].tsx                # détail d'un logement
+    [id]/dossier.tsx        # dossier documentaire, par locataire
     [id]/historique.tsx     # grille mensuelle des quittances
     [id]/locataires.tsx     # modification des titulaires du bail
     [id]/modifier.tsx       # édition du logement et du bail
@@ -46,21 +50,23 @@ app/                        # routes Expo Router (une route = un fichier)
 
 src/
   domain/                   # moteur métier pur, testable sans téléphone
-    types.ts                # types du domaine
+    types.ts                # types du domaine, y compris les pièces du dossier
     money.ts                # arithmétique en centimes (jamais de flottants)
     period.ts               # mois, années, comparaisons, clés de période
     rent.ts                 # loyer dû pour un mois, selon date d'effet et bail
     payments.ts             # cumul des paiements, solde, statut, action contextuelle
+    dossier.ts              # ordre du dossier, rattachement des pièces, saisie
     numbering.ts            # numérotation unique et stable des documents
     rappels.ts              # texte des rappels, sans mois figé
     reinitialisation.ts     # le mot qui confirme un effacement, règle pure
+  documents/
+    stockage.ts             # copie d'un fichier choisi dans le dossier des documents
   db/
     schema.ts               # schéma SQL, migrations versionnées, tables à vider
     database.ts             # ouverture, pragmas, migration au démarrage
     reinitialisation.ts     # effacement de toutes les données et des PDF
-    repositories/           # owners, properties, tenancies, rentTerms, payments,
-                            # documents, settings
-    index.ts                # instantiation des dépôts
+    repositories/           # owners, properties, payments, documents, pieces,
+                            #   settings
   pdf/
     styles.ts               # styles partagés par tous les modèles
     styles-colore.ts        # palette du modèle coloré, qui ne suit pas le thème
@@ -78,12 +84,15 @@ src/
     import.ts               # lecture, vérification, restauration
   ui/
     tokens.ts               # couleurs, espacements, rayons, typographie
-    components/             # Card, Button, StatusBadge, ProgressBar, EmptyState…
+    palette.ts              # les quatre accents, les deux modes, leurs défauts
+    components/             # Carte, Bouton, PastilleStatut, Segments, EnTeteEcran…
+    ecrans/                 # panneaux d'écran réemployés par plusieurs routes
+      PanneauQuittances.tsx #   le contenu de la catégorie Quittances
   hooks/                    # hooks de données (chargement, rafraîchissement)
   state/                    # contexte applicatif (mois sélectionné, réglages)
-  utils/                    # formatage de dates, de montants, de noms de fichiers
 
 tests/                      # tests du moteur métier avec node:test
+.verif/                     # contrôleurs de binaire, mesure des témoins, falsificateurs
 .github/workflows/          # compilation APK et IPA
 ```
 
@@ -108,9 +117,185 @@ bouton « Générer »
   -> écran de succès : voir, partager, terminer
 ```
 
-La génération se fait **en un appui**, sans écran intermédiaire : l'onglet
-Quittance produit la quittance directement, et l'aperçu n'est plus qu'un chemin
-de vérification, atteint en touchant le nom du logement.
+La génération se fait **en un appui**, sans écran intermédiaire : la catégorie
+Quittances de l'onglet DOCUMENTS produit la quittance directement, et l'aperçu
+n'est plus qu'un chemin de vérification, atteint en touchant le nom du logement.
+
+## Les modèles de document
+
+Le papier ne suit pas le thème de l'écran : les couleurs du document sont
+déclarées à part (`COULEURS_DOCUMENT`), et deux modèles partagent `STYLES_BASE`.
+
+- **`colore` (défaut)** vit dans `styles-colore.ts` et ses couleurs dans
+  `COULEURS_COLORE`. Pour le faire tenir sur une feuille, on touche aux **marges
+  et aux tailles, jamais au texte**. L'onglet et le tampon suivent
+  `resteAPercevoir` ; le libellé du montant suit `contenu.type`.
+- `classique` et `moderne` partagent `STYLES_BASE` avec `colore`.
+
+`src/pdf/` importe en `.ts` — le rendu tourne donc sous `node --test`
+(`tests/modele-colore.test.ts`) — et le format se demande dans `pdf/page.ts`.
+
+**Tenue en page.** Une quittance tient sur une seule feuille dans les marges A4
+(6,35 mm mesurés à l'impression), et `tests/tenue-en-page.test.ts` le garde.
+**Un contenu très long déborde** des trois modèles : c'est une limite de
+`STYLES_BASE`, commune et préexistante.
+
+**Les bancs de mesure** lisent `modeles.json`, produit par `rendre-modeles.ts` :
+`mesurer-pages.py`, `mesurer-marges-impression.py`, `eprouver-paiements.py`.
+
+## Les baux de location
+
+Un bail n'est pas une quittance. La quittance **atteste un paiement** et se
+numérote ; le bail **établit un accord** et se range. Les deux ne partagent donc
+pas la même table (voir « Le dossier documentaire »), et le bail se rend par son
+propre module.
+
+**`src/domain/bail.ts`** porte les six catégories — vide, meublée, étudiant,
+mobilité, colocation, stationnement — et, pour chacune, sa durée légale, son
+plafond de dépôt de garantie, ses préavis, ses annexes obligatoires et ses points
+de vigilance. Le module est **pur** : ni SQLite, ni React.
+
+**Aucune clause n'est inventée.** Chaque règle chiffrée est adossée à une entrée
+de `SOURCES_BAIL`, qui porte ce qu'elle établit, sa référence exacte et sa **date
+de consultation**. Une règle qu'on n'a pas pu lire dans un texte officiel se
+déclare `aVerifier` au lieu d'être devinée. Le document imprime ses fondements en
+dernière page.
+
+Ce que le domaine **corrige** au lieu de l'informer : le dépôt de garantie. Un
+dépôt au-dessus du plafond — ou un dépôt quelconque dans un bail mobilité, où il
+est interdit — **bloque** l'établissement du bail. Les annexes manquantes, elles,
+n'empêchent rien : elles sont signalées, parce que le bailleur peut les joindre
+après.
+
+**Le droit change, et l'architecture doit suivre.** `CONTRATS_TYPES` porte la
+date du **1er octobre 2026**, à partir de laquelle les nouveaux contrats types
+réglementaires s'appliquent aux baux vides, meublés et aux colocations à bail
+unique — avec la clause résolutoire pour impayés de loyer, de charges ou de dépôt
+de garantie. Un bail conclu à cette date ou après le rappelle. Le modèle meublé
+ne s'applique **ni** au bail mobilité **ni** aux locations saisonnières.
+
+Le formulaire guidé compte **neuf étapes** (`ETAPES_BAIL`). Les deux premières ne
+demandent aucune saisie : elles rappellent le logement et ses locataires, déjà
+enregistrés. C'est la promesse « ne jamais ressaisir une information déjà
+donnée », tenue par la forme du parcours et non par une consigne.
+
+**`src/pdf/bail.ts`** rend le document — module pur, éprouvé par `node --test`.
+Il échappe tout texte saisi, imprime les annexes jointes et **non jointes**, et
+rappelle le plafond du dépôt à côté du montant. `finDuBail` ramène le jour au
+dernier jour du mois d'arrivée : sans ce ramenage, un bail d'un mois commencé le
+31 janvier finirait le 2 mars.
+
+**Ce que le document dit de ses signatures.** Elles sont tracées au doigt sur
+l'écran, puis figées. Le document l'écrit, et écrit aussi qu'elles **ne
+constituent pas** une signature électronique qualifiée au sens du règlement (UE)
+n° 910/2014 — l'application ne délivre ni certificat, ni horodatage, ni cachet de
+tiers de confiance. `MENTION_SIGNATURE` est vérifiée par un test, et le banc
+`falsifier-bail-rendu.py` refuse de laisser cette phrase être retournée.
+
+**De la saisie au fichier rangé.** Le parcours traverse quatre modules, et
+chacun a une raison d'être distincte :
+
+```
+app/bail/nouveau.tsx   le formulaire guidé — il ne calcule rien
+  -> brouillons         (table, migration 3 : un brouillon survit à la fermeture)
+  -> emettreBail        contrôle, assemble, imprime, range
+  -> pieces             (document établi, rattaché au logement et au bail)
+  -> documents/         (le fichier PDF, nommé par cheminPourPiece)
+```
+
+**`src/db/repositories/brouillons.ts`** garde les formulaires inachevés, dans
+**leur propre table** et non dans `pieces` : y déposer un brouillon ferait
+apparaître, dans le dossier du logement, un bail qui n'existe pas. La clé est
+`(logement_id, type)` — un seul brouillon de bail par logement, qu'on reprend ou
+qu'on écrase. `src/domain/brouillon.ts` (pur) décide de ce qui est **reprenable** :
+un brouillon de plus de `JOURS_BROUILLON_RECENT` jours est proposé sans être
+imposé, et une étape qui n'existe plus rend `null` au lieu de ramener l'utilisateur
+sur un écran disparu.
+
+**`src/pdf/emettre-bail.ts`** est le seul chemin qui écrit un bail. Il re-vérifie
+`manquesDuBail` **côté émission** — un écran peut mentir, une fonction pure non —
+puis reprend le loyer de `periodeLoyerApplicable` et non du formulaire : deux
+implémentations du même calcul finiraient par ne plus s'accorder. Il ne réécrit en
+base que les champs que le formulaire a le droit de corriger (dépôt, jour
+d'échéance), afin qu'un dépôt imprimé et un dépôt enregistré ne puissent pas
+différer.
+
+**Les écrans** vivent sous `app/bail/` : `choisir.tsx` (point d'entrée depuis la
+catégorie « Baux de location », qui **sépare** les logements pourvus d'un locataire
+de ceux qui n'en ont pas, au lieu de filtrer en silence), `nouveau.tsx` (les neuf
+étapes), `verification.tsx` (relecture section par section, génération **désactivée**
+tant qu'il manque quelque chose) et `succes.tsx`. La vérification n'affiche pas
+d'aperçu HTML : aucun moteur de rendu web n'est embarqué, et l'ajouter pour montrer
+deux pages A4 sur un téléphone — c'est-à-dire mal — serait payer cher pour mentir.
+
+Les bancs : `.verif/falsifier-bail.py` (**vingt** mutations du domaine),
+`.verif/falsifier-bail-rendu.py` (**quatorze** du rendu) et
+`.verif/falsifier-brouillon.py` (**six** de la reprise de brouillon).
+
+**Un banc à la fois, jamais deux en parallèle.** Les deux bancs du bail mutent le
+même `src/domain/bail.ts` et partagent le même fichier de sauvegarde : lancés
+ensemble, l'un restaure pendant que l'autre croit avoir muté, et une mutation
+**vivante** est alors comptée **muette** — le banc accuse les tests d'un défaut qui
+n'existe pas. Mesuré : `20/0` en série contre `19/1` en parallèle, sur les mêmes
+octets de départ. Le compteur d'un banc n'est lisible que si rien d'autre n'écrit
+dans ses sources.
+
+## Le dossier documentaire
+
+Un logement ne porte pas « des documents » en vrac : il porte une **succession de
+locations**, et chacune a ses pièces. L'ordre de lecture est la donnée :
+
+```
+bail → état des lieux d'entrée → état des lieux de sortie → inventaire
+     → quittances → autres documents
+```
+
+Cet ordre vit dans `SECTIONS_DU_DOSSIER` (`src/domain/dossier.ts`), pas dans un
+écran : le changer change ce que le bailleur lit en premier, et cela se vérifie
+par un test.
+
+**Deux tables, et non une.** `documents` porte les documents **émis** — les
+quittances, numérotées par année, qui attestent un règlement. `pieces` porte les
+documents **établis** — baux, états des lieux, inventaires, autres pièces. Les
+mêler obligerait à rendre nulles la moitié des colonnes de `documents` (numéro,
+mois, montants), et une colonne nulle finit par être lue comme un zéro. Le
+dossier les réunit à l'affichage, sous une forme commune (`ElementDossier`).
+
+**Le rattachement est ce qui compte.** Une pièce porte `logement_id` et,
+facultativement, `bail_id`. Trois règles en découlent :
+
+- une pièce rattachée à un bail apparaît sous **ce locataire**, même si la
+  location est terminée depuis des années ;
+- une pièce sans bail — un diagnostic, une facture de travaux — est rangée sous
+  **le bien**, parce que la rattacher à un locataire ferait croire qu'elle lui
+  est propre ;
+- une pièce dont le bail n'existe plus, ce qu'une sauvegarde restaurée peut
+  produire, est rangée sous le bien **plutôt qu'écartée** : un document qu'on ne
+  sait plus rattacher doit rester visible, sinon il devient introuvable sans que
+  personne ne s'en aperçoive.
+
+**Aucun document ne disparaît parce qu'un locataire part.** Clôturer un bail
+renseigne une date de sortie ; il ne supprime rien. Les quittances, le bail et
+les états des lieux de ce locataire restent dans son dossier, et l'écran les
+présente repliés, sous son nom.
+
+**Les fichiers vivent dans `documents/`**, le même dossier que les quittances
+émises — celui que la remise à zéro efface en entier. Un second dossier aurait
+demandé de penser à l'effacer aussi, et c'est exactement l'oubli qui laisse des
+documents personnels sur le téléphone après que l'écran a annoncé « tout a été
+effacé ». Le nom du dossier est déclaré **une seule fois**, dans
+`src/db/reinitialisation.ts`, et importé par `src/documents/stockage.ts` ; deux
+contrôles tiennent l'accord : l'un vérifie que c'est bien le dossier où
+`pdf/render.ts` écrit, l'autre que la remise à zéro le nomme.
+
+**Ranger un fichier existant.** `app/document/ajouter.tsx` prend un PDF ou une
+photo déjà sur le téléphone et le **copie** dans l'application : le fichier
+d'origine peut vivre dans un cache que le système efface, ou sur une carte qu'on
+retire. Le titre d'origine est conservé comme titre du document, et le fichier
+reçoit un nom fabriqué par `src/documents/stockage.ts` — accents et espaces
+retirés, comme pour les quittances. Si l'enregistrement en base échoue après la
+copie, le fichier copié est retiré : un fichier que rien ne référence serait
+invisible, et personne ne saurait qu'il existe.
 
 ## Règles de calcul
 
@@ -152,6 +337,9 @@ seule fonction pure**, pour être éprouvable sans base de données et sans tél
 | Une remise à zéro n'oublie aucune table, et son ordre respecte les clés étrangères | `TABLES_A_VIDER` dans `src/db/schema.ts`, dont l'ordre est **dérivé** des `REFERENCES` de `MIGRATIONS` | `tests/reinitialisation.test.ts` |
 | Rien ne survit à l'effacement : ni les lignes, ni les PDF, ni le rappel programmé | `effacerToutesLesDonnees` (`src/db/reinitialisation.ts`), `annulerRappel`, `rechargerReglages` | `tests/reinitialisation-fichiers.test.ts` |
 | Le mot qui confirme un effacement est celui que le domaine définit | `confirmationValide` dans `src/domain/reinitialisation.ts` | `tests/reinitialisation.test.ts` |
+| Un document reste rattaché au locataire qui l'a signé, jamais au suivant | `construireDossier` dans `src/domain/dossier.ts` — le rattachement se fait par `bailId`, et une pièce orpheline va sous le bien plutôt que d'être écartée | `tests/dossier.test.ts`, falsifié par `.verif/falsifier-dossier.py` |
+| L'ordre du dossier est la vie de la location, et il est le même partout | `SECTIONS_DU_DOSSIER` dans `src/domain/dossier.ts` | `tests/dossier.test.ts` |
+| Le thème affiché à l'ouverture est celui des réglages par défaut | `COULEUR_PAR_DEFAUT` / `MODE_PAR_DEFAUT` dans `src/ui/palette.ts`, d'où `REGLAGES_PAR_DEFAUT` les tire | `tests/theme.test.ts` |
 
 Le dépôt en base de `ajouterPeriodeLoyer` ne fait qu'**appliquer** le plan
 calculé par le domaine : la décision est prise ailleurs, et la transaction
@@ -191,10 +379,10 @@ et ce réarmement rend l'état auto-réparateur.
 
 L'écran `app/reinitialiser.tsx`, atteint depuis les réglages, remet l'application
 dans son état d'installation : logements, baux, titulaires, périodes de loyer,
-paiements, documents, fichiers PDF et réglages. **Il n'y a ni corbeille, ni
-annulation** : le bouton destructeur n'est actif qu'après recopie du mot défini
-par `MOT_CONFIRMATION` (`src/domain/reinitialisation.ts`), et la règle
-`confirmationValide` est pure, donc éprouvable sans téléphone.
+paiements, documents, pièces du dossier, fichiers PDF et réglages. **Il n'y a ni
+corbeille, ni annulation** : le bouton destructeur n'est actif qu'après recopie
+du mot défini par `MOT_CONFIRMATION` (`src/domain/reinitialisation.ts`), et la
+règle `confirmationValide` est pure, donc éprouvable sans téléphone.
 
 Trois décisions portent la sûreté de cette opération :
 
@@ -211,11 +399,14 @@ Trois décisions portent la sûreté de cette opération :
 - **L'effacement suit la liste du schéma, il ne la recopie pas.**
   `effacerToutesLesDonnees` (`src/db/reinitialisation.ts`) parcourt
   `TABLES_A_VIDER` dans une seule transaction, puis supprime le dossier
-  `documents/` — celui-là même où `src/pdf/render.ts` écrit les quittances. Le
+  `documents/` — celui-là même où `src/pdf/render.ts` écrit les quittances, et
+  celui où `src/documents/stockage.ts` range les pièces du dossier. Le
   dossier entier, et non les chemins un par un : c'est ce qui attrape aussi les
   PDF qu'une ligne perdue avait déjà rendus orphelins.
   `tests/reinitialisation-fichiers.test.ts` **dérive** le nom du dossier du
-  moteur de rendu : renommé d'un seul côté, le contrôle tombe.
+  moteur de rendu : renommé d'un seul côté, le contrôle tombe. C'est aussi
+  pourquoi `DOSSIER_DOCUMENTS` n'est déclaré **qu'une fois**, dans
+  `src/db/reinitialisation.ts`, et importé ailleurs.
 - **Deux choses ne sont pas dans la base** et doivent être défaites par l'écran :
   le **rappel programmé**, que le système détient et qui survivrait à
   l'effacement (`annulerRappel`), et les **réglages en mémoire**, que
@@ -351,9 +542,25 @@ npm run test:domaine     # tests de la couche domaine
 ```
 
 Les tests portent sur le domaine pur — arithmétique monétaire, périodes,
-loyers, paiements, encodage, cryptographie. Ils tournent en quelques secondes
-sous Node, sans appareil ni émulateur, et ce sont eux qui gardent les promesses
-du tableau ci-dessus.
+loyers, paiements, dossier documentaire, encodage, cryptographie. Ils tournent en
+quelques secondes sous Node, sans appareil ni émulateur, et ce sont eux qui
+gardent les promesses du tableau ci-dessus.
+
+Un module du domaine importe en **chemin relatif avec l'extension `.ts`** : Node
+ne résout ni l'alias `@/`, ni un chemin sans extension. Un module testé qui
+importerait `from './period'` ne se chargerait pas, et le test échouerait à
+l'import — pas sur ce qu'il vérifie.
+
+`npm run verifier:tests` type les tests à part, avec `tsconfig.tests.json` :
+`tsconfig.json` exclut `tests/` et `.verif/`, donc sans ce second passage les
+tests ne seraient pas typés du tout.
+
+`.verif/falsifier-dossier.py` **mute** la source du domaine, relance
+`tests/dossier.test.ts` et exige qu'il tombe — sept mutations, sept règles. Un
+test vert qu'aucune mutation ne fait tomber ne prouve rien : il ne mesure peut-être
+rien. Chaque mutation part des octets d'origine, et la source est restaurée dans
+un `finally` : une mutation oubliée accuserait ensuite le code pour un défaut qui
+n'existe plus.
 
 `scripts/check-workflows.mjs` valide les flux GitHub avant de pousser : YAML
 analysé, chaque script `run:` passé à `bash -n`, actions épinglées, permissions

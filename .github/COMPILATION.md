@@ -123,6 +123,45 @@ Vérifiez que `app.json` contient bien un bloc ressemblant à ceci :
 
 Vous pouvez fermer la page et revenir plus tard : la compilation continue.
 
+### Si le forfait Expo refuse la compilation
+
+Le forfait gratuit d'Expo autorise un nombre limité de compilations Android par
+mois. Quand la limite est atteinte, le service refuse la compilation — **et le
+message n'arrive pas tout de suite** : il tombe après l'envoi du projet et le
+calcul de son empreinte, plusieurs minutes après le lancement. La ligne utile
+ressemble à ceci, et elle est **au-dessus** d'un `Error: build command failed.`
+qui, lui, n'apprend rien :
+
+```
+This account has used its Android builds from the Free plan this month,
+which will reset in N days (on <jour>)
+```
+
+Ce n'est donc **pas une panne, ni une faute dans le code** : c'est une
+autorisation qui manque jusqu'à la date annoncée. Le flux en tient compte tout
+seul — voir ci-dessous. Rien à faire de votre côté.
+
+**Le flux essaie d'abord la compilation distante, puis bascule sur l'exécuteur
+GitHub.** Concrètement, `android-apk.yml` lance `eas build` (distant) ; si la
+commande échoue — quota, ou panne du service — il réessaie avec
+`eas build --local --output <fichier>`, qui compile sur la machine de GitHub
+Actions. Deux détails rendent ce repli possible, et il faut les connaître pour ne
+pas croire à une erreur :
+
+- `--local` demande normalement une session Expo. En intégration continue, le
+  jeton `EXPO_TOKEN` en tient lieu : aucune connexion interactive n'est requise.
+- `--local` n'est pas utilisable sur Windows. L'exécuteur, lui, est
+  `ubuntu-latest` — donc Linux : le repli y fonctionne.
+
+Le repli **conserve la clé de signature d'Expo**, exactement comme la compilation
+distante : une mise à jour s'installe par-dessus la précédente sans effacer vos
+données. C'est vérifiable, et vérifié : `.verif/comparer-signatures.py` compare
+l'empreinte des certificats de deux APK et dit si Android acceptera la mise à
+jour. La commande est rappelée en fin de document.
+
+Quand le repli a servi, la compilation dure plus longtemps (environ 25 minutes au
+lieu de 12). Le fichier produit est identique dans son usage.
+
 ---
 
 ## Étape 5 — Récupérer le fichier
@@ -254,6 +293,14 @@ l'iPhone branché. Rien ne transite par Expo ni par GitHub.
 L'étape 2 n'a pas été faite, ou le nom du secret est mal orthographié. Il faut
 exactement `EXPO_TOKEN`.
 
+**La compilation échoue avec « This account has used its Android builds from the
+Free plan this month ».**
+Ce n'est ni une panne ni une faute dans le code : le forfait gratuit d'Expo a
+épuisé ses compilations Android du mois, et la date de remise à zéro est écrite
+dans le message. Le flux bascule alors tout seul sur une compilation locale (voir
+l'étape 4) : laissez-le finir, il produira quand même l'APK. Si vous préférez ne
+pas attendre, relancez après la date annoncée.
+
 **La compilation échoue avec « no project linked » ou une erreur de projet.**
 L'étape 3 n'a pas été poussée sur GitHub. Vérifiez que `app.json` contient bien
 `extra.eas.projectId` dans la version du dépôt en ligne.
@@ -328,6 +375,18 @@ npm run test:domaine             # lancer les tests
 npm run verifier:tout            # tout d'un coup
 npx expo start                   # ouvrir l'application en développement
 ```
+
+Pour vérifier **vous-même** qu'un APK se posera par-dessus le précédent sans
+effacer vos données, comparez les certificats de deux fichiers — c'est la clé de
+signature, et rien d'autre, qui en décide :
+
+```bash
+python .verif/comparer-signatures.py ancien.apk nouveau.apk
+```
+
+La réponse est en français : « IDENTIQUES : le nouveau se posera par-dessus
+l'ancien, sans perte de donnees », ou « DIFFERENTES : Android refusera la mise a
+jour ». Deux APK signés par Expo donnent la première réponse.
 
 Le fichier `.npmrc` à la racine n'est pas un détail : Expo 57 épingle `react`
 en 19.2.3 alors que `react-dom` réclame 19.3.0. `react-dom` ne sert qu'au rendu

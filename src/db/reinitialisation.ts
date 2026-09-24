@@ -20,7 +20,15 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { transaction } from './database';
 import { TABLES_A_VIDER } from './schema';
 
-/** Le dossier des PDF émis, tel que `render.ts` l'écrit. */
+/**
+ * Le dossier des documents, tel que `render.ts` l'écrit.
+ *
+ * C'est **l'unique déclaration** de ce nom : `src/documents/stockage.ts` l'importe
+ * pour y ranger les pièces du dossier — baux, états des lieux, inventaires — et
+ * c'est ce qui garantit qu'elles partent avec le reste lors d'une remise à zéro.
+ * Une seconde déclaration finirait par diverger, et les pièces resteraient sur
+ * le téléphone alors que l'écran annonce que tout a été effacé.
+ */
 export const DOSSIER_DOCUMENTS = 'documents/';
 
 export interface ResultatEffacement {

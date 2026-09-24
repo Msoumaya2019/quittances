@@ -23,16 +23,43 @@ interface PropsBarreActionFixe {
   aide?: string;
   /** Icône affichée avant le libellé. */
   icone?: React.ReactNode;
+  /**
+   * Action secondaire, posée **au-dessus** de l'action principale.
+   *
+   * Dans un formulaire guidé, « Précédent » doit rester atteignable au pouce
+   * sans quitter l'écran : le placer sous le bouton principal le mettrait dans
+   * la zone du geste système, et le rendre discret le ferait manquer.
+   */
+  secondaireLibelle?: string;
+  secondaireOnPress?: () => void;
+  /** Libellé de remplacement quand l'action principale est indisponible. */
+  desactive?: boolean;
 }
 
-export function BarreActionFixe({ libelle, onPress, aide, icone }: PropsBarreActionFixe) {
+export function BarreActionFixe({
+  libelle,
+  onPress,
+  aide,
+  icone,
+  secondaireLibelle,
+  secondaireOnPress,
+  desactive,
+}: PropsBarreActionFixe) {
   const styles = useStyles(creerStyles);
   const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.barre, { paddingBottom: Math.max(insets.bottom, espaces.md) }]}>
       {aide ? <Text style={styles.aide}>{aide}</Text> : null}
-      <Bouton libelle={libelle} onPress={onPress} icone={icone} />
+      {secondaireLibelle && secondaireOnPress ? (
+        <Bouton
+          libelle={secondaireLibelle}
+          onPress={secondaireOnPress}
+          variante="secondaire"
+          style={styles.secondaire}
+        />
+      ) : null}
+      <Bouton libelle={libelle} onPress={onPress} icone={icone} desactive={desactive} />
     </View>
   );
 }
@@ -50,6 +77,9 @@ const creerStyles = (couleurs: Couleurs) =>
       ...typographie.petit,
       color: couleurs.texteSecondaire,
       textAlign: 'center',
+      marginBottom: espaces.sm,
+    },
+    secondaire: {
       marginBottom: espaces.sm,
     },
   });

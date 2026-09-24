@@ -18,6 +18,7 @@ import type {
   Logement,
   Paiement,
   PeriodeLoyer,
+  PieceDossier,
   Proprietaire,
   TitulaireBail,
 } from '@/domain/types';
@@ -35,6 +36,7 @@ export interface BilanRestauration {
   periodesLoyer: number;
   paiements: number;
   documents: number;
+  pieces: number;
   reglages: boolean;
 }
 
@@ -102,6 +104,16 @@ export function validerContenu(objet: ContenuSauvegarde): void {
     }
   }
 
+  // Les pièces ne sont exigées que si la sauvegarde en annonce : une sauvegarde
+  // écrite avant l'apparition du dossier documentaire n'en a pas, et la refuser
+  // priverait l'utilisateur de ses propres sauvegardes. Le contrôle porte donc
+  // sur la **forme quand le champ est là**, jamais sur sa présence.
+  if (objet.donnees.pieces !== undefined && !Array.isArray(objet.donnees.pieces)) {
+    throw new ErreurSauvegarde(
+      'Cette sauvegarde est incomplète : une partie des données manque. Elle ne peut pas être restaurée.',
+    );
+  }
+
   if (!objet.donnees.reglages || typeof objet.donnees.reglages !== 'object') {
     throw new ErreurSauvegarde(
       'Cette sauvegarde est incomplète : une partie des données manque. Elle ne peut pas être restaurée.',
@@ -124,8 +136,11 @@ export async function appliquerSauvegarde(
   const d = contenu.donnees;
 
   await transaction(async (db) => {
-    // On vide d'abord, dans l'ordre inverse des dépendances.
+    // On vide d'abord, dans l'ordre inverse des dépendances. `pieces` référence
+    // `baux` et `logements` : la vider après eux violerait la clé étrangère et
+    // ferait échouer toute la restauration.
     await db.execAsync('DELETE FROM documents');
+    await db.execAsync('DELETE FROM pieces');
     await db.execAsync('DELETE FROM paiements');
     await db.execAsync('DELETE FROM periodes_loyer');
     await db.execAsync('DELETE FROM titulaires');
@@ -190,6 +205,27 @@ export async function appliquerSauvegarde(
           b.notes ?? null,
           b.creeLe,
           b.modifieLe,
+        ],
+      );
+    }
+
+    for (const piece of d.pieces ?? []) {
+      await db.runAsync(
+        `INSERT INTO pieces
+           (id, logement_id, bail_id, type, titre, date_document, chemin_fichier, donnees,
+            cree_le, modifie_le)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          piece.id,
+          piece.logementId,
+          piece.bailId ?? null,
+          piece.type,
+          piece.titre,
+          piece.dateDocument,
+          piece.cheminFichier,
+          piece.donnees,
+          piece.creeLe,
+          piece.modifieLe,
         ],
       );
     }
@@ -286,6 +322,7 @@ export async function appliquerSauvegarde(
     periodesLoyer: d.periodesLoyer.length,
     paiements: d.paiements.length,
     documents: d.documents.length,
+    pieces: (d.pieces ?? []).length,
     reglages: true,
   };
 }
@@ -316,4 +353,13 @@ export async function documentsSansFichier(documents: Document[]): Promise<Docum
 }
 
 /** Types réexportés pour l'écran de restauration. */
-export type { Bail, Document, Logement, Paiement, PeriodeLoyer, Proprietaire, TitulaireBail };
+export type {
+  Bail,
+  Document,
+  Logement,
+  Paiement,
+  PeriodeLoyer,
+  PieceDossier,
+  Proprietaire,
+  TitulaireBail,
+};

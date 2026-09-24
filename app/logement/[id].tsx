@@ -364,6 +364,50 @@ export default function EcranLogement() {
               ) : null}
             </Carte>
 
+            {/* Le dossier documentaire du logement : bail, états des lieux,
+                inventaires, quittances et autres pièces, rangés par location.
+                C'est le seul endroit où l'on retrouve ce qui a été signé. */}
+            <Carte>
+              <Text style={styles.section}>Documents</Text>
+              <Text style={styles.aide}>
+                Le bail, les états des lieux, les inventaires et les quittances de ce logement,
+                rangés par locataire.
+              </Text>
+              <View style={styles.actions}>
+                <Bouton
+                  libelle="Ouvrir le dossier du logement"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/logement/[id]/dossier',
+                      params: { id: logement.id },
+                    })
+                  }
+                />
+                {/* Le bail se fabrique ici : le logement est connu, donc rien
+                    n'est à ressaisir. Le formulaire guidé part de cette fiche. */}
+                <Bouton
+                  libelle="Créer le bail"
+                  variante="secondaire"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/bail/nouveau',
+                      params: { logementId: logement.id },
+                    })
+                  }
+                />
+                <Bouton
+                  libelle="Ranger un document"
+                  variante="secondaire"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/document/ajouter',
+                      params: { logementId: logement.id },
+                    })
+                  }
+                />
+              </View>
+            </Carte>
+
             {/* Le bien lui-même : adresse, référence, jour d'échéance, loyer.
                 L'écran de modification existait, mais rien n'y menait : le
                 bailleur ne pouvait corriger une adresse qu'en supprimant le

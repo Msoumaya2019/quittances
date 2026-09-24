@@ -7,10 +7,15 @@
 
 import { executer, lireToutes } from '../database';
 import { MODELES_PROPOSES, type ModelePropose } from '../../domain/types';
-// Import de type uniquement : `palette.ts` ne contient que des données, et rien
-// n'est embarqué à l'exécution. Les réglages ont besoin de connaître les valeurs
-// admises, pas de dessiner.
-import type { CouleurTheme, ModeTheme } from '../../ui/palette';
+// `palette.ts` ne contient que des données et n'importe rien : l'en tirer les
+// valeurs par défaut du thème n'embarque aucun code, et c'est ce qui fait tenir
+// l'accord entre le thème affiché à l'ouverture et le thème enregistré.
+import {
+  COULEUR_PAR_DEFAUT,
+  MODE_PAR_DEFAUT,
+  type CouleurTheme,
+  type ModeTheme,
+} from '../../ui/palette';
 
 export interface Reglages {
   /**
@@ -50,8 +55,12 @@ export const REGLAGES_PAR_DEFAUT: Reglages = {
   // Le modèle coloré par défaut : c'est celui que le bailleur a choisi, et il
   // porte toutes les informations obligatoires.
   modeleParDefaut: 'colore',
-  couleurTheme: 'vert',
-  modeTheme: 'clair',
+  // Le rose par défaut : c'est l'identité sous laquelle le bailleur reconnaît son
+  // application. Ce défaut ne touche pas un réglage déjà enregistré — un
+  // bailleur qui a choisi le bleu garde le bleu — il décide seulement de ce que
+  // voit une installation neuve.
+  couleurTheme: COULEUR_PAR_DEFAUT,
+  modeTheme: MODE_PAR_DEFAUT,
   signatureBase64: null,
   signatureActive: false,
   lieuEmission: '',
