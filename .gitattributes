@@ -1,0 +1,42 @@
+# Fins de ligne, fixees une fois pour toutes.
+#
+# POURQUOI CE FICHIER EXISTE. Sans lui, `core.autocrlf=true` (le reglage par
+# defaut sur Windows) convertit en CRLF tout fichier que Git touche, et une
+# edition locale laisse le fichier en CRLF dans la copie de travail tandis que
+# le depot garde des LF. Git ne le signale pas comme un changement — le texte
+# est identique — mais **les octets ne le sont plus**.
+#
+# Ce n'est pas une gene theorique. Mesure du 24 septembre 2026 :
+# `src/pdf/etat-des-lieux.ts` et `src/pdf/styles.ts` sont revenus en CRLF apres
+# une edition, et `.verif/falsifier-edl-pagination.py` a refuse de conclure —
+# deux de ses mutations ecrivent leurs ancres avec des `\n`, qui ne
+# correspondaient plus a rien. Un falsificateur qui refuse est honnete ; deux
+# mutations **muettes** auraient ete un trou de couverture invisible.
+#
+# La regle est donc explicite, et non heritee du reglage de la machine : le
+# depot et la copie de travail portent des LF, partout, pour tout le monde.
+# Un contributeur sous Windows, sous macOS ou sous Linux lit alors les memes
+# octets, et les bancs qui comparent des octets mesurent la meme chose.
+* text=auto eol=lf
+
+# Les binaires : jamais convertis. Git le deduit de `text=auto`, mais une
+# image qui traverserait une conversion serait corrompue sans bruit — et un
+# fichier corrompu ne se voit qu'a l'impression du document.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ipa binary
+*.apk binary
+*.aab binary
+*.pdf binary
+
+# Les scripts de banc : ils sont lus **et ecrits** par des outils Python, qui
+# comparent leurs octets. Une conversion de fin de ligne y ferait echouer une
+# verification de restauration — un faux echec qui accuse le code.
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.md text eol=lf

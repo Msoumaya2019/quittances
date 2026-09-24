@@ -534,6 +534,78 @@ référence et la date de consultation. Chaque section du document nomme son
 déclarée : un fondement qui ne renvoie à aucune source lue est une clause
 inventée, même quand elle est vraie.
 
+### Les marges d'impression, et les pages maigres
+
+**Le blanc haut et bas est porté par le `@page`, jamais par `.page`.** C'est la
+règle née d'un défaut signalé depuis un téléphone : *« pour l'état des lieux je
+veux que toutes les pages laissent une marge pour l'impression et pas que la
+1re »*. `STYLES_BASE` pose `@page { margin: 0 }` et met les blancs dans `.page` —
+or un rembourrage de **bloc** ne protège que la **première** feuille. Mesure du
+24 septembre 2026 avant correction : le premier texte de la page 2 s'imprimait à
+**2,3 mm** du bord haut, et le dernier de la page 5 à **1,4 mm** du bord bas,
+sous le quart de pouce (6,35 mm) que beaucoup d'imprimantes ne savent pas
+imprimer. `@page` est la seule règle que le moteur applique à **chaque** page.
+`STYLES_EDL` porte donc `@page { size: A4; margin: 14mm 0 }`, et `.page` garde le
+seul rembourrage latéral (`0 18mm`), parce que le `@page` sert aussi au modèle de
+quittance dont la tenue sur une feuille repose sur un calcul en millimètres.
+
+La valeur est **mesurée**, pas choisie : 12 mm donne 15,2 mm au pire ; 14 mm donne
+15,2 mm sur les pages 2 et suivantes ; 20 mm fait passer l'état des lieux complet
+de 6 à 7 feuilles et la sortie de 5 à 6 ; 30 mm, comme le bail, en ferait 8 et 9.
+Aucune valeur de 12 à 18 mm ne change la pagination.
+
+**Un banc qui ne mesure que la page 1 reste vert sur ce défaut.** C'est
+exactement ce qui s'était produit : `.verif/mesurer-marges-impression.py` lit
+`page = document[0]`. Les deux bancs des constats portent donc une mesure qui
+**boucle sur toutes les pages** (`marge_haut_bas`), et une page entièrement
+blanche rend `None` — elle ne porte pas d'encre, il n'y a pas de marge à y
+mesurer, et la compter comme un zéro ferait échouer le document sur une
+séparation légitime. `.verif/mesurer-marges-pages.py` est l'outil de diagnostic
+qui imprime, page par page, la marge des quatre bords.
+
+**Une page maigre vient d'un bloc insécable, pas d'un manque de place.** Le même
+document se terminait sur une septième feuille de **108 caractères** — les deux
+réserves seules. La cause n'est pas le volume : resserrer les blocs de section
+(6 → 4 mm), les blocs de pièce (5 → 3,5 mm) ou les lignes d'élément (1,8 → 1,2 mm)
+ne change **ni le nombre de pages ni le nombre de pages maigres**. La cause est un
+bloc qui **saute en entier** plutôt que de se couper : `.e-element` porte
+`break-inside: avoid-page` — et c'est justifié, une photo détachée de sa ligne ne
+montre plus ce qu'elle illustre — mais un bloc « élément + photos » peut alors
+atteindre 130 mm et ne plus tenir en bas de page.
+
+**Le levier est donc la hauteur des photos, et elle a été mesurée.**
+`HAUTEUR_PHOTO_MAX_MM` (`src/pdf/constats.ts`) est passée de 105 à **60 mm** :
+
+| plafond | état des lieux complet | inventaire complet | inventaire de sortie |
+|---|---|---|---|
+| 105 mm (avant) | 6 p. | 7 p., page orpheline | 6 p. |
+| 75 mm | 6 p. | 7 p., page orpheline | 6 p. |
+| **60 mm (retenu)** | **5 p.** | **6 p.** | 6 p. |
+| 45 mm | 5 p. | 6 p. | 6 p., aucune page maigre |
+
+45 mm a été écarté : à 85 mm de large, il donne à un portrait un rapport de 0,53,
+où l'on ne distingue plus un objet debout — ce qui dessert un constat. 75 mm ne
+gagne rien et fait revenir la page orpheline. Le plafond est **lu dans la source**
+par les deux bancs, qui le comparent à la hauteur réellement dessinée (57,9 mm et
+57,5 mm mesurés) : deux plafonds qui divergeraient, c'est un document coupé en
+deux.
+
+**`break-inside` sur une liste entière est un piège, mais pas celui qu'on
+croyait.** Le commentaire qui portait `.e-liste { break-inside: avoid-page }`
+affirmait que le moteur l'ignore quand la liste dépasse une page. C'est faux :
+la liste **saute en bloc**. La consigne a néanmoins été retirée pour ce qu'elle
+coûtait vraiment — la page orpheline des réserves — et la mesure avant/après dit
+honnêtement ce qu'elle ne réglait pas : même nombre de pages, même nombre de
+pages maigres, la page maigre s'étant seulement déplacée. Ce qui reste est gardé :
+**la puce ne se coupe pas** (`break-inside: avoid-page` sur `li`), **la liste,
+oui**.
+
+**Le nombre de pages est borné par le haut dans les deux bancs.** Un plancher
+seul — « au moins cinq pages » — resterait vert sur un document qui s'étire.
+`MAXIMUM_DE_PAGES_COMPLET` vaut 5 pour l'état des lieux et 6 pour l'inventaire,
+et c'est ce qui donne un témoin au plafond de photo : le remonter à 105 mm fait
+**tomber** le banc au lieu de le laisser vert.
+
 ## L'inventaire du mobilier
 
 C'est le constat d'une location **meublée** : ce que le logement contient, en
@@ -994,6 +1066,24 @@ sauvegarde dans `.verif/sauvegardes/` — jamais **à côté de sa source**, où
 apparaîtrait dans `git status` comme si elle faisait partie du projet — et
 **prouve la restauration sur les octets**, jamais sur la couleur des tests : une
 source laissée mutée peut rendre les tests verts par chance.
+
+**Les fins de ligne sont réglées par un `.gitattributes`, et il en fallait un.**
+Mesuré le 24 septembre 2026 : `src/pdf/etat-des-lieux.ts` et `src/pdf/styles.ts`
+revenaient en **CRLF** après une édition, alors que les objets Git portent des
+LF — `git ls-files --eol` les montrait en `i/lf w/crlf`. Git ne signalait aucun
+changement de contenu, mais les **octets** différaient, et les automates dont les
+ancres sont écrites avec `\n` échouaient alors sur un fichier juste. La racine
+est que `core.autocrlf=true` reconvertissait à chaque passage, faute de règle.
+`.gitattributes` pose donc `* text=auto eol=lf`, marque les binaires (`*.png`,
+`*.jpg`, `*.ipa`, `*.apk`, `*.aab`, `*.pdf`) et force `eol=lf` sur les sources et
+les documents. `git add --renormalize .` aligne l'index ; `styles.ts` rend alors
+une empreinte **identique** à son objet `HEAD`, donc son contenu était intact.
+
+`.verif/pages-maigres.py` imprime le nombre de caractères de **chaque** page d'un
+PDF rendu, et signale celles qui en portent moins de 600 : un bloc insécable qui
+a sauté laisse une feuille maigre derrière lui, et cela ne se voit ni au nombre
+de pages ni à l'œil. `.verif/mesurer-marges-pages.py` fait de même pour les
+quatre bords de chaque page. Les deux **impriment** ; ils ne jugent pas.
 
 `tests/lecture-avant-declaration.test.ts` garde une faute de **forme**, celle
 qu'aucun autre contrôle ne pouvait voir : un écran qui lit une variable de

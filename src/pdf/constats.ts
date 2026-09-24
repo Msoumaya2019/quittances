@@ -50,8 +50,37 @@ export const LARGEUR_PHOTO_MM = 85;
  * Une photo en portrait, cadrée sur la seule largeur, occuperait la moitié d'une
  * feuille et repousserait les éléments suivants. On plafonne donc la hauteur, en
  * conservant le rapport.
+ *
+ * Le plafond est passe de 105 a 60 mm le 24 septembre 2026, apres une mesure
+ * commandee par la demande « faire tenir le document, quitte a resserrer ».
+ *
+ * La cause des pages a moitie vides, etablie par la mesure : un element et ses
+ * photos ne se separent pas (`.e-element`, `break-inside: avoid-page`), donc des
+ * qu'un bloc element + photo ne tient plus en bas de page il saute **en entier**
+ * et laisse la page derriere lui. Ce n'est pas un manque de place : resserrer
+ * les blocs de section (6 -> 4 mm), les blocs de piece (5 -> 3.5 mm) ou les
+ * lignes d'element (1.8 -> 1.2 mm) ne change ni le nombre de pages ni le nombre
+ * de pages maigres. Le plafond, lui, change les deux, parce qu'il decide de la
+ * hauteur du bloc qui saute.
+ *
+ * Ce qui a ete mesure, plafond par plafond (memes document, memes donnees, seul
+ * le plafond differe) :
+ *
+ *   105 mm (valeur precedente)  inventaire-complet 7 p., maigres [3, 4, 5]
+ *                               etat des lieux complet 6 p.
+ *    75 mm                      inventaire-complet 7 p., maigres [3, 4, 7]
+ *                               etat des lieux complet 6 p.
+ *    60 mm (valeur retenue)     inventaire-complet **6 p.**, maigres [3, 4]
+ *                               etat des lieux complet **5 p.**
+ *    45 mm                      inventaire de sortie sans aucune page maigre
+ *
+ * 45 mm a ete ecarte : a 85 mm de large, il donne a une photo en portrait un
+ * rapport de 0.53 — une bande ou l'on ne distingue plus un objet debout, ce qui
+ * dessert un constat. 60 mm (rapport 0.71) gagne la meme page sur l'etat des
+ * lieux et une page sur l'inventaire, en gardant une image lisible. 75 mm ne
+ * gagne rien et fait meme revenir la page orpheline : il n'a pas ete retenu.
  */
-export const HAUTEUR_PHOTO_MAX_MM = 105;
+export const HAUTEUR_PHOTO_MAX_MM = 60;
 
 /** Le fond, le texte et la bordure d'une pastille d'état. */
 export interface TonEtat {

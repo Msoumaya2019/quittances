@@ -117,4 +117,41 @@ describe('une signature recueillie est montree', () => {
       'le formulaire ne passe plus le trace courant : le pave resterait vide apres signature',
     );
   });
+
+  /*
+   * Le defaut, signale depuis un telephone : « lorsque je passe a une 2eme
+   * personne la signature de la 1ere reste toujours ».
+   *
+   * Le pave garde ses traits dans un etat local. Rien ne les efface quand on
+   * change de signataire : les traits du precedent sont redessines tels quels
+   * sous le nom du suivant, et l'on signe sans voir que l'on signe sur le
+   * trace d'un autre. La donnee enregistree, elle, reste juste — mais ce que
+   * l'ecran montre ne l'est pas, et c'est ce que la personne voit.
+   *
+   * Le remede est une `key` par signataire : React detruit le pave et en monte
+   * un neuf, dont l'etat local est vide. Le bail la portait depuis l'origine ;
+   * ni l'etat des lieux ni l'inventaire ne l'avaient.
+   *
+   * Ce que ce controle ne peut pas faire, et qui est dit ici pour qu'on ne le
+   * lui demande pas : il lit du source. Qu'un pave remonte par une `key`
+   * reparte bien d'un etat vide est le comportement documente de React, et
+   * aucun test sans emulateur ne le prouvera.
+   */
+  it('chaque formulaire monte un pave neuf quand on change de signataire', () => {
+    const formulaires = [
+      'app/bail/nouveau.tsx',
+      'app/etat-des-lieux/nouveau.tsx',
+      'app/inventaire/nouveau.tsx',
+    ];
+
+    for (const chemin of formulaires) {
+      const source = lire(chemin);
+      assert.match(
+        source,
+        /<BlocSignature\s*\n(?:\s*\/\/[^\n]*\n|\s*\n)*\s*key=\{signataire\}/,
+        `${chemin} ne remonte plus son pave au changement de signataire : `
+          + 'le trace du precedent resterait affiche sous le nom du suivant',
+      );
+    }
+  });
 });

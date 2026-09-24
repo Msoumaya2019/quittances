@@ -1067,6 +1067,13 @@ export default function EcranNouvelInventaire() {
             />
 
             <BlocSignature
+              // La clé force un pavé neuf à chaque changement de signataire.
+              // Sans elle, le pavé garde dans son état local les traits du
+              // précédent : ils sont redessinés tels quels sous le nom du
+              // suivant, et la signature recueillie n'est plus celle qu'on croit.
+              // Le bail porte la même clé depuis l'origine ; ni l'état des lieux
+              // ni l'inventaire ne l'avaient.
+              key={signataire}
               chemin={signatureCourante?.trace ?? ''}
               onTrace={signer}
               onDessinEnCours={(enCours) => setDefilement(!enCours)}

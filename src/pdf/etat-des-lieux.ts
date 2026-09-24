@@ -166,10 +166,44 @@ export const STYLES_EDL = `
      donc en bloc et on laisse le contenu decider du nombre de feuilles.
      (Les accents graves sont proscrits dans ce commentaire : il vit a
      l'interieur d'un litteral de gabarit, et ils fermeraient la chaine.) */
+
+  /* LE BLANC HAUT ET BAS EST PORTE PAR LE @page, ET PAR LUI SEUL.
+     Correction du 24 septembre 2026, signalee depuis un telephone : « pour
+     l'etat des lieux je veux que toutes les pages laissent une marge pour
+     l'impression et pas que la premiere ».
+
+     Ce qui etait faux, mesure : STYLES_BASE pose \`@page { margin: 0 }\` et met
+     les blancs dans \`.page\`. Un rembourrage de bloc ne protege que la
+     **premiere** feuille — le texte de la page 2 d'un etat des lieux
+     s'imprimait a 2,3 mm du bord haut et a 0,8 mm du bord bas, trop pres pour
+     qu'une imprimante A4 le prenne (le quart de pouce, 6,35 mm, est ce que
+     beaucoup ne savent pas imprimer).
+
+     Le \`@page\` est la seule regle que le moteur applique a CHAQUE page : c'est
+     donc lui qui porte le blanc, comme dans le bail. Le rembourrage lateral,
+     lui, reste dans \`.page\` — il est plus large que celui d'une imprimante, et
+     le \`@page\` sert aussi au modele de quittance, dont la tenue en page tient
+     d'un calcul en millimetres qu'il ne faut pas perturber.
+
+     14 mm, et non les 12 du gabarit : le seuil a battre est 6,35 mm, et une
+     mesure du 24 septembre 2026 donne 15,2 mm au pire sur les pages 2 et
+     suivantes. Deux millimetres de plus ne coutent rien ici ; en descendre
+     ferait tomber le document sous le seuil au premier arrondi.
+
+     Ce qui a ete mesure valeur par valeur, pour ne pas choisir a l'oeil :
+     20 mm fait passer l'etat des lieux complet de 6 a 7 feuilles et la sortie
+     de 5 a 6 ; 30 mm, comme le bail, en ferait 8 pour l'entree et 9 pour
+     l'inventaire. 41 mm de blanc en moins par feuille, c'est quatre feuilles
+     ajoutees a un inventaire : on protege la marge sans noyer le document. */
+  @page {
+    size: A4;
+    margin: 14mm 0;
+  }
+
   .page {
     display: block;
     min-height: 0;
-    padding: 12mm 18mm 12mm 18mm;
+    padding: 0 18mm;
   }
 
   .e-bandeau {
@@ -326,18 +360,54 @@ export const STYLES_EDL = `
   .e-texte-libre { font-size: 9.5pt; margin: 0; white-space: pre-wrap; }
 
   /* Les deux listes du document — les reserves et les sources — se lisent
-     d'un bloc : une puce seule sur la feuille suivante laisse une page aux
-     cinq sixiemes vide, defaut mesure sur la liste des sources. La consigne
-     break-inside posee sur la liste entiere est sans danger quand elle depasse
-     une page : le moteur l'ignore alors et coupe normalement.
+     mieux d'un bloc, et le commentaire qui precedait celui-ci affirmait que
+     l'insecabilite de la liste entiere etait sans danger : « break-inside
+     posee sur la liste entiere est sans danger quand elle depasse une page :
+     le moteur l'ignore alors et coupe normalement ».
+
+     Ce qui est vrai : la phrase est fausse. Une liste qui ne tient plus ne se
+     coupe pas la ou elle deborde — elle saute **en entier** a la feuille
+     suivante. La consigne sur la liste entiere est donc bien un piege.
+
+     Ce qui est vrai aussi, et qui a demande une mesure avant/apres pour etre
+     su : **ce piege n'est pas la cause des pages maigres de ce document.**
+     Mesure du 24 septembre 2026, toute chose egale par ailleurs (la seule
+     difference entre les deux series est la consigne ci-dessous) :
+
+       avec la consigne    inventaire-complet 7 p., maigres [3, 4, 7]
+       sans la consigne    inventaire-complet 7 p., maigres [3, 4, 5]
+
+     Meme nombre de pages, meme nombre de pages maigres, et les deux series
+     restent identiques sur l'etat des lieux (6 p. dessus, 5 p. pour la sortie,
+     maigres [2, 3] et [2]). La consigne ne faisait donc que **deplacer** la
+     page maigre : la septieme feuille de 108 caracteres, qui portait les deux
+     reserves seules apres les signatures, disparait — mais la cinquieme
+     devient maigre a son tour.
+
+     La cause reelle, elle, n'est pas dans cette liste : elle est dans les
+     **blocs de photo et de piece**, qui sautent eux aussi en bloc. Et la
+     mesure dit aussi que ce n'est pas un manque de place : resserrer les blocs
+     de section (6 -> 4 mm), les blocs de piece (5 -> 3.5 mm) ou les lignes
+     d'element (1.8 -> 1.2 mm) ne change **ni le nombre de pages ni le nombre
+     de pages maigres**.
+
+     La consigne est neanmoins retiree ici, sur le fond et non par
+     empirisme — et c'est le seul effet que la mesure autorise a lui preter :
+     **la page orpheline des reserves disparait**, le document ne se termine
+     plus sur une feuille de deux puces. Ce qui reste se reglera en traitant
+     les blocs qui sautent, pas cette liste.
+
+     Ce qui est garde : **la puce ne se coupe pas** — une ligne coupee entre
+     deux feuilles ne se lit plus. Ce qui est rendu : **la liste, oui**, pour
+     qu'une liste qui ne tient pas en bas de page se poursuive au lieu de
+     sauter en bloc.
+
      (Les accents graves sont proscrits dans ce commentaire : il vit a
      l'interieur d'un litteral de gabarit, et ils fermeraient la chaine.) */
   .e-liste {
     margin: 0;
     padding-left: 5mm;
     font-size: 9.5pt;
-    break-inside: avoid-page;
-    page-break-inside: avoid;
   }
   .e-liste li { margin-bottom: 0.8mm; break-inside: avoid-page; page-break-inside: avoid; }
 
