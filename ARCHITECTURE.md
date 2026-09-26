@@ -146,6 +146,54 @@ La génération se fait **en un appui**, sans écran intermédiaire : la catégo
 Quittances de l'onglet DOCUMENTS produit la quittance directement, et l'aperçu
 n'est plus qu'un chemin de vérification, atteint en touchant le nom du logement.
 
+### Consulter un document n'est pas l'imprimer
+
+Signalé depuis le téléphone le 26 septembre 2026 : « lorsque je génère un bail
+ou une quittance et je clique sur voir le pdf ça m'ouvre une fenêtre
+d'impression comme si je voulais imprimer ».
+
+Le défaut tenait à **un seul appel**. `ouvrirDocument` (`src/pdf/partage.ts`)
+confiait le fichier à `Print.printAsync` d'`expo-print` — qui ne montre jamais un
+document, mais demande au système de l'**imprimer**. Le nom de la fonction disait
+« ouvrir », le comportement disait « imprimer », et rien ne le relevait : **aucun
+test ne couvrait `ouvrirDocument`**. C'est la leçon de cette passe — un nom juste
+sur un appel faux ne se voit qu'en lisant l'appel.
+
+Les deux systèmes n'offrent pas la même chose, et il faut le dire :
+
+- **Android** sait ouvrir un PDF dans le lecteur installé. L'ouverture passe par
+  une intention `ACTION_VIEW` portant une **URI de contenu**
+  (`FileSystem.getContentUriAsync`) et le drapeau `FLAG_GRANT_READ_URI_PERMISSION`
+  (`flags: 1`). Sans ce drapeau, le lecteur n'a pas le droit de lire le fichier et
+  Android refuse l'ouverture. Faute de lecteur, l'ouverture **retombe sur la
+  feuille de partage** plutôt que d'échouer.
+- **iOS n'expose aucune API** pour ouvrir un fichier dans une application tierce.
+  La feuille de partage est le seul chemin, et c'est elle qui porte « Ouvrir
+  dans… » et les lecteurs PDF installés. Sur iPhone, « Voir le PDF » demande donc
+  un appui de plus qu'on ne le souhaiterait — ce n'est pas un choix, c'est iOS.
+
+**`Linking.openURL` ne peut pas servir ici, et c'est mesuré.** Le module
+d'intention de React Native construit bien une intention `ACTION_VIEW`
+(`IntentModule.kt`), mais n'ajoute que `FLAG_ACTIVITY_NEW_TASK` — jamais
+`FLAG_GRANT_READ_URI_PERMISSION`. Un `content://` de notre propre fournisseur
+serait donc refusé par l'application qui le reçoit. D'où `expo-intent-launcher`,
+qui laisse poser le drapeau.
+
+**`imprimerDocument` a été retirée.** Cette fonction n'avait **aucun appelant** :
+son seul effet visible était le défaut signalé, atteint par accident. Imprimer
+reste possible — la feuille de partage porte « Imprimer » sur les deux systèmes,
+et un lecteur PDF imprime aussi — mais l'application ne l'annonce plus comme une
+façon de voir un document.
+
+`tests/ouverture-document.test.ts` garde la règle, et
+`.verif/falsifier-ouverture-document.py` lui remet **sept** fautes une à une, la
+première étant **le défaut tel qu'il a été signalé**. Les écrans y sont
+**découverts par balayage** plutôt que listés : un écran ajouté demain qui
+propose « Voir le PDF » entre dans le contrôle tout seul. L'accord est exigé
+**dans les deux sens** — vérifier seulement que chaque écran qui annonce
+« Voir le PDF » ouvre bien le document laisserait passer le cas où l'annonce
+disparaît, l'écran sortant alors du contrôle.
+
 ## Les modèles de document
 
 Le papier ne suit pas le thème de l'écran : les couleurs du document sont
@@ -770,6 +818,7 @@ seule fonction pure**, pour être éprouvable sans base de données et sans tél
 | Les deux colonnes d'une paire avant / après portent **deux** images, et non deux fois la même | `CoteDePaire` porte son propre index, résolu par `paireEnHtml` dans `src/pdf/sections-constat.ts` | `tests/inventaire-rendu.test.ts`, et la mesure des pixels par `.verif/mesurer-inventaire.py` — falsifié par `.verif/falsifier-inventaire.py` |
 | Une sauvegarde emporte les fichiers eux-mêmes, et se relit sans eux | `VERSION_CONTENU` porté à 2, `rassemblerFichiers` (`src/backup/export.ts`) et `restaurerFichiers` (`src/backup/import.ts`) — champ **facultatif**, chemin **relatif** | `tests/promesses-sauvegarde.test.ts` |
 | Aucun écran de sauvegarde ne promet une régénération que l'application ne fait pas | `app/sauvegarde/export.tsx` et `import.tsx` — l'ancienne phrase « les PDF peuvent être régénérés » est interdite par le contrôle | `tests/promesses-sauvegarde.test.ts` |
+| « Voir le PDF » ouvre le document, et ne le fait pas imprimer | `ouvrirDocument` dans `src/pdf/partage.ts` — intention de consultation sur Android, feuille de partage sur iOS ; l'impression n'y est plus importée | `tests/ouverture-document.test.ts`, falsifié par `.verif/falsifier-ouverture-document.py` |
 
 Le dépôt en base de `ajouterPeriodeLoyer` ne fait qu'**appliquer** le plan
 calculé par le domaine : la décision est prise ailleurs, et la transaction
@@ -913,6 +962,13 @@ version qu'Expo SDK 57 recommande (`0.10.1`). `react-native-reanimated@4.5.1`
 le réclame en pair **obligatoire** — son greffon Babel le charge — mais un pair
 n'est pas installé automatiquement lorsqu'on ignore les pairs. Sans cette ligne,
 le greffon échoue et l'application ne démarre pas.
+
+**`expo-intent-launcher` ouvre les PDF sur Android**, épinglé à `~57.0.1` — la
+version que le SDK 57 attend, **lue** dans
+`node_modules/expo/bundledNativeModules.json` et non devinée. C'est un module
+**natif** : il ne prend effet qu'à la compilation suivante. React Native ne peut
+pas le remplacer, son `Linking.openURL` ne posant pas le drapeau de lecture (voir
+« Consulter un document n'est pas l'imprimer »).
 
 Pour reproduire l'installation des serveurs Expo sans attendre une compilation :
 
@@ -1079,6 +1135,17 @@ est que `core.autocrlf=true` reconvertissait à chaque passage, faute de règle.
 les documents. `git add --renormalize .` aligne l'index ; `styles.ts` rend alors
 une empreinte **identique** à son objet `HEAD`, donc son contenu était intact.
 
+**Mais la copie de travail restait en CRLF, et rien ne le disait.** Mesure du
+26 septembre 2026 : **40 fichiers** étaient encore en `i/lf w/crlf` — l'objet Git
+sans aucun retour chariot, la copie de travail avec un par ligne. Git ne le
+signale pas, puisqu'il normalise à la lecture comme à l'écriture.
+`.verif/normaliser-fins-de-ligne.py` les ramène au blob, et **prouve la
+conversion sur l'objet que Git stockerait** (`git hash-object --path=…`), jamais
+sur `git status` : après conversion, les fichiers non modifiés apparaissaient
+` M` alors qu'aucun octet de contenu n'avait bougé — un cache de statistiques
+périmé, que `git add` rafraîchit. **Un témoin qui crie au loup sur un arbre juste
+ne vaut rien.**
+
 `.verif/pages-maigres.py` imprime le nombre de caractères de **chaque** page d'un
 PDF rendu, et signale celles qui en portent moins de 600 : un bloc insécable qui
 a sauté laisse une feuille maigre derrière lui, et cela ne se voit ni au nombre
@@ -1112,6 +1179,18 @@ pavé qui affiche le tracé qu'on lui passe au lieu de rester blanc.
 exige que chacune tombe **en nommant son test** — `node --test` sort en 0 quand
 un motif ne désigne aucun test, si bien qu'un nom mal orthographié ferait passer
 une faute pour un succès.
+
+`tests/ouverture-document.test.ts` garde la même famille, sur l'**ouverture**
+d'un document : `ouvrirDocument` confiait le PDF à l'appel d'impression, si bien
+que « Voir le PDF » ouvrait la boîte d'impression — signalé depuis le téléphone
+le 26 septembre 2026. Le contrôle exige que l'impression ne soit plus ni appelée
+ni importée, que l'ouverture Android porte une URI de contenu et le drapeau de
+lecture, qu'un repli existe vers la feuille de partage, et que les écrans qui
+ouvrent un document soient **exactement** ceux qui annoncent « Voir le PDF » —
+accord vérifié **dans les deux sens**, et écrans **découverts par balayage**
+plutôt que listés, pour qu'un écran ajouté demain entre dans le contrôle tout
+seul. `.verif/falsifier-ouverture-document.py` lui remet sept fautes, la première
+étant le défaut tel qu'il a été signalé.
 
 `.verif/mesurer-marges-bail.py` mesure la marge réellement **imprimée** sur
 chaque page du bail, et non celle écrite dans le CSS. La règle de page de
