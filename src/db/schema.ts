@@ -14,7 +14,7 @@
  * Version courante du schéma. À incrémenter en ajoutant une migration à
  * `MIGRATIONS`, jamais en modifiant une migration existante.
  */
-export const VERSION_SCHEMA = 3;
+export const VERSION_SCHEMA = 4;
 
 export interface Migration {
   version: number;
@@ -246,6 +246,35 @@ export const MIGRATIONS: Migration[] = [
         maj_le       TEXT NOT NULL,
         PRIMARY KEY (logement_id, type)
       );`,
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // Migration 4 — la civilité des locataires
+  // -------------------------------------------------------------------------
+  {
+    version: 4,
+    description: 'Civilité des locataires : « M. », « Mme » ou « Mlle », devant le nom sur les documents',
+    statements: [
+      /**
+       * La civilité d'un titulaire.
+       *
+       * Elle est **stockée** et non déduite : `nomPourDocument` refusait
+       * auparavant de l'inventer, et le document n'imprimait donc que
+       * « Prénom NOM ». Le bailleur peut désormais la choisir, et elle se place
+       * devant le nom — « M. Hery Ny Ony RAJAONAH ».
+       *
+       * `NOT NULL DEFAULT ''` plutôt qu'une colonne nullable : une colonne nulle
+       * finit par être lue comme une valeur, et « pas de civilité » est ici une
+       * information légitime, pas une absence. Les locataires enregistrés avant
+       * cette migration reçoivent donc `''`, et leurs documents restent
+       * exactement ceux d'avant — c'est la promesse d'une migration additive.
+       *
+       * `ALTER TABLE ADD COLUMN` est **additif** : aucune ligne n'est réécrite,
+       * aucune donnée ne peut être perdue. La contrainte `NOT NULL` est acceptée
+       * parce qu'une valeur par défaut est fournie.
+       */
+      `ALTER TABLE titulaires ADD COLUMN civilite TEXT NOT NULL DEFAULT '';`,
     ],
   },
 ];

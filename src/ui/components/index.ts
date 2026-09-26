@@ -16,6 +16,7 @@ export { FeuilleAction, DialogueConfirmation, type OptionFeuille } from './Feuil
 export { BandeauMessage, type TonBandeau } from './BandeauMessage';
 export { AnimationReussite } from './AnimationReussite';
 export { Segments, type Segment } from './Segments';
+export { ChoixCivilite } from './ChoixCivilite';
 export { LigneDetail } from './LigneDetail';
 export { CarteLogementItem } from './CarteLogement';
 export { BoutonFlottant } from './BoutonFlottant';

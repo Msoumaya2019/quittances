@@ -97,6 +97,28 @@ export interface ContenuDocument {
   mentionCharges: boolean;
 }
 
+/**
+ * Le nom du bailleur tel qu'il s'imprime, civilité comprise.
+ *
+ * Les réglages proposent une civilité et annoncent « Placé avant votre nom sur
+ * les documents ». La promesse était écrite mais **non tenue** : le champ était
+ * collecté, transmis dans le contenu, et lu nulle part — il ne s'imprimait donc
+ * sur aucun document. Mesuré le 27 septembre 2026, `civilite` n'apparaissait que
+ * sur la ligne de sa propre déclaration.
+ *
+ * Une civilité vide n'imprime rien, exactement comme pour un locataire : le
+ * document ne choisit pas à la place du bailleur.
+ *
+ * Rend la chaîne **brute** ; c'est à l'appelant de l'échapper, comme pour le nom
+ * seul qu'elle remplace.
+ */
+function nomEmetteur(contenu: ContenuDocument): string {
+  return [contenu.emetteur.civilite, contenu.emetteur.nom]
+    .map((partie) => (partie ?? '').trim())
+    .filter((partie) => partie.length > 0)
+    .join(' ');
+}
+
 /** Date d'émission du jour, mise en forme. */
 function mentionReconnaissance(contenu: ContenuDocument): string {
   const locataires = contenu.locataires.join(' et ');
@@ -216,7 +238,7 @@ function blocSignature(contenu: ContenuDocument, couleurTrait: string): string {
         <div class="etiquette">Signature du bailleur</div>
         <img src="${contenu.signatureBase64}" alt="Signature du bailleur" />
         <div style="font-size: 9pt; color: #666666; margin-top: 2mm;">
-          ${echapper(contenu.emetteur.nom)}
+          ${echapper(nomEmetteur(contenu))}
         </div>
       </div>
     </div>
@@ -283,7 +305,7 @@ export function rendreModeleClassique(contenu: ContenuDocument): string {
 
     <div class="entete">
       <div class="emetteur">
-        <p class="nom">${echapper(contenu.emetteur.nom)}</p>
+        <p class="nom">${echapper(nomEmetteur(contenu))}</p>
         ${contenu.emetteur.qualite ? `<p class="ligne">${echapper(contenu.emetteur.qualite)}</p>` : ''}
         ${contenu.emetteur.adresse.map((l) => `<p class="ligne">${echapper(l)}</p>`).join('')}
         ${contenu.emetteur.telephone ? `<p class="ligne">Tél. ${echapper(contenu.emetteur.telephone)}</p>` : ''}
@@ -307,7 +329,7 @@ export function rendreModeleClassique(contenu: ContenuDocument): string {
       <div class="partie">
         <div class="etiquette">Bailleur</div>
         <div class="valeur">
-          <strong>${echapper(contenu.emetteur.nom)}</strong><br />
+          <strong>${echapper(nomEmetteur(contenu))}</strong><br />
           ${contenu.emetteur.adresse.map((l) => echapper(l)).join('<br />')}
         </div>
       </div>
@@ -478,7 +500,7 @@ ${STYLES_BASE}
       <div class="carte-info">
         <div class="etiquette">Bailleur</div>
         <div class="valeur">
-          <strong>${echapper(contenu.emetteur.nom)}</strong><br />
+          <strong>${echapper(nomEmetteur(contenu))}</strong><br />
           ${contenu.emetteur.adresse.map((l) => echapper(l)).join('<br />')}
           ${contenu.emetteur.telephone ? `<br />Tél. ${echapper(contenu.emetteur.telephone)}` : ''}
         </div>
@@ -544,6 +566,18 @@ function carteColore(params: {
   etiquette: string;
   /** Lignes déjà échappées, la première en gras. */
   lignes: string[];
+  /**
+   * Toutes les lignes sont des noms, et le sont donc toutes.
+   *
+   * Une carte de locataires est exactement ce cas : plusieurs personnes, toutes
+   * au même rang. Sans cette option, seule la **première** portait le gras et
+   * les suivantes se lisaient comme une adresse — un bailleur a signalé que le
+   * locataire 2 n'était pas en gras, alors que les modèles `classique` et
+   * `moderne` le mettaient déjà. C'est la carte du bailleur qui justifie que
+   * l'option existe plutôt qu'un gras systématique : là, seule la première
+   * ligne est un nom, les autres sont son adresse.
+   */
+  toutesEnGras?: boolean;
   /** Passe la carte sur toute la largeur au lieu de partager la ligne. */
   pleineLargeur?: boolean;
 }): string {
@@ -558,7 +592,9 @@ function carteColore(params: {
       <div class="cc-etiquette">${echapper(params.etiquette)}</div>
       <div class="cc-valeur">
         <strong>${premiere ?? ''}</strong>
-        ${suivantes.map((l) => `<br />${l}`).join('')}
+        ${suivantes
+          .map((l) => `<br />${params.toutesEnGras ? `<strong>${l}</strong>` : l}`)
+          .join('')}
       </div>
     </div>
   `;
@@ -670,7 +706,7 @@ export function rendreModeleColore(contenu: ContenuDocument): string {
     contenu.type === 'recu' ? contenu.montantRecu : contenu.montants.total;
 
   const adresseBailleur = [
-    contenu.emetteur.nom,
+    nomEmetteur(contenu),
     ...contenu.emetteur.adresse,
     contenu.emetteur.telephone ? `Tél. ${contenu.emetteur.telephone}` : null,
     contenu.emetteur.email,
@@ -681,7 +717,7 @@ export function rendreModeleColore(contenu: ContenuDocument): string {
     variante: '',
     etiquette: 'Bailleur',
     lignes: [
-      echapper(contenu.emetteur.qualite ?? contenu.emetteur.nom),
+      echapper(contenu.emetteur.qualite ?? nomEmetteur(contenu)),
       ...adresseBailleur.map((l) => echapper(l)),
     ],
   });
@@ -693,6 +729,9 @@ export function rendreModeleColore(contenu: ContenuDocument): string {
       contenu.locataires.length > 0
         ? contenu.locataires.map((l) => echapper(l))
         : ['—'],
+    // Toutes ces lignes sont des noms de personnes : elles se mettent toutes en
+    // gras, et pas seulement la première.
+    toutesEnGras: true,
   });
 
   const carteLogement = carteColore({

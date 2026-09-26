@@ -64,6 +64,7 @@ import {
   section,
 } from './sections-constat.ts';
 import type { BailImprime, SignataireImprime } from './sections-constat.ts';
+import { nomDuBailleur, nomDuLocataire } from './bail.ts';
 import type { LogementBail, PartieBailleur, PartieLocataire } from './bail.ts';
 
 // ---------------------------------------------------------------------------
@@ -554,10 +555,10 @@ export function contenuInventaireDepuis(params: {
   const ids = params.locatairesIds ?? locataires.map((_, index) => `titulaire-${index + 1}`);
 
   const signataires: SignataireImprime[] = [
-    { id: 'bailleur', nom: params.bailleur.nom, role: 'Le bailleur' },
+    { id: 'bailleur', nom: nomDuBailleur(params.bailleur), role: 'Le bailleur' },
     ...locataires.map((l, index) => ({
       id: ids[index] ?? `titulaire-${index + 1}`,
-      nom: `${l.prenom} ${l.nom}`.trim(),
+      nom: nomDuLocataire(l),
       role: locataires.length > 1 ? `Locataire ${index + 1}` : 'Le locataire',
     })),
   ];

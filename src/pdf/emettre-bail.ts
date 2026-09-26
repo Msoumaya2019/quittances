@@ -161,6 +161,10 @@ export async function emettreBail(params: {
         .slice()
         .sort((a, b) => a.ordre - b.ordre)
         .map((t) => ({
+          // L'identifiant suit le titulaire jusque dans le document : c'est lui
+          // qui permet de retrouver sa signature.
+          id: t.id,
+          civilite: t.civilite,
           nom: t.nom,
           prenom: t.prenom,
           dateNaissance: t.dateNaissance,
@@ -177,7 +181,10 @@ export async function emettreBail(params: {
       charges: periode.charges,
       dateDebut: brouillon.dateDebut || bail.dateEntree,
     },
-    reglages: { lieuEmission: reglages.lieuEmission },
+    reglages: {
+      lieuEmission: reglages.lieuEmission,
+      civiliteBailleur: reglages.civiliteBailleur,
+    },
     etabliLe,
   });
 

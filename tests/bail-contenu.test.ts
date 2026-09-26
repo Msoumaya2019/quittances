@@ -58,6 +58,9 @@ const TITULAIRES: TitulaireBail[] = [
     id: 'tit-1',
     bailId: 'bail-1',
     ordre: 1,
+    // Vide : le document n'imprime aucune civilité, ce qui est le cas des
+    // locataires enregistrés avant la migration 4.
+    civilite: '',
     nom: 'Benali',
     prenom: 'Mohamed',
     telephone: '06 00 00 00 00',
@@ -69,6 +72,7 @@ const TITULAIRES: TitulaireBail[] = [
     id: 'tit-2',
     bailId: 'bail-1',
     ordre: 2,
+    civilite: '',
     nom: 'Benali',
     prenom: 'Yasmine',
     telephone: null,

@@ -121,6 +121,31 @@ export interface Bail {
 }
 
 /**
+ * La civilité d'un locataire, telle qu'elle s'écrit devant son nom.
+ *
+ * Trois valeurs, et pas une de plus : ce sont celles qu'un bailleur coche sur un
+ * contrat. La chaîne vide signifie **non renseignée**, et c'est le défaut — une
+ * civilité ne se devine pas. `nomPourDocument` n'imprime alors rien, plutôt que
+ * de choisir à la place du bailleur.
+ */
+export type Civilite = 'M.' | 'Mme' | 'Mlle';
+
+/** Les civilités proposées, dans l'ordre d'affichage. */
+export const CIVILITES: readonly Civilite[] = ['M.', 'Mme', 'Mlle'];
+
+/**
+ * Reconnaît une civilité telle qu'elle est **stockée**.
+ *
+ * La base rend une chaîne libre : une valeur inconnue — écrite à la main dans le
+ * fichier, ou ajoutée par une version future — se lit ici comme « non
+ * renseignée ». Elle disparaît donc du document au lieu d'y être imprimée telle
+ * quelle, ce qui est le seul choix qui n'invente rien.
+ */
+export function civiliteStockee(valeur: string | null | undefined): Civilite | '' {
+  return CIVILITES.includes(valeur as Civilite) ? (valeur as Civilite) : '';
+}
+
+/**
  * Un titulaire du bail. Un bail peut avoir plusieurs titulaires
  * (colocation, couple) ; ils figurent tous sur la quittance.
  */
@@ -129,6 +154,8 @@ export interface TitulaireBail {
   bailId: string;
   /** Rang d'affichage : 1 = titulaire principal. */
   ordre: number;
+  /** « M. », « Mme », « Mlle », ou vide si le bailleur ne l'a pas renseignée. */
+  civilite: Civilite | '';
   nom: string;
   prenom: string;
   telephone?: string | null;
@@ -143,15 +170,19 @@ export function nomComplet(t: Pick<TitulaireBail, 'prenom' | 'nom'>): string {
 }
 
 /**
- * Nom mis en forme pour un document : « Monsieur Mohamed BENALI ».
- * Le civilité n'est pas stockée — on ne l'invente pas. On renvoie donc
- * « Mohamed BENALI », et le modèle PDF peut préfixer « Monsieur » ou « Madame »
- * si le bailleur l'a renseigné dans ses réglages.
+ * Nom mis en forme pour un document : « M. Mohamed BENALI ».
+ *
+ * La civilité est **stockée** depuis qu'elle se saisit, et elle est imprimée
+ * quand elle est renseignée. Elle ne l'est pas quand elle est vide : un document
+ * qui annoncerait « M. » sur une personne dont personne n'a rien dit affirmerait
+ * un fait que le bailleur n'a pas donné. C'est aussi ce qui rend les locataires
+ * enregistrés **avant** cette version imprimables sans retouche — leur civilité
+ * est vide, et le document reste celui d'avant.
  */
 export function nomPourDocument(t: TitulaireBail): string {
   const nom = t.nom.trim().toUpperCase();
   const prenom = t.prenom.trim();
-  return `${prenom} ${nom}`.trim();
+  return [t.civilite, prenom, nom].filter((partie) => partie.length > 0).join(' ');
 }
 
 // ---------------------------------------------------------------------------

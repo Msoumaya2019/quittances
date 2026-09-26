@@ -47,6 +47,11 @@ export { traceEnDataUri } from './trace.ts';
 // ---------------------------------------------------------------------------
 
 export interface PartieBailleur {
+  /**
+   * Civilité du bailleur, texte libre : « Madame », « Monsieur », « M. et Mme ».
+   * Vide : rien n'est imprimé devant le nom.
+   */
+  civilite?: string | null;
   nom: string;
   qualite?: string | null;
   adresse: string;
@@ -57,13 +62,56 @@ export interface PartieBailleur {
   siret?: string | null;
 }
 
+/**
+ * Le nom du bailleur tel qu'il s'imprime, civilité comprise.
+ *
+ * Les réglages proposent une civilité et annoncent « Placé avant votre nom sur
+ * les documents » : la promesse est tenue ici, et par les mêmes règles que pour
+ * un locataire — une civilité vide n'imprime rien.
+ */
+export function nomDuBailleur(b: PartieBailleur): string {
+  return [b.civilite, b.nom]
+    .map((partie) => (partie ?? '').trim())
+    .filter((partie) => partie.length > 0)
+    .join(' ');
+}
+
 export interface PartieLocataire {
+  /**
+   * Identifiant du titulaire en base.
+   *
+   * Il sert à **retrouver sa signature** : l'écran de saisie clé les signatures
+   * par identifiant, jamais par nom. Un nom peut être corrigé, ou porté par deux
+   * personnes ; l'identifiant, non.
+   */
+  id?: string | null;
+  /** « M. », « Mme » ou « Mlle ». Vide : rien n'est imprimé devant le nom. */
+  civilite?: string | null;
   nom: string;
   prenom: string;
   dateNaissance?: string | null;
   lieuNaissance?: string | null;
   telephone?: string | null;
   email?: string | null;
+}
+
+/**
+ * Le nom d'un locataire tel qu'il s'imprime : « M. Hery Ny Ony RAJAONAH ».
+ *
+ * La civilité est **omise** quand elle est vide, plutôt que remplacée par un
+ * défaut : un document qui annoncerait « M. » sur une personne dont personne n'a
+ * rien dit affirmerait un fait que le bailleur n'a pas donné.
+ *
+ * La règle vit **ici**, et non dans chacun des trois documents qui impriment un
+ * locataire — le bail, l'état des lieux et l'inventaire. Recopiée trois fois,
+ * elle aurait fini par diverger, et l'un des documents aurait annoncé une
+ * civilité que l'autre taisait.
+ */
+export function nomDuLocataire(l: PartieLocataire): string {
+  return [l.civilite, l.prenom, l.nom]
+    .map((partie) => (partie ?? '').trim())
+    .filter((partie) => partie.length > 0)
+    .join(' ');
 }
 
 export interface LogementBail {
@@ -442,6 +490,14 @@ export interface SourcesBail {
 export interface ReglagesBail {
   /** Lieu d'établissement imprimé. La ville du bailleur à défaut. */
   lieuEmission?: string | null;
+  /**
+   * Civilité du bailleur, saisie dans les réglages.
+   *
+   * Elle ne vient pas de la fiche du propriétaire mais des réglages, comme pour
+   * la quittance : c'est le même champ, et les deux documents doivent dire la
+   * même chose.
+   */
+  civiliteBailleur?: string | null;
 }
 
 /**
@@ -478,7 +534,7 @@ export function contenuDepuis(params: {
 
   return {
     categorie,
-    bailleur: sources.bailleur,
+    bailleur: { ...sources.bailleur, civilite: reglages?.civiliteBailleur ?? null },
     locataires: sources.locataires,
     logement: sources.logement,
     dateDebut: brouillon.dateDebut ?? '',
@@ -520,8 +576,8 @@ export function rendreBail(contenu: ContenuBail): string {
       ${cartePartie('Bailleur', [
         [
           contenu.bailleur.qualite
-            ? `${contenu.bailleur.nom} — ${contenu.bailleur.qualite}`
-            : contenu.bailleur.nom,
+            ? `${nomDuBailleur(contenu.bailleur)} — ${contenu.bailleur.qualite}`
+            : nomDuBailleur(contenu.bailleur),
           ...adresseBailleur,
           contenu.bailleur.telephone ? `Tél. ${contenu.bailleur.telephone}` : '',
           contenu.bailleur.email ?? '',
@@ -533,10 +589,12 @@ export function rendreBail(contenu: ContenuBail): string {
         // Un groupe par locataire : sans cela, deux personnes se lisent d'un
         // trait et l'on ne sait plus où finit la première.
         contenu.locataires.map((l) => [
-          `${l.prenom} ${l.nom}`.trim(),
-          // « Né le » ou « Née le » supposerait une civilité que la base ne
-          // porte pas, et qu'on n'invente donc pas : la première version du
-          // document annonçait « Mohamed Benali — Née le 17/04/1988 ».
+          nomDuLocataire(l),
+          // « Né le » ou « Née le » supposerait une civilité **renseignée**, et
+          // l'accord serait faux sur un locataire dont le bailleur n'en a pas
+          // choisi. Le mot neutre « Naissance » dit la même chose sans rien
+          // supposer : la première version du document annonçait « Mohamed
+          // Benali — Née le 17/04/1988 ».
           l.dateNaissance
             ? `Naissance : ${dateFr(l.dateNaissance)}${l.lieuNaissance ? ` à ${l.lieuNaissance}` : ''}`
             : '',
@@ -693,19 +751,36 @@ interface Signataire {
  * mention « Non signé » : c'est une information, pas un oubli.
  */
 export function signataires(contenu: ContenuBail): Signataire[] {
+  /**
+   * Retrouve la signature d'un signataire.
+   *
+   * La clé est un **identifiant**, jamais un nom : c'est celle que l'écran de
+   * saisie écrit, et la seule qui résiste à une correction d'orthographe comme à
+   * deux homonymes.
+   *
+   * La recherche **par nom** est gardée en second recours. Elle est fausse pour
+   * un titulaire — l'écran l'a toujours clé par identifiant — mais elle est
+   * juste pour un document établi quand l'identifiant n'était pas transmis.
+   * Mesuré le 27 septembre 2026 : sans la clé par identifiant, un bail signé par
+   * son locataire s'imprimait « Non signé ».
+   */
+  const signatureDe = (cle: string, nom: string): SignatureBail | undefined =>
+    contenu.signatures.find((s) => s.signataire === cle) ??
+    contenu.signatures.find((s) => s.signataire === nom);
+
   const liste: Signataire[] = [
     {
-      nom: contenu.bailleur.nom,
+      nom: nomDuBailleur(contenu.bailleur),
       role: 'Le bailleur',
-      signature: contenu.signatures.find((s) => s.signataire === 'bailleur'),
+      signature: signatureDe('bailleur', nomDuBailleur(contenu.bailleur)),
     },
   ];
   for (const l of contenu.locataires) {
-    const cle = `${l.prenom} ${l.nom}`.trim();
+    const nom = nomDuLocataire(l);
     liste.push({
-      nom: cle,
+      nom,
       role: contenu.locataires.length > 1 ? 'Locataire' : 'Le locataire',
-      signature: contenu.signatures.find((s) => s.signataire === cle),
+      signature: signatureDe(l.id ?? '', nom),
     });
   }
   return liste;

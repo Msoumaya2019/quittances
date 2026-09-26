@@ -9,7 +9,15 @@
 import { executer, lireToutes, lireUne, transaction } from '../database';
 import { maintenantISO, nouvelId } from '../ids';
 import { planifierChangementLoyer } from '../../domain/rent';
-import type { Bail, Logement, PeriodeLoyer, TitulaireBail, TypeLogement } from '../../domain/types';
+import { civiliteStockee } from '../../domain/types';
+import type {
+  Bail,
+  Civilite,
+  Logement,
+  PeriodeLoyer,
+  TitulaireBail,
+  TypeLogement,
+} from '../../domain/types';
 
 // ---------------------------------------------------------------------------
 // Traduction des lignes
@@ -47,6 +55,8 @@ interface LigneTitulaire {
   id: string;
   bail_id: string;
   ordre: number;
+  /** Colonne ajoutée par la migration 4 ; `''` pour les locataires d'avant. */
+  civilite: string;
   nom: string;
   prenom: string;
   telephone: string | null;
@@ -103,6 +113,9 @@ function versTitulaire(l: LigneTitulaire): TitulaireBail {
     id: l.id,
     bailId: l.bail_id,
     ordre: l.ordre,
+    // La colonne est du texte libre : une valeur inconnue se lit « non
+    // renseignée » plutôt que d'être imprimée telle quelle sur un document.
+    civilite: civiliteStockee(l.civilite),
     nom: l.nom,
     prenom: l.prenom,
     telephone: l.telephone,
@@ -293,6 +306,11 @@ export async function ajouterPeriodeLoyer(
 // ---------------------------------------------------------------------------
 
 export interface SaisieTitulaire {
+  /**
+   * « M. », « Mme » ou « Mlle ». Facultatif : vide, le document n'imprime
+   * aucune civilité plutôt que d'en choisir une à la place du bailleur.
+   */
+  civilite?: Civilite | '';
   nom: string;
   prenom: string;
   telephone?: string | null;
@@ -426,12 +444,15 @@ export async function creerLogementComplet(
     for (const [index, titulaire] of saisie.titulaires.entries()) {
       await db.runAsync(
         `INSERT INTO titulaires
-           (id, bail_id, ordre, nom, prenom, telephone, email, date_naissance, lieu_naissance)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
+           (id, bail_id, ordre, civilite, nom, prenom, telephone, email, date_naissance, lieu_naissance)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
         [
           nouvelId(),
           bailId,
           index + 1,
+          // Normalisée à l'écriture : une valeur hors des trois civilités ne
+          // peut pas entrer en base, même si un écran la proposait un jour.
+          civiliteStockee(titulaire.civilite),
           titulaire.nom.trim(),
           titulaire.prenom.trim(),
           titulaire.telephone?.trim() || null,
@@ -526,12 +547,15 @@ export async function remplacerTitulaires(
     for (const [index, titulaire] of titulaires.entries()) {
       await db.runAsync(
         `INSERT INTO titulaires
-           (id, bail_id, ordre, nom, prenom, telephone, email, date_naissance, lieu_naissance)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
+           (id, bail_id, ordre, civilite, nom, prenom, telephone, email, date_naissance, lieu_naissance)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
         [
           nouvelId(),
           bailId,
           index + 1,
+          // Normalisée à l'écriture : une valeur hors des trois civilités ne
+          // peut pas entrer en base, même si un écran la proposait un jour.
+          civiliteStockee(titulaire.civilite),
           titulaire.nom.trim(),
           titulaire.prenom.trim(),
           titulaire.telephone?.trim() || null,
@@ -629,12 +653,15 @@ export async function ouvrirNouveauBail(saisie: {
     for (const [index, titulaire] of saisie.titulaires.entries()) {
       await db.runAsync(
         `INSERT INTO titulaires
-           (id, bail_id, ordre, nom, prenom, telephone, email, date_naissance, lieu_naissance)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
+           (id, bail_id, ordre, civilite, nom, prenom, telephone, email, date_naissance, lieu_naissance)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
         [
           nouvelId(),
           bailId,
           index + 1,
+          // Normalisée à l'écriture : une valeur hors des trois civilités ne
+          // peut pas entrer en base, même si un écran la proposait un jour.
+          civiliteStockee(titulaire.civilite),
           titulaire.nom.trim(),
           titulaire.prenom.trim(),
           titulaire.telephone?.trim() || null,

@@ -56,7 +56,7 @@ function bail(id: string, entree: string, sortie: string | null = null): Bail {
 }
 
 function titulaire(id: string, bailId: string, prenom: string, nom: string, ordre = 1): TitulaireBail {
-  return { id, bailId, ordre, nom, prenom };
+  return { id, bailId, ordre, civilite: '', nom, prenom };
 }
 
 function piece(

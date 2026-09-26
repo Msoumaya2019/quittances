@@ -29,6 +29,7 @@ import { BandeauMessage } from '@/ui/components/BandeauMessage';
 import { Bouton } from '@/ui/components/Bouton';
 import { Carte } from '@/ui/components/Carte';
 import { Champ, ChampMontant } from '@/ui/components/Champ';
+import { ChoixCivilite } from '@/ui/components/ChoixCivilite';
 import { EnTeteEcran } from '@/ui/components/EnTeteEcran';
 import { LigneDetail } from '@/ui/components/LigneDetail';
 import { espaces, rayons, typographie } from '@/ui/tokens';
@@ -36,6 +37,7 @@ import { formatMontant } from '@/domain/money';
 import { aujourdHui, libelleLongCapitalise, periodeActuelle, versCle } from '@/domain/period';
 import {
   TYPES_LOGEMENT,
+  type Civilite,
   type Proprietaire,
   type TypeLogement,
 } from '@/domain/types';
@@ -93,6 +95,7 @@ export default function EcranNouveauLogement() {
   const [reference, setReference] = useState('');
 
   // --- Étape 3 : locataire ---------------------------------------------
+  const [civiliteTitulaire, setCiviliteTitulaire] = useState<Civilite | ''>('');
   const [nomTitulaire, setNomTitulaire] = useState('');
   const [prenomTitulaire, setPrenomTitulaire] = useState('');
   const [autresTitulaires, setAutresTitulaires] = useState<SaisieTitulaire[]>([]);
@@ -219,7 +222,11 @@ export default function EcranNouveauLogement() {
 
     try {
       const titulaires: SaisieTitulaire[] = [
-        { nom: nomTitulaire, prenom: prenomTitulaire },
+        {
+          civilite: civiliteTitulaire,
+          nom: nomTitulaire,
+          prenom: prenomTitulaire,
+        },
         ...autresTitulaires.filter((t) => t.nom.trim() && t.prenom.trim()),
       ];
 
@@ -526,6 +533,8 @@ export default function EcranNouveauLogement() {
             <Carte style={styles.carteEtape}>
               <Text style={typographie.titreCarte}>Titulaire du bail</Text>
 
+              <ChoixCivilite valeur={civiliteTitulaire} onChanger={setCiviliteTitulaire} />
+
               <Champ
                 libelle="Prénom"
                 valeur={prenomTitulaire}
@@ -574,6 +583,14 @@ export default function EcranNouveauLogement() {
 
               {autresTitulaires.map((titulaire, index) => (
                 <View key={index} style={styles.blocAutreTitulaire}>
+                  <ChoixCivilite
+                    valeur={titulaire.civilite ?? ''}
+                    onChanger={(v) =>
+                      setAutresTitulaires((liste) =>
+                        liste.map((t, i) => (i === index ? { ...t, civilite: v } : t)),
+                      )
+                    }
+                  />
                   <View style={styles.rangee}>
                     <View style={styles.colonneLarge}>
                       <Champ
@@ -615,7 +632,10 @@ export default function EcranNouveauLogement() {
                 variante="secondaire"
                 compact
                 onPress={() =>
-                  setAutresTitulaires((liste) => [...liste, { nom: '', prenom: '' }])
+                  setAutresTitulaires((liste) => [
+                    ...liste,
+                    { civilite: '', nom: '', prenom: '' },
+                  ])
                 }
               />
             </Carte>

@@ -45,7 +45,7 @@ import type {
 import type { Signature } from '../domain/signature.ts';
 import { adresseEnLignes } from '../domain/types.ts';
 import { COULEURS_DOCUMENT, echapper, STYLES_BASE } from './styles.ts';
-import { MENTION_SIGNATURE } from './bail.ts';
+import { MENTION_SIGNATURE, nomDuBailleur, nomDuLocataire } from './bail.ts';
 import type { LogementBail, PartieBailleur, PartieLocataire } from './bail.ts';
 import {
   HAUTEUR_PHOTO_MAX_MM,
@@ -946,10 +946,10 @@ export function contenuEdlDepuis(params: {
   // L'ordre d'impression est celui du bail : le bailleur, puis chaque locataire
   // dans l'ordre enregistré, puis le mandataire s'il y en a un.
   const signataires: SignataireImprime[] = [
-    { id: 'bailleur', nom: params.bailleur.nom, role: 'Le bailleur' },
+    { id: 'bailleur', nom: nomDuBailleur(params.bailleur), role: 'Le bailleur' },
     ...locataires.map((l, index) => ({
       id: ids[index] ?? `titulaire-${index + 1}`,
-      nom: `${l.prenom} ${l.nom}`.trim(),
+      nom: nomDuLocataire(l),
       role: locataires.length > 1 ? `Locataire ${index + 1}` : 'Le locataire',
     })),
   ];

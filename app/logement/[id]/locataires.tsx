@@ -21,6 +21,7 @@ import {
   Bouton,
   Carte,
   Champ,
+  ChoixCivilite,
   EcranVide,
   EnTeteEcran,
 } from '@/ui/components';
@@ -32,7 +33,7 @@ import {
   trouverLogement,
   type SaisieTitulaire,
 } from '@/db/repositories/properties';
-import type { Bail, Logement } from '@/domain/types';
+import type { Bail, Civilite, Logement } from '@/domain/types';
 import { useApplication } from '@/state/ApplicationContext';
 import { useStyles, type Couleurs } from '@/ui/theme';
 
@@ -46,6 +47,8 @@ import { useStyles, type Couleurs } from '@/ui/theme';
 interface TitulaireSaisi {
   /** Identité de la ligne pour React, indépendante du nom saisi. */
   cle: string;
+  /** « M. », « Mme », « Mlle », ou vide si le bailleur n'a rien choisi. */
+  civilite: Civilite | '';
   nom: string;
   prenom: string;
   telephone: string;
@@ -103,6 +106,7 @@ export default function EcranLocataires() {
       setTitulaires(
         existants.map((t) => ({
           cle: nouvelleCle(),
+          civilite: t.civilite,
           nom: t.nom,
           prenom: t.prenom,
           telephone: t.telephone ?? '',
@@ -132,7 +136,8 @@ export default function EcranLocataires() {
   function ajouter() {
     setTitulaires((actuels) => [
       ...actuels,
-      { cle: nouvelleCle(), nom: '', prenom: '', telephone: '', email: '' },
+      // Aucune civilité présélectionnée : le bailleur choisit, ou laisse vide.
+      { cle: nouvelleCle(), civilite: '', nom: '', prenom: '', telephone: '', email: '' },
     ]);
   }
 
@@ -161,6 +166,7 @@ export default function EcranLocataires() {
     setEnregistrement(true);
     try {
       const saisie: SaisieTitulaire[] = titulaires.map((t) => ({
+        civilite: t.civilite,
         nom: t.nom,
         prenom: t.prenom,
         telephone: t.telephone.trim() || null,
@@ -237,6 +243,10 @@ export default function EcranLocataires() {
                 ) : null}
               </View>
 
+              <ChoixCivilite
+                valeur={t.civilite}
+                onChanger={(valeur) => modifier(t.cle, 'civilite', valeur)}
+              />
               <Champ
                 libelle="Nom"
                 valeur={t.nom}

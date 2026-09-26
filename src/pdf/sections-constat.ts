@@ -22,7 +22,7 @@ import { adresseEnLignes } from '../domain/types.ts';
 import { rendrePhoto } from './constats.ts';
 import type { PhotoImprimable, PhotosImprimables } from './constats.ts';
 import { echapper } from './styles.ts';
-import { MENTION_SIGNATURE } from './bail.ts';
+import { MENTION_SIGNATURE, nomDuBailleur, nomDuLocataire } from './bail.ts';
 import type { LogementBail, PartieBailleur, PartieLocataire } from './bail.ts';
 
 /**
@@ -108,8 +108,8 @@ export function corpsParties(contenu: {
     <h3>Le bailleur</h3>
     <p><strong>${echapper(
       contenu.bailleur.qualite
-        ? `${contenu.bailleur.nom} — ${contenu.bailleur.qualite}`
-        : contenu.bailleur.nom,
+        ? `${nomDuBailleur(contenu.bailleur)} — ${contenu.bailleur.qualite}`
+        : nomDuBailleur(contenu.bailleur),
     )}</strong></p>
     ${adresseBailleur.map((l) => `<p>${echapper(l)}</p>`).join('')}
     ${contenu.bailleur.telephone ? `<p>Tél. ${echapper(contenu.bailleur.telephone)}</p>` : ''}
@@ -121,7 +121,7 @@ export function corpsParties(contenu: {
           .map(
             (l) => `<div class="e-partie">
         <h3>${contenu.locataires.length > 1 ? 'Un locataire' : 'Le locataire'}</h3>
-        <p><strong>${echapper(`${l.prenom} ${l.nom}`.trim())}</strong></p>
+        <p><strong>${echapper(nomDuLocataire(l))}</strong></p>
         ${
           l.dateNaissance
             ? `<p>Naissance : ${echapper(dateFr(l.dateNaissance))}${

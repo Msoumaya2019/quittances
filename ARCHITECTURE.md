@@ -110,13 +110,13 @@ src/
   ui/
     tokens.ts               # couleurs, espacements, rayons, typographie
     palette.ts              # les quatre accents, les deux modes, leurs défauts
-    components/             # Carte, Bouton, PastilleStatut, Segments, EnTeteEcran…
+    components/             # Carte, Bouton, PastilleStatut, Segments, ChoixCivilite…
     ecrans/                 # panneaux d'écran réemployés par plusieurs routes
       PanneauQuittances.tsx #   le contenu de la catégorie Quittances
   hooks/                    # hooks de données (chargement, rafraîchissement)
   state/                    # contexte applicatif (mois sélectionné, réglages)
 
-tests/                      # tests du moteur métier avec node:test
+tests/                      # moteur métier sous node:test, migrations comprises (node:sqlite)
 .verif/                     # contrôleurs de binaire, mesure des témoins, falsificateurs
 .github/workflows/          # compilation APK et IPA
 ```
@@ -236,6 +236,77 @@ déclarées à part (`COULEURS_DOCUMENT`), et deux modèles partagent `STYLES_BA
 
 **Les bancs de mesure** lisent `modeles.json`, produit par `rendre-modeles.ts` :
 `mesurer-pages.py`, `mesurer-marges-impression.py`, `eprouver-paiements.py`.
+
+## Le nom des personnes sur les documents
+
+Cinq familles impriment un nom de personne — les trois modèles de quittance, le
+bail, l'état des lieux et l'inventaire. Deux règles valent pour toutes, et
+chacune vit **une seule fois**.
+
+**Tous les locataires sont en gras.** Un bail peut en porter plusieurs, et le
+document les met tous au même rang : le premier, le deuxième, et au-delà. Le
+défaut signalé était dans le modèle `colore` seul — sa carte des locataires
+réemploie celle du bailleur, où seule la **première** ligne est un nom et les
+suivantes une adresse. D'où l'option `toutesEnGras` de `carteColore`
+(`src/pdf/models.ts`), que seule la carte des locataires active : la carte du
+bailleur garde la convention, qui est juste pour elle. `classique`, `moderne`,
+le bail et les constats mettaient déjà tout le monde en gras ; ils sont
+contrôlés eux aussi, pour que le prochain modèle ne réintroduise pas le défaut.
+
+Mesuré, sur trois locataires, par `.verif/mesurer-gras.ts` — l'option retirée,
+puis remise :
+
+```
+                    locataire 1  locataire 2  locataire 3
+  colore   avant        GRAS         ---          ---
+  colore   apres        GRAS        GRAS         GRAS
+  classique / moderne   GRAS        GRAS         GRAS      (inchangés)
+```
+
+Le défaut ne se voyait donc **que** dans le modèle par défaut, et un correctif
+appliqué aux trois aurait changé deux modèles qui étaient justes.
+
+**La civilité se place devant le nom, et rien n'est inventé.** « M. », « Mme »
+ou « Mlle », choisie par le bailleur. `Civilite` et `CIVILITES`
+(`src/domain/types.ts`) en sont l'unique définition ; `civiliteStockee`
+normalise en `''` tout ce qu'une base peut porter d'autre — une valeur écrite à
+la main, une casse différente, un blanc de trop. **Une civilité vide n'imprime
+rien** : un document qui annoncerait « M. » sur une personne dont personne n'a
+rien dit affirmerait un fait que le bailleur n'a pas donné. C'est aussi ce qui
+rend la migration **additive** — les documents déjà remis restent identiques à
+l'octet près.
+
+- **Quittance** : `nomPourDocument` compose `[civilite, prenom, NOM]`, le nom de
+  famille en capitales.
+- **Bail, état des lieux, inventaire** : `nomDuLocataire` et `nomDuBailleur`
+  (`src/pdf/bail.ts`) composent `[civilite, prenom, nom]`. Recopiée dans les
+  trois documents, la règle aurait fini par diverger ; elle vit donc une fois, et
+  les trois l'importent.
+- **La civilité du bailleur** vient des **réglages**, jamais de la fiche du
+  propriétaire : elle arrive par `ReglagesBail.civiliteBailleur` (bail) et
+  `ContenuDocument.emetteur.civilite` (quittance). Le réglage promet « Placé
+  avant votre nom sur les documents » ; `nomEmetteur` (`src/pdf/models.ts`) tient
+  la promesse dans les trois modèles.
+
+**Une signature se retrouve par identifiant, jamais par nom.** `signataires`
+(`src/pdf/bail.ts`) cherche d'abord `l.id` — ce que l'écran de saisie écrit — et
+ne retombe sur le nom qu'en second recours, pour les documents déjà rangés.
+Mesuré le 24 septembre 2026 : l'écran clavait `signataire: t.id` (`'tit-1'`) là
+où le document cherchait `« Prénom Nom »`, et un bail signé par son locataire
+s'imprimait **« Non signé »**. Un nom se corrige, ou se porte à deux ;
+l'identifiant, non.
+
+**Ce qui se stocke.** `titulaires.civilite` est `TEXT NOT NULL DEFAULT ''` : une
+colonne nulle finit par être lue comme une valeur, et « pas de civilité » est ici
+une information, pas une absence. La colonne arrive par la **migration 4**,
+purement additive — `ALTER TABLE ADD COLUMN`, aucune ligne réécrite, donc aucune
+donnée ne peut être perdue.
+
+**Le choix est posé une fois.** `src/ui/components/ChoixCivilite.tsx` sert les
+deux écrans qui saisissent un locataire — `app/logement/nouveau.tsx` et
+`app/logement/[id]/locataires.tsx` — et tire ses valeurs de `CIVILITES` : un
+écran ne peut donc pas proposer une civilité que le document refuserait
+d'imprimer. **Rien n'est présélectionné**, la valeur vide étant un état légitime.
 
 ## Les baux de location
 
@@ -840,6 +911,12 @@ seule fonction pure**, pour être éprouvable sans base de données et sans tél
 | Une sauvegarde emporte les fichiers eux-mêmes, et se relit sans eux | `VERSION_CONTENU` porté à 2, `rassemblerFichiers` (`src/backup/export.ts`) et `restaurerFichiers` (`src/backup/import.ts`) — champ **facultatif**, chemin **relatif** | `tests/promesses-sauvegarde.test.ts` |
 | Aucun écran de sauvegarde ne promet une régénération que l'application ne fait pas | `app/sauvegarde/export.tsx` et `import.tsx` — l'ancienne phrase « les PDF peuvent être régénérés » est interdite par le contrôle | `tests/promesses-sauvegarde.test.ts` |
 | « Voir le PDF » ouvre le document, et ne le fait pas imprimer | `ouvrirDocument` dans `src/pdf/partage.ts` — intention de consultation sur Android, feuille de partage sur iOS ; l'impression n'y est plus importée | `tests/ouverture-document.test.ts`, falsifié par `.verif/falsifier-ouverture-document.py` |
+| **Tous** les locataires d'un document sont en gras, pas seulement le premier | `carteColore` et son option `toutesEnGras` dans `src/pdf/models.ts` — les cartes de `classique`, `moderne`, du bail et des constats la suivent | `tests/locataires-sur-les-documents.test.ts`, falsifié par `.verif/falsifier-locataires-sur-les-documents.py` |
+| La civilité s'imprime devant le nom, et une civilité vide n'imprime rien | `nomPourDocument` (`src/domain/types.ts`), `nomDuLocataire` / `nomDuBailleur` (`src/pdf/bail.ts`), `nomEmetteur` (`src/pdf/models.ts`) | `tests/locataires-sur-les-documents.test.ts` |
+| Une civilité que le document ne propose pas ne s'imprime jamais | `civiliteStockee` dans `src/domain/types.ts` — la base peut porter autre chose, le document ne retient que les trois valeurs de `CIVILITES` | `tests/locataires-sur-les-documents.test.ts` |
+| La civilité du bailleur réglée dans les réglages arrive jusqu'au document | `ReglagesBail.civiliteBailleur` (`src/pdf/bail.ts`) et `ContenuDocument.emetteur.civilite` (`src/pdf/models.ts`) | `tests/locataires-sur-les-documents.test.ts` |
+| Une signature se retrouve par **identifiant**, et ne se pose jamais sur un autre locataire | `signataires` dans `src/pdf/bail.ts`, qui cherche `l.id` d'abord ; l'identifiant est transmis par `emettre-bail.ts` | `tests/locataires-sur-les-documents.test.ts` |
+| Ajouter une colonne ne perd aucune donnée déjà saisie | migration 4 (`src/db/schema.ts`), `ALTER TABLE ADD COLUMN` — aucune ligne réécrite | `tests/migration-civilite.test.ts` |
 
 Le dépôt en base de `ajouterPeriodeLoyer` ne fait qu'**appliquer** le plan
 calculé par le domaine : la décision est prise ailleurs, et la transaction
@@ -1119,6 +1196,17 @@ l'import — pas sur ce qu'il vérifie.
 `tsconfig.json` exclut `tests/` et `.verif/`, donc sans ce second passage les
 tests ne seraient pas typés du tout.
 
+**Une migration se prouve sur une vraie base.** `tests/migration-civilite.test.ts`
+n'ouvre pas `expo-sqlite` : il rejoue les `MIGRATIONS` sur un SQLite du système
+(`node:sqlite`, livré avec Node). Il construit une base **en version 3**, la
+remplit de lignes dans **toutes** les tables, applique la migration 4 pour de
+vrai, puis compare sa forme — colonnes **dans l'ordre**, et index — à celle d'une
+base neuve. Une colonne oubliée passerait le contrôle des données et tomberait
+ici. Trois gardes empêchent le banc d'être vert sans rien mesurer : la table de
+départ ne doit **pas** déjà porter la colonne, aucune table ne doit être restée
+vide avant migration, et le nombre de tables doit correspondre à `TABLES` — sans
+quoi une table absente de `TABLES` survivrait à la remise à zéro.
+
 `.verif/falsifier-dossier.py` **mute** la source du domaine, relance
 `tests/dossier.test.ts` et exige qu'il tombe — sept mutations, sept règles. Un
 test vert qu'aucune mutation ne fait tomber ne prouve rien : il ne mesure peut-être
@@ -1133,6 +1221,10 @@ une mutation **vivante** est comptée muette. Mesuré sur les bancs du bail :
 
 `.verif/falsifier-bail.py` (vingt mutations du domaine),
 `.verif/falsifier-bail-rendu.py` (quatorze du rendu),
+`.verif/falsifier-locataires-sur-les-documents.py` (vingt : le gras de chaque
+locataire, la civilité sous toutes ses formes, la signature retrouvée par
+identifiant, et trois fautes de migration — dont la première est celle que le
+bailleur a signalée),
 `.verif/falsifier-brouillon.py` (six de la reprise de brouillon),
 `.verif/falsifier-etat-des-lieux.py` (vingt-huit, domaine et rendu),
 `.verif/falsifier-rappel-quantite.py` (une : le rappel indexé par le seul

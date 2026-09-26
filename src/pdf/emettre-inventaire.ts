@@ -352,8 +352,11 @@ export async function emettreInventaire(params: {
     etabliLe,
     lieu: reglages.lieuEmission,
     logement,
-    bailleur: proprietaire,
+    // La civilité vient des réglages, comme pour la quittance et le bail :
+    // c'est le même champ, et tous les documents doivent dire la même chose.
+    bailleur: { ...proprietaire, civilite: reglages.civiliteBailleur },
     locataires: ordonnes.map((t) => ({
+      civilite: t.civilite,
       nom: t.nom,
       prenom: t.prenom,
       telephone: t.telephone,
