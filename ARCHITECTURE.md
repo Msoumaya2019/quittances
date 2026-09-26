@@ -194,6 +194,27 @@ propose « Voir le PDF » entre dans le contrôle tout seul. L'accord est exigé
 « Voir le PDF » ouvre bien le document laisserait passer le cas où l'annonce
 disparaît, l'écran sortant alors du contrôle.
 
+**Le correctif a été cherché dans le binaire livré, et le contrôle s'y est
+trompé une fois.** Quatre fragments comptent **0** dans le bundle Android du
+1.1.3 et **1** dans celui du 1.1.4 : `android.intent.action.VIEW`,
+`IntentLauncher`, `startActivityAsync`, `Ouvrir le PDF`. Ils distinguent donc
+réellement. Mais quatre autres — `printAsync`, `IntentLauncher`,
+`startActivityAsync`, `getContentUriAsync` — comptent **1 des deux côtés** : ce
+sont les noms des fonctions **internes aux modules importés**, présents parce
+qu'on importe le module, même quand notre appel n'y est plus. Hermes les range
+en `anon_0_printAsync`. Chercher `printAsync` pour prouver que l'impression est
+partie donne 1 avant comme après — un témoin vert quoi qu'on livre. **Un témoin
+ne s'adopte qu'après avoir été mesuré dans les deux binaires.**
+
+**Un témoin propre à une plateforme ne se réclame pas de l'autre.** La branche
+`Platform.OS === 'android'` est **retirée du bundle iOS** à l'empaquetage :
+`android.intent.action.VIEW` y compte 0, et `android.intent`, `intent.action`,
+`action.VIEW` comptent aussi 0 — la chaîne est absente, pas coupée. Le contrôle
+de l'IPA réclamait donc un fragment que ce binaire **ne peut pas** contenir, et
+échouait sur un fichier conforme. D'où `TEMOINS_ANDROID` dans `.verif/temoins.py`
+et une plateforme déclarée à la lecture : les témoins non jugés sont **annoncés
+hors plateforme**, jamais tus — les taire les ferait passer pour vérifiés.
+
 ## Les modèles de document
 
 Le papier ne suit pas le thème de l'écran : les couleurs du document sont
@@ -1191,6 +1212,15 @@ accord vérifié **dans les deux sens**, et écrans **découverts par balayage**
 plutôt que listés, pour qu'un écran ajouté demain entre dans le contrôle tout
 seul. `.verif/falsifier-ouverture-document.py` lui remet sept fautes, la première
 étant le défaut tel qu'il a été signalé.
+
+Le même correctif est cherché dans le **binaire livré** par `.verif/temoins.py`,
+que les contrôleurs de l'APK et de l'IPA partagent. Quatre fragments y comptent 0
+dans le 1.1.3 et 1 dans le 1.1.4 — `android.intent.action.VIEW`,
+`IntentLauncher`, `startActivityAsync`, `Ouvrir le PDF`. Les témoins propres à
+Android y sont déclarés **à part** (`TEMOINS_ANDROID`) et la plateforme est
+déclarée à la lecture : la branche `Platform.OS === 'android'` est retirée du
+bundle iOS, et l'exiger de l'IPA faisait échouer le contrôle sur un binaire
+conforme. Les témoins non jugés sont annoncés **hors plateforme**.
 
 `.verif/mesurer-marges-bail.py` mesure la marge réellement **imprimée** sur
 chaque page du bail, et non celle écrite dans le CSS. La règle de page de
