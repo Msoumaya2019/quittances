@@ -47,6 +47,8 @@ export interface BilanRestauration {
   paiements: number;
   documents: number;
   pieces: number;
+  /** Numéros de document réservés par la sauvegarde, et désormais consommés. */
+  souches: number;
   /** Nombre de fichiers réécrits dans le dossier documentaire. */
   fichiers: number;
   reglages: boolean;
@@ -151,6 +153,33 @@ export function validerContenu(objet: ContenuSauvegarde): void {
       'Cette sauvegarde est incomplète : une partie des données manque. Elle ne peut pas être restaurée.',
     );
   }
+
+  // Les souches suivent la règle des pièces et des fichiers : une sauvegarde
+  // écrite avant leur apparition n'en porte pas, et la refuser priverait
+  // l'utilisateur de ses propres sauvegardes. Quand le champ est là, il doit
+  // être lisible — une souche sans numéro ni année ne réserverait rien, et un
+  // numéro déjà remis au locataire pourrait être réattribué sans que rien ne le
+  // signale. C'est précisément le défaut que cette table existe pour empêcher.
+  if (objet.donnees.souches !== undefined) {
+    if (!Array.isArray(objet.donnees.souches)) {
+      throw new ErreurSauvegarde(
+        'Cette sauvegarde est incomplète : une partie des données manque. Elle ne peut pas être restaurée.',
+      );
+    }
+    for (const souche of objet.donnees.souches) {
+      if (
+        !souche ||
+        typeof souche.numero !== 'string' ||
+        typeof souche.type !== 'string' ||
+        !Number.isInteger(souche.annee)
+      ) {
+        throw new ErreurSauvegarde(
+          'Cette sauvegarde annonce des numéros de document illisibles. ' +
+            'Elle ne peut pas être restaurée.',
+        );
+      }
+    }
+  }
 }
 
 /**
@@ -171,6 +200,14 @@ export async function appliquerSauvegarde(
     // On vide d'abord, dans l'ordre inverse des dépendances. `pieces` référence
     // `baux` et `logements` : la vider après eux violerait la clé étrangère et
     // ferait échouer toute la restauration.
+    //
+    // `numeros_consommes` n'est **pas** vidée, et c'est la seule table dans ce
+    // cas. Une souche est un numéro déjà attribué : la rendre parce qu'on
+    // restaure une sauvegarde plus ancienne ferait exactement ce que la table
+    // existe pour empêcher. La restauration écrit donc les souches de la
+    // sauvegarde **en plus** de celles déjà présentes, sans jamais en retirer.
+    // La conséquence est un ensemble de numéros réservés plus large que celui de
+    // la sauvegarde — des numéros sautés, jamais un numéro repris.
     await db.execAsync('DELETE FROM documents');
     await db.execAsync('DELETE FROM pieces');
     await db.execAsync('DELETE FROM paiements');
@@ -339,6 +376,18 @@ export async function appliquerSauvegarde(
         ],
       );
     }
+
+    // Les souches viennent en dernier, et `DO NOTHING` les rend additives : une
+    // sauvegarde plus ancienne n'efface pas les numéros réservés depuis. Voir la
+    // raison au-dessus des `DELETE`.
+    for (const souche of d.souches ?? []) {
+      await db.runAsync(
+        `INSERT INTO numeros_consommes (numero, type, annee, consomme_le)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(numero) DO NOTHING`,
+        [souche.numero, souche.type, souche.annee, souche.consommeLe],
+      );
+    }
   });
 
   // Les réglages sont écrits après la transaction : ce sont des préférences,
@@ -363,6 +412,7 @@ export async function appliquerSauvegarde(
     paiements: d.paiements.length,
     documents: d.documents.length,
     pieces: (d.pieces ?? []).length,
+    souches: (d.souches ?? []).length,
     fichiers,
     reglages: true,
   };

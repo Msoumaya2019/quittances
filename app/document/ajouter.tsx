@@ -44,7 +44,7 @@ import { bailEnCours, listerLogements } from '@/db/repositories/properties';
 import { enregistrerPiece } from '@/db/repositories/pieces';
 import {
   copierPiece,
-  supprimerFichierPiece,
+  supprimerFichier,
   tailleLisible,
   titreDepuisNom,
 } from '@/documents/stockage';
@@ -184,7 +184,7 @@ export default function EcranAjouterDocument() {
       // Le fichier a pu être copié avant que l'enregistrement échoue : on le
       // retire, sinon il resterait dans le dossier des documents sans qu'aucune
       // ligne ne le référence, et personne ne saurait qu'il existe.
-      if (copie) await supprimerFichierPiece(copie.chemin);
+      if (copie) await supprimerFichier(copie.chemin);
       setErreur(
         e instanceof Error ? e.message : "Le document n'a pas pu être enregistré.",
       );

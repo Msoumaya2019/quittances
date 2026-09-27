@@ -26,6 +26,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BandeauMessage } from '@/ui/components/BandeauMessage';
 import { Bouton } from '@/ui/components/Bouton';
 import { Carte } from '@/ui/components/Carte';
+// `DialogueConfirmation` n'a pas de fichier à son nom : il vit dans
+// `FeuilleAction.tsx` avec la feuille d'actions, et s'exporte par le barrel.
+import { DialogueConfirmation } from '@/ui/components';
 import { EnTeteEcran } from '@/ui/components/EnTeteEcran';
 import { LigneDetail } from '@/ui/components/LigneDetail';
 import { PastilleStatut } from '@/ui/components/PastilleStatut';
@@ -33,6 +36,8 @@ import { espaces, typographie } from '@/ui/tokens';
 import { formatMontant } from '@/domain/money';
 import { libelleLongCapitalise, depuisCle, formaterDateFr } from '@/domain/period';
 import { LIBELLE_DOCUMENT, LIBELLE_MODELE, type Document } from '@/domain/types';
+import { elementDeDocument } from '@/domain/dossier';
+import { messageDeSuppression } from '@/domain/suppression';
 import {
   emettreDocument,
   diagnostiquerMois,
@@ -41,6 +46,7 @@ import {
 } from '@/pdf/render';
 import { ouvrirDocument, partagerDocument } from '@/pdf/partage';
 import { trouverDocument } from '@/db/repositories/documents';
+import { supprimerElement } from '@/documents/suppression';
 import { useApplication } from '@/state/ApplicationContext';
 import { useStyles, useCouleurs, type Couleurs } from '@/ui/theme';
 
@@ -61,6 +67,10 @@ export default function EcranApercuQuittance() {
   const [diagnostic, setDiagnostic] = useState<DiagnosticMois | null>(null);
   const [document, setDocument] = useState<Document | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
+  /** La confirmation de suppression est ouverte. */
+  const [demandeSuppression, setDemandeSuppression] = useState(false);
+  /** La suppression est en cours : le bouton de la boîte est occupé. */
+  const [suppression, setSuppression] = useState(false);
 
   const periode = parametres.periode ?? '';
   const mois = depuisCle(periode);
@@ -159,6 +169,39 @@ export default function EcranApercuQuittance() {
     });
   }, [parametres.logementId, periode]);
 
+  /**
+   * Retire la quittance consultée, puis revient à la liste.
+   *
+   * La suppression elle-même — l'ordre de la ligne et du fichier, et ce qui
+   * n'est pas touché — vit dans `supprimerElement`, partagé avec les deux
+   * écrans qui listent des documents.
+   *
+   * `rafraichir` avant de revenir : le mois redevient « à rattraper » dès que
+   * la ligne a disparu, et la liste doit le montrer sans qu'on ait à la quitter
+   * puis revenir. Le paiement, lui, n'est pas touché : c'est la preuve qu'on
+   * retire, pas le règlement.
+   */
+  const supprimer = useCallback(async () => {
+    if (!document) return;
+
+    setSuppression(true);
+    setErreur(null);
+
+    try {
+      await supprimerElement(elementDeDocument(document));
+      rafraichir();
+      setDemandeSuppression(false);
+      router.back();
+    } catch (e) {
+      setErreur(
+        e instanceof Error ? e.message : "La quittance n'a pas pu être supprimée.",
+      );
+      setDemandeSuppression(false);
+    } finally {
+      setSuppression(false);
+    }
+  }, [document, rafraichir]);
+
   // --- Affichage --------------------------------------------------------
 
   if (chargement) {
@@ -186,6 +229,8 @@ export default function EcranApercuQuittance() {
             titre={LIBELLE_DOCUMENT[document.type]}
             sousTitre={`N° ${document.numero}`}
           />
+
+          {erreur ? <BandeauMessage ton="erreur" message={erreur} /> : null}
 
           <Carte style={styles.carteRecap}>
             <Text style={[typographie.titreCarte, styles.titreCarte]}>
@@ -230,9 +275,28 @@ export default function EcranApercuQuittance() {
               variante="secondaire"
               onPress={() => void partagerDocument(document.cheminFichier, document.numero)}
             />
+            {/* Supprimer est ici, et pas seulement derrière un appui long : une
+                quittance ne se supprimait nulle part, et un geste caché n'est
+                pas une possibilité qu'on trouve. */}
+            <Bouton
+              libelle="Supprimer cette quittance"
+              variante="danger"
+              onPress={() => setDemandeSuppression(true)}
+            />
             <Bouton libelle="Terminer" variante="discret" onPress={() => router.back()} />
           </View>
         </ScrollView>
+
+        <DialogueConfirmation
+          visible={demandeSuppression}
+          titre="Supprimer cette quittance ?"
+          message={messageDeSuppression(elementDeDocument(document))}
+          libelleConfirmer="Supprimer"
+          danger
+          occupe={suppression}
+          onConfirmer={() => void supprimer()}
+          onAnnuler={() => setDemandeSuppression(false)}
+        />
       </View>
     );
   }

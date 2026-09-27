@@ -44,7 +44,7 @@ export function normaliserJourRappel(jour: number): number {
 export function texteRappel(): { titre: string; corps: string } {
   return {
     titre: 'Loyers à encaisser',
-    corps: 'Ouvrez Quittances pour voir ce qui reste à encaisser ce mois-ci.',
+    corps: 'Ouvrez Gestion Locative pour voir ce qui reste à encaisser ce mois-ci.',
   };
 }
 

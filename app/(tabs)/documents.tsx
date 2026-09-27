@@ -45,10 +45,11 @@ import {
 } from '@/domain/dossier';
 import { useApplication } from '@/state/ApplicationContext';
 import { listerLogements } from '@/db/repositories/properties';
-import { toutesLesPieces, supprimerPiece } from '@/db/repositories/pieces';
+import { toutesLesPieces } from '@/db/repositories/pieces';
 import { tousLesDocuments } from '@/db/repositories/documents';
 import { partagerDocument } from '@/pdf/partage';
-import { supprimerFichierPiece } from '@/documents/stockage';
+import { supprimerElement } from '@/documents/suppression';
+import { messageDeSuppression } from '@/domain/suppression';
 import { PanneauQuittances } from '@/ui/ecrans/PanneauQuittances';
 import { useStyles, type Couleurs } from '@/ui/theme';
 
@@ -177,17 +178,13 @@ export default function EcranDocuments() {
     }
   }
 
-  async function supprimerLaPiece() {
+  async function supprimerLeDocument() {
     if (!aSupprimer) return;
     setTravail(true);
     try {
-      const piece = pieces.find((p) => p.id === aSupprimer.id);
-      await supprimerPiece(aSupprimer.id);
-      // Le fichier est retiré après la ligne : si le retrait échoue, il reste un
-      // orphelin invisible, alors que l'inverse laisserait une pièce listée mais
-      // illisible — le pire des deux, puisque l'application prétendrait encore
-      // pouvoir l'ouvrir.
-      if (piece?.cheminFichier) await supprimerFichierPiece(piece.cheminFichier);
+      // La ligne d'abord, le fichier ensuite — l'ordre et la raison vivent dans
+      // `supprimerElement`, avec les deux autres écrans qui suppriment aussi.
+      await supprimerElement(aSupprimer);
       setASupprimer(null);
       await charger();
     } catch (e) {
@@ -315,16 +312,11 @@ export default function EcranDocuments() {
       <DialogueConfirmation
         visible={aSupprimer !== null}
         titre="Supprimer ce document ?"
-        message={
-          aSupprimer
-            ? `« ${aSupprimer.libelle} » sera retiré du dossier, et son fichier effacé du ` +
-              'téléphone. Cette action ne peut pas être annulée.'
-            : ''
-        }
+        message={aSupprimer ? messageDeSuppression(aSupprimer) : ''}
         libelleConfirmer="Supprimer"
         danger
         occupe={travail}
-        onConfirmer={() => void supprimerLaPiece()}
+        onConfirmer={() => void supprimerLeDocument()}
         onAnnuler={() => setASupprimer(null)}
       />
     </View>

@@ -13,8 +13,10 @@
 /**
  * Version courante du schéma. À incrémenter en ajoutant une migration à
  * `MIGRATIONS`, jamais en modifiant une migration existante.
+ *
+ * 5 : les souches des documents supprimés (`numeros_consommes`).
  */
-export const VERSION_SCHEMA = 4;
+export const VERSION_SCHEMA = 5;
 
 export interface Migration {
   version: number;
@@ -277,6 +279,55 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE titulaires ADD COLUMN civilite TEXT NOT NULL DEFAULT '';`,
     ],
   },
+
+  // -------------------------------------------------------------------------
+  // Migration 5 — les souches
+  // -------------------------------------------------------------------------
+  {
+    version: 5,
+    description:
+      'Souches des documents supprimés : un numéro attribué n’est jamais réattribué',
+    statements: [
+      /**
+       * La souche d'un document : son numéro, et rien d'autre.
+       *
+       * Supprimer une quittance retire sa ligne de `documents`. Or le rang
+       * suivant se calcule sur le rang maximal **des lignes présentes** : la
+       * suppression de la dernière quittance de l'année fait donc retomber le
+       * maximum, et la quittance suivante reprend le numéro de celle qu'on vient
+       * de retirer. Une quittance a pu être remise au locataire avant d'être
+       * supprimée de l'application — deux quittances différentes porteraient
+       * alors le même numéro, et rien ne le signalerait.
+       *
+       * Cette table est la **souche** du carnet : elle garde les numéros partis,
+       * pour qu'ils ne reviennent pas.
+       *
+       * Elle ne peut pas vivre dans `documents`, et c'est structurel :
+       * `documents.logement_id` est `ON DELETE CASCADE`. Supprimer un logement
+       * effacerait ses souches, et les numéros de ses quittances redeviendraient
+       * libres — exactement le défaut qu'on veut rendre impossible. Aucune clé
+       * étrangère ici, donc : une souche ne dépend de rien.
+       *
+       * `numero` est la clé primaire : consommer deux fois le même numéro est
+       * refusé par la base, et non par une précaution d'appelant.
+       *
+       * Le **rang n'est pas une colonne**. Il se relit du numéro
+       * (`rangDeNumero`, `src/domain/numbering.ts`). Stocker les deux, c'est
+       * accepter qu'ils divergent un jour, et une souche dont le numéro dit 7
+       * quand la colonne dit 5 rendrait la numérotation imprévisible. `type` et
+       * `annee` restent, eux : ils ne sont qu'un index de lecture, et le calcul
+       * ne s'y fie pas.
+       */
+      `CREATE TABLE IF NOT EXISTS numeros_consommes (
+        numero       TEXT PRIMARY KEY NOT NULL,
+        type         TEXT NOT NULL,
+        annee        INTEGER NOT NULL,
+        consomme_le  TEXT NOT NULL
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_numeros_consommes_type_annee
+         ON numeros_consommes(type, annee);`,
+    ],
+  },
 ];
 
 /** Ensemble des tables attendues, utilisé par les contrôles de cohérence. */
@@ -290,6 +341,7 @@ export const TABLES = [
   'documents',
   'pieces',
   'brouillons',
+  'numeros_consommes',
   'reglages',
 ] as const;
 
@@ -315,11 +367,17 @@ export type NomTable = (typeof TABLES)[number];
  *   baux           -> logements
  *   logements      -> proprietaires   (RESTRICT)
  *   reglages       -> aucune
+ *   numeros_consommes -> aucune
  *
  * Une table enfant se vide donc **avant** sa table parente. `tests/reinitialisation.test.ts`
  * ne recopie pas cet ordre : il relit les `REFERENCES` de `MIGRATIONS` et exige
  * que la liste soit un ordre topologique de ce graphe. Une table ajoutée demain
  * sans être mise ici, ou mise au mauvais rang, fait donc tomber le contrôle.
+ *
+ * `numeros_consommes` est vidée comme les autres : une remise à zéro rend
+ * l'application à l'état d'installation, donc le carnet neuf repart à `0001`.
+ * C'est le choix explicite du bailleur, pas un oubli — il n'y a plus aucune
+ * quittance dont un numéro doive rester pris.
  */
 export const TABLES_A_VIDER: readonly NomTable[] = [
   'documents',
@@ -331,5 +389,6 @@ export const TABLES_A_VIDER: readonly NomTable[] = [
   'baux',
   'logements',
   'proprietaires',
+  'numeros_consommes',
   'reglages',
 ];

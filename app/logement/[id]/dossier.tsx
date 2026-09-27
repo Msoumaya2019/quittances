@@ -30,6 +30,7 @@ import {
   BandeauMessage,
   Bouton,
   Carte,
+  DialogueConfirmation,
   EnTeteEcran,
   LigneDetail,
 } from '@/ui/components';
@@ -44,6 +45,7 @@ import type {
   TitulaireBail,
 } from '@/domain/types';
 import { construireDossier, type ElementDossier, type SectionDossier } from '@/domain/dossier';
+import { messageDeSuppression } from '@/domain/suppression';
 import { useApplication } from '@/state/ApplicationContext';
 import {
   bauxDuLogement,
@@ -53,6 +55,7 @@ import {
 import { piecesDuLogement } from '@/db/repositories/pieces';
 import { documentsDuLogement } from '@/db/repositories/documents';
 import { partagerDocument } from '@/pdf/partage';
+import { supprimerElement } from '@/documents/suppression';
 import { useStyles, type Couleurs } from '@/ui/theme';
 
 interface Etat {
@@ -83,6 +86,8 @@ export default function EcranDossierLogement() {
    * exprimer ce défaut, et aurait demandé un effet pour l'initialiser.
    */
   const [bascules, setBascules] = useState<Record<string, boolean>>({});
+  const [aSupprimer, setASupprimer] = useState<ElementDossier | null>(null);
+  const [travail, setTravail] = useState(false);
 
   const charger = useCallback(async () => {
     if (!id) return;
@@ -167,6 +172,29 @@ export default function EcranDossierLogement() {
     }
   }
 
+  /**
+   * Retire le document confirmé, puis relit le dossier.
+   *
+   * La suppression elle-même — l'ordre de la ligne et du fichier, et ce qui
+   * n'est pas touché — vit dans `supprimerElement`, partagé avec l'onglet
+   * DOCUMENTS et l'aperçu d'une quittance.
+   */
+  async function supprimerLeDocument() {
+    if (!aSupprimer) return;
+    setTravail(true);
+    setErreur(null);
+    try {
+      await supprimerElement(aSupprimer);
+      setASupprimer(null);
+      await charger();
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Le document n'a pas pu être supprimé.");
+      setASupprimer(null);
+    } finally {
+      setTravail(false);
+    }
+  }
+
   function basculer(bailId: string, enCours: boolean) {
     setBascules((actuelles) => ({
       ...actuelles,
@@ -188,6 +216,7 @@ export default function EcranDossierLogement() {
   const logement = etat?.logement ?? null;
 
   return (
+    <>
     <ScrollView
       contentContainerStyle={[
         styles.conteneur,
@@ -276,6 +305,7 @@ export default function EcranDossierLogement() {
                           key={section.cle}
                           section={section}
                           onOuvrir={(element) => void ouvrir(element)}
+                          onSupprimer={setASupprimer}
                         />
                       ))
                     )}
@@ -328,8 +358,10 @@ export default function EcranDossierLogement() {
                   <Pressable
                     key={`bien-${element.id}`}
                     onPress={() => void ouvrir(element)}
+                    onLongPress={() => setASupprimer(element)}
                     accessibilityRole="button"
                     accessibilityLabel={`${element.libelle}, ${formaterDateFr(element.date)}`}
+                    accessibilityHint="Un appui long propose de le supprimer."
                     style={({ pressed }) => [styles.ligne, pressed && styles.ligneAppuyee]}
                   >
                     <View style={styles.ligneTextes}>
@@ -348,6 +380,18 @@ export default function EcranDossierLogement() {
         </>
       ) : null}
     </ScrollView>
+
+      <DialogueConfirmation
+        visible={aSupprimer !== null}
+        titre="Supprimer ce document ?"
+        message={aSupprimer ? messageDeSuppression(aSupprimer) : ''}
+        libelleConfirmer="Supprimer"
+        danger
+        occupe={travail}
+        onConfirmer={() => void supprimerLeDocument()}
+        onAnnuler={() => setASupprimer(null)}
+      />
+    </>
   );
 }
 
@@ -355,9 +399,11 @@ export default function EcranDossierLogement() {
 function Section({
   section,
   onOuvrir,
+  onSupprimer,
 }: {
   section: SectionDossier;
   onOuvrir: (element: ElementDossier) => void;
+  onSupprimer: (element: ElementDossier) => void;
 }) {
   const styles = useStyles(creerStyles);
 
@@ -368,8 +414,10 @@ function Section({
         <Pressable
           key={element.id}
           onPress={() => onOuvrir(element)}
+          onLongPress={() => onSupprimer(element)}
           accessibilityRole="button"
           accessibilityLabel={`Ouvrir ${element.libelle}`}
+          accessibilityHint="Un appui long propose de le supprimer."
           style={({ pressed }) => [styles.ligne, pressed && styles.ligneAppuyee]}
         >
           <View style={styles.ligneTextes}>

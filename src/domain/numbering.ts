@@ -10,8 +10,16 @@
  *     |   +------- année d'émission
  *     +----------- type : QUI, REC ou AVI
  *
- * Le rang est calculé sur les documents **déjà enregistrés pour l'année**, ce
- * qui évite de réutiliser un numéro après suppression d'un PDF.
+ * Le rang est calculé sur les documents **déjà enregistrés pour l'année**, et
+ * sur les rangs **consommés** — ceux dont le document a été supprimé.
+ *
+ * Le second terme n'est pas une précaution de style : supprimer une quittance
+ * retire sa ligne, donc fait baisser le maximum, et la suivante porterait le
+ * numéro de celle qu'on vient de retirer. Or une quittance a pu être remise au
+ * locataire avant d'être supprimée de l'application : deux quittances
+ * différentes porteraient alors le même numéro. Un numéro attribué est donc
+ * consommé pour toujours — c'est la souche, qui reste au carnet quand la
+ * feuille est détachée.
  */
 
 import type { TypeDocument } from './types';
@@ -53,11 +61,18 @@ export function numeroDocument(
  * Déduit le rang suivant à partir des numéros déjà utilisés.
  * On repère le rang maximal connu, et on ajoute un. Si un numéro ne suit pas le
  * format attendu, il est ignoré du calcul plutôt que de faire échouer l'émission.
+ *
+ * `rangsConsommes` porte les rangs des documents **supprimés**. Ils comptent
+ * exactement comme les numéros encore présents : le maximum est pris sur les
+ * deux ensembles, jamais sur les seuls survivants. Le paramètre a une valeur par
+ * défaut pour qu'un appelant qui n'a pas de souches — un test, une évaluation —
+ * obtienne le calcul d'avant sans le connaître.
  */
 export function rangSuivant(
   numerosExistants: readonly string[],
   type: TypeDocument,
   annee: number,
+  rangsConsommes: readonly number[] = [],
 ): number {
   const motif = new RegExp(`^${PREFIXE[type]}-${annee}-(\\d{4})$`);
 
@@ -69,7 +84,28 @@ export function rangSuivant(
     if (rang > maximum) maximum = rang;
   }
 
+  for (const rang of rangsConsommes) {
+    if (Number.isInteger(rang) && rang > maximum) maximum = rang;
+  }
+
   return maximum + 1;
+}
+
+/**
+ * Le rang porté par un numéro, ou `null` s'il ne suit pas le format attendu.
+ *
+ * La souche d'une quittance supprimée ne conserve **pas** son rang : elle
+ * conserve son numéro, et le rang s'en relit. Deux représentations du même fait
+ * finiraient par diverger — une ligne dont le numéro dit 7 et la colonne 5
+ * rendrait la numérotation imprévisible, sans que rien ne le signale.
+ */
+export function rangDeNumero(
+  numero: string,
+  type: TypeDocument,
+  annee: number,
+): number | null {
+  const correspondance = new RegExp(`^${PREFIXE[type]}-${annee}-(\\d{4})$`).exec(numero);
+  return correspondance ? Number(correspondance[1]) : null;
 }
 
 /** Vrai si le numéro respecte le format attendu. */

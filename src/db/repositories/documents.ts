@@ -8,6 +8,7 @@
 
 import { executer, lireToutes, lireUne } from '../database';
 import { maintenantISO, nouvelId } from '../ids';
+import { consommerNumero, rangsConsommes } from './numeros';
 import {
   nomFichierDocument,
   numeroDocument,
@@ -153,15 +154,34 @@ async function numerosExistants(type: TypeDocument, annee: number): Promise<stri
 
 /**
  * Réserve le prochain numéro disponible pour un type et une année.
- * Le calcul se fait sur la base existante, donc un redémarrage de l'application
- * ne peut pas produire deux fois le même numéro.
+ *
+ * **Réserver est une écriture**, et c'est le mot juste : le numéro est consommé
+ * au moment où il est attribué, pas au moment où le document est enregistré. Une
+ * quittance dont l'enregistrement échoue laisse donc un numéro pris — c'est ce
+ * que fait un carnet à souches, et c'est ce qui rend impossible qu'une seconde
+ * quittance porte le numéro d'une première déjà remise au locataire.
+ *
+ * Le maximum est pris sur les documents **présents** et sur les **souches** des
+ * documents supprimés. Sans le second terme, supprimer la dernière quittance de
+ * l'année ferait retomber le maximum, et le numéro reviendrait.
+ *
+ * Appelé après le garde-fou du paiement intégral (`emettreDocument`,
+ * `src/pdf/render.ts`) : un mois non réglé ne consomme donc aucun numéro.
  */
 export async function prochainNumero(
   type: TypeDocument,
   annee: number,
 ): Promise<string> {
-  const existants = await numerosExistants(type, annee);
-  return numeroDocument(type, annee, rangSuivant(existants, type, annee));
+  const [existants, consommes] = await Promise.all([
+    numerosExistants(type, annee),
+    rangsConsommes(type, annee),
+  ]);
+
+  const rang = rangSuivant(existants, type, annee, consommes);
+  const numero = numeroDocument(type, annee, rang);
+
+  await consommerNumero({ numero, type, annee });
+  return numero;
 }
 
 export interface SaisieDocument {

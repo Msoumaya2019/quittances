@@ -212,9 +212,18 @@ function remplir(db: DatabaseSync): void {
   `);
 }
 
-/** Les comptes attendus, table par table, après la migration. */
-function comptes(db: DatabaseSync): Record<string, number> {
-  return Object.fromEntries(TABLES.map((table) => [table, compter(db, table)]));
+/**
+ * Les comptes attendus, table par table, après la migration.
+ *
+ * La liste des tables est **donnée par l'appelant**, et jamais prise dans
+ * `TABLES`. `TABLES` décrit la base d'aujourd'hui : une table ajoutée par une
+ * migration postérieure — `numeros_consommes`, apparue avec les souches — n'existe
+ * pas dans la base ancienne, et la compter ferait échouer ce banc pour une raison
+ * qui n'a rien à voir avec la civilité. C'est la liste des tables **de la base
+ * ancienne**, relevée sur elle, qui est comparée avant et après.
+ */
+function comptes(db: DatabaseSync, tables: readonly string[]): Record<string, number> {
+  return Object.fromEntries(tables.map((table) => [table, compter(db, table)]));
 }
 
 // ---------------------------------------------------------------------------
@@ -253,8 +262,12 @@ test(`Migration ${VERSION_CIVILITE} : une base ancienne remplie garde ses locata
     );
 
     // --- 2. On remplit AVANT de migrer --------------------------------------
+    // Les tables de la base ancienne sont relevées **sur elle**, avant la
+    // migration : c'est le seul moment où elles décrivent l'état d'avant.
+    const tablesAnciennes = nomsDesTables(ancienne);
+
     remplir(ancienne);
-    const avant = comptes(ancienne);
+    const avant = comptes(ancienne, tablesAnciennes);
     assert.ok(
       Object.values(avant).every((n) => n > 0),
       `une table est restée vide avant migration (${JSON.stringify(avant)}) : `
@@ -291,7 +304,7 @@ test(`Migration ${VERSION_CIVILITE} : une base ancienne remplie garde ses locata
 
     // --- 5. Les données -----------------------------------------------------
     assert.deepEqual(
-      comptes(ancienne),
+      comptes(ancienne, tablesAnciennes),
       avant,
       'la migration a fait disparaître des lignes : elle n’est pas additive',
     );

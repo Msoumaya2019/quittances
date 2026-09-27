@@ -33,6 +33,7 @@ import {
 import { tousLesPaiements } from '@/db/repositories/payments';
 import { tousLesDocuments } from '@/db/repositories/documents';
 import { toutesLesPieces } from '@/db/repositories/pieces';
+import { toutesLesSouches, type Souche } from '@/db/repositories/numeros';
 import { dateDuJour, maintenantISO } from '@/db/ids';
 import { DOSSIER_DOCUMENTS } from '@/db/reinitialisation';
 import type {
@@ -113,6 +114,22 @@ export interface ContenuSauvegarde {
      * sauvegarde de version 1 n'en a pas.
      */
     fichiers?: FichierSauvegarde[];
+    /**
+     * Les souches des documents supprimés : les numéros déjà attribués.
+     *
+     * Elles voyagent avec la sauvegarde, et ce n'est pas un détail : sans elles,
+     * une restauration remettrait dans `documents` des quittances dont les
+     * numéros ne seraient plus réservés nulle part, et la prochaine quittance
+     * pourrait reprendre le numéro d'une quittance déjà remise au locataire.
+     *
+     * Facultatif, comme `pieces` : une sauvegarde écrite avant cette version n'en
+     * contient pas, et la refuser ferait perdre l'accès aux sauvegardes
+     * existantes. Une telle sauvegarde se restaure donc avec ses seuls documents
+     * présents, ce qui suffit à protéger la numérotation — les souches ne
+     * concernent que les documents **supprimés**, dont une sauvegarde ancienne
+     * ne peut pas connaître l'existence.
+     */
+    souches?: Souche[];
     reglages: Reglages;
   };
   /** Décompte, pour afficher ce que contient la sauvegarde avant de restaurer. */
@@ -125,6 +142,8 @@ export interface ContenuSauvegarde {
     paiements: number;
     documents: number;
     pieces?: number;
+    /** Nombre de souches : des numéros réservés, dont le document a été supprimé. */
+    souches?: number;
     /** Nombre de fichiers joints. */
     fichiers?: number;
     /** Poids des fichiers joints, en octets, avant encodage. */
@@ -153,14 +172,16 @@ export const TAILLE_MAXIMALE_FICHIERS = 64 * 1024 * 1024;
  * locataires successifs qu'il faut tous conserver.
  */
 export async function rassemblerDonnees(): Promise<ContenuSauvegarde['donnees']> {
-  const [proprietaires, logements, paiements, documents, pieces, reglages] = await Promise.all([
-    listerProprietaires(),
-    listerLogements(),
-    tousLesPaiements(),
-    tousLesDocuments(),
-    toutesLesPieces(),
-    lireReglages(),
-  ]);
+  const [proprietaires, logements, paiements, documents, pieces, souches, reglages] =
+    await Promise.all([
+      listerProprietaires(),
+      listerLogements(),
+      tousLesPaiements(),
+      tousLesDocuments(),
+      toutesLesPieces(),
+      toutesLesSouches(),
+      lireReglages(),
+    ]);
 
   const baux: Bail[] = [];
   for (const logement of logements) {
@@ -188,6 +209,7 @@ export async function rassemblerDonnees(): Promise<ContenuSauvegarde['donnees']>
     paiements,
     documents,
     pieces,
+    souches,
     reglages,
   };
 }
@@ -200,7 +222,7 @@ export async function preparerContenu(): Promise<ContenuSauvegarde> {
   return {
     version: VERSION_CONTENU,
     creeLe: maintenantISO(),
-    application: 'Quittances',
+    application: 'Gestion Locative',
     donnees: { ...donnees, fichiers },
     resume: {
       proprietaires: donnees.proprietaires.length,
@@ -211,6 +233,7 @@ export async function preparerContenu(): Promise<ContenuSauvegarde> {
       paiements: donnees.paiements.length,
       documents: donnees.documents.length,
       pieces: (donnees.pieces ?? []).length,
+      souches: (donnees.souches ?? []).length,
       fichiers: fichiers.length,
       octetsFichiers: fichiers.reduce(
         // Le base64 gonfle d'environ un tiers : le décompte annoncé à

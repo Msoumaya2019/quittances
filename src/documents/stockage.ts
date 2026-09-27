@@ -186,11 +186,16 @@ export async function deplacerPiece(params: {
 /**
  * Retire un fichier du dossier des documents.
  *
+ * Le nom ne dit pas « pièce » : la fonction ne connaît qu'un chemin, et elle
+ * sert aussi bien à la pièce qu'on vient de ranger qu'à la quittance qu'on
+ * supprime. Un nom plus étroit ferait hésiter à l'appeler sur une quittance —
+ * et c'est ainsi qu'une seconde fonction, presque identique, finit par naître.
+ *
  * `idempotent` : retirer une pièce dont le fichier a déjà disparu ne doit pas
  * faire échouer la suppression de la ligne. L'utilisateur veut que la pièce
  * disparaisse de la liste, et elle disparaîtra.
  */
-export async function supprimerFichierPiece(chemin: string): Promise<boolean> {
+export async function supprimerFichier(chemin: string): Promise<boolean> {
   if (!chemin) return false;
   try {
     await FileSystem.deleteAsync(chemin, { idempotent: true });

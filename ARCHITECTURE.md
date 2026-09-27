@@ -77,8 +77,10 @@ src/
     numbering.ts            # numérotation unique et stable des documents
     rappels.ts              # texte des rappels, sans mois figé
     reinitialisation.ts     # le mot qui confirme un effacement, règle pure
+    suppression.ts          # ce qu'une suppression emporte, et ce qu'elle épargne
   documents/
     stockage.ts             # copie d'un fichier choisi dans le dossier des documents
+    suppression.ts          # le geste : retirer la ligne, puis le fichier
     bail-contexte.ts        # ce que la location porte déjà, lu en une fois
     photos.ts               # prise, choix, compression et rangement des photos
   db/
@@ -86,7 +88,7 @@ src/
     database.ts             # ouverture, pragmas, migration au démarrage
     reinitialisation.ts     # effacement de toutes les données et des PDF
     repositories/           # owners, properties, payments, documents, pieces,
-                            #   brouillons, settings
+                            #   brouillons, settings, numeros (les souches)
   pdf/
     styles.ts               # styles partagés par tous les modèles
     styles-colore.ts        # palette du modèle coloré, qui ne suit pas le thème
@@ -923,6 +925,10 @@ seule fonction pure**, pour être éprouvable sans base de données et sans tél
 | La civilité du bailleur réglée dans les réglages arrive jusqu'au document | `ReglagesBail.civiliteBailleur` (`src/pdf/bail.ts`) et `ContenuDocument.emetteur.civilite` (`src/pdf/models.ts`) | `tests/locataires-sur-les-documents.test.ts` |
 | Une signature se retrouve par **identifiant**, et ne se pose jamais sur un autre locataire | `signataires` dans `src/pdf/bail.ts`, qui cherche `l.id` d'abord ; l'identifiant est transmis par `emettre-bail.ts` | `tests/locataires-sur-les-documents.test.ts` |
 | Ajouter une colonne ne perd aucune donnée déjà saisie | migration 4 (`src/db/schema.ts`), `ALTER TABLE ADD COLUMN` — aucune ligne réécrite | `tests/migration-civilite.test.ts` |
+| Supprimer un document ne supprime aucun fait qui l'a produit | `EPARGNE` dans `src/domain/suppression.ts` (ce que le geste épargne, par section) et `src/documents/suppression.ts`, qui n'importe **que** les deux dépôts de documents | `tests/suppression-document.test.ts`, falsifié par `.verif/falsifier-souches-et-suppression.py` |
+| Le geste de suppression n'existe qu'une fois, et la ligne tombe avant le fichier | `supprimerElement` dans `src/documents/suppression.ts`, employé par les trois écrans qui suppriment | `tests/suppression-document.test.ts`, falsifié par `.verif/falsifier-souches-et-suppression.py` |
+| Un numéro de document attribué n'est jamais réattribué | `numeros_consommes` (migration 5, **sans clé étrangère**), `rangSuivant` qui prend le maximum sur les numéros présents **et** les rangs consommés, `prochainNumero` qui **réserve** le numéro | `tests/souches.test.ts`, falsifié par `.verif/falsifier-souches-et-suppression.py` |
+| Restaurer une sauvegarde ne libère aucun numéro déjà consommé | `toutesLesSouches` (`src/backup/export.ts`) et l'écriture additive de `src/backup/import.ts` — `INSERT … ON CONFLICT DO NOTHING`, jamais de `DELETE` sur les souches | `tests/souches.test.ts` |
 
 Le dépôt en base de `ajouterPeriodeLoyer` ne fait qu'**appliquer** le plan
 calculé par le domaine : la décision est prise ailleurs, et la transaction
@@ -957,6 +963,76 @@ interrupteur absent.
 Au lancement, `RappelsDeLoyers` dans `app/_layout.tsx` reprogramme le rappel si
 le réglage est actif : une réinstallation efface la programmation sans prévenir,
 et ce réarmement rend l'état auto-réparateur.
+
+## Supprimer un document
+
+Le bailleur peut retirer n'importe quel document qu'il a produit : une quittance,
+un bail, un état des lieux, un inventaire, un document scanné. Trois écrans le
+proposent — l'onglet **DOCUMENTS** (appui long), le **dossier d'un logement**
+(appui long) et l'**aperçu d'une quittance** (bouton), cette dernière parce
+qu'une quittance ne se supprimait nulle part et qu'un geste caché n'est pas une
+possibilité qu'on trouve.
+
+**Le geste n'existe qu'une fois**, dans `src/documents/suppression.ts` : retirer
+la ligne, **puis** le fichier. L'ordre est la règle. Effacer le fichier d'abord
+laisserait un document listé mais illisible, et l'application prétendrait encore
+pouvoir l'ouvrir — le pire des deux états, puisque rien ne le signalerait. Dans
+l'autre sens, un effacement de fichier qui échoue laisse un orphelin invisible :
+de la place perdue, aucune promesse rompue. `supprimerFichier`
+(`src/documents/stockage.ts`) est idempotent, donc retirer une pièce dont le
+fichier a déjà disparu ne fait pas échouer la suppression.
+
+**Ce qu'une suppression n'emporte pas est écrit, et vérifié.**
+`src/domain/suppression.ts` porte, par section du dossier, ce que le geste retire
+et ce qu'il **épargne**. Supprimer une quittance ne supprime **aucun paiement** :
+le mois reste réglé, il redevient simplement « à rattraper », et une nouvelle
+quittance peut être produite. Supprimer un bail ne touche **aucune location** :
+`pieces.bail_id` est `ON DELETE SET NULL`, donc les locataires, les loyers et les
+quittances déjà émises restent en place. Ces phrases sont ce que le bailleur lit
+au moment de décider ; `tests/suppression-document.test.ts` exige qu'elles
+nomment le paiement et la location, section par section — une phrase fausse se
+paierait au moment où le bailleur croit avoir effacé une dette.
+
+### Les souches : un numéro attribué ne revient pas
+
+Supprimer une quittance retire sa ligne de `documents`. Or le rang suivant se
+calculait sur le rang maximal **des lignes présentes** : la suppression de la
+dernière quittance de l'année faisait donc retomber le maximum, et la quittance
+suivante reprenait le numéro de celle qu'on venait de retirer. **Le défaut a été
+mesuré avant d'être corrigé** (`.verif/mesurer-reutilisation-numero.ts`) : cinq
+quittances émises, la cinquième supprimée, la suivante numérotée `QUI-2026-0005`
+— deux quittances différentes, le même numéro, dont l'une a pu être remise au
+locataire.
+
+La table `numeros_consommes` (migration 5) est la **souche** du carnet : elle
+garde les numéros partis. Trois décisions la portent :
+
+- **Aucune clé étrangère.** Ce n'est pas un détail de schéma :
+  `documents.logement_id` est `ON DELETE CASCADE`, donc une souche qui pendrait
+  au logement disparaîtrait avec lui et **libérerait les numéros de ses
+  quittances**. Une souche ne dépend de rien. Le contrôle l'exige sur la
+  définition même de la table.
+- **Le rang n'est pas une colonne.** Il se relit du numéro (`rangDeNumero`,
+  `src/domain/numbering.ts`). Deux représentations du même fait finiraient par
+  diverger, et une souche dont le numéro dit 7 quand la colonne dit 5 rendrait la
+  numérotation imprévisible. `type` et `annee` restent, eux : ce n'est qu'un
+  index de lecture, et le calcul ne s'y fie pas.
+- **Réserver est une écriture.** `prochainNumero` consomme le numéro au moment où
+  il l'attribue, pas au moment où le document est enregistré — c'est le sens du
+  mot « réserve », et c'est ce qui fait qu'une émission qui échoue après avoir
+  pris un numéro ne le rend pas. L'appel se fait **après** le garde-fou du
+  paiement intégral (`src/pdf/render.ts`), donc un mois non réglé ne consomme
+  rien.
+
+La sauvegarde emporte les souches, et **la restauration n'en retire aucune** :
+une sauvegarde plus ancienne n'a jamais connu les documents supprimés depuis, et
+les effacer rendrait leurs numéros réattribuables. Le geste de sauvegarde ne peut
+donc pas annuler une garantie comptable — la conséquence est un ensemble de
+numéros réservés plus large, jamais un numéro repris.
+
+La remise à zéro, elle, **vide** `numeros_consommes` comme le reste : l'état
+d'installation est un carnet neuf, et il n'y a plus aucune quittance dont un
+numéro doive rester pris. C'est le choix explicite du bailleur, pas un oubli.
 
 ## La remise à zéro
 
@@ -1251,7 +1327,10 @@ bailleur a signalée),
 `.verif/falsifier-rappel-quantite.py` (une : le rappel indexé par le seul
 identifiant du meuble) et
 `.verif/falsifier-edl-pagination.py` / `.verif/falsifier-edl-sortie.py` (neuf sur
-les pages réellement imprimées) suivent la même méthode. Chacun écrit sa
+les pages réellement imprimées) et
+`.verif/falsifier-souches-et-suppression.py` (dix-huit : la numérotation des
+quittances, la forme de la souche, la sauvegarde, l'ordre de la ligne et du
+fichier, et les textes affichés avant d'effacer) suivent la même méthode. Chacun écrit sa
 sauvegarde dans `.verif/sauvegardes/` — jamais **à côté de sa source**, où elle
 apparaîtrait dans `git status` comme si elle faisait partie du projet — et
 **prouve la restauration sur les octets**, jamais sur la couleur des tests : une
