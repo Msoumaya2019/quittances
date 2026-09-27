@@ -170,7 +170,7 @@ lieu de 12). Le fichier produit est identique dans son usage.
 2. Cliquez sur la ligne de la compilation terminée (rond vert).
 3. Faites défiler jusqu'au bas de la page, section **Artifacts**.
 4. Cliquez sur **apk-quittances**. Un fichier `.zip` se télécharge.
-5. Décompressez-le : vous obtenez `Quittances-<version>-android.apk`. La version
+5. Décompressez-le : vous obtenez `Gestion-Locative-<version>-android.apk`. La version
    est celle de `app.json` — le flux la lit, il ne la recopie pas. Le nom du
    fichier dit donc toujours quelle version il porte.
 
@@ -181,7 +181,7 @@ compilation.
 
 ## Étape 6 — Installer sur le téléphone Android
 
-1. Transférez `Quittances-<version>-android.apk` vers le téléphone — par câble,
+1. Transférez `Gestion-Locative-<version>-android.apk` vers le téléphone — par câble,
    par courriel, ou par un lien de transfert de fichiers. À vous de choisir.
 2. Sur le téléphone, ouvrez le fichier. Android affiche un avertissement du type
    « Pour votre sécurité, votre téléphone n'est pas autorisé à installer des
@@ -219,7 +219,7 @@ fichier-là ne s'installe sur aucun iPhone, ni maintenant, ni après signature.*
 Il s'installe dans le simulateur iOS d'un Mac :
 
 ```bash
-tar -xzf Quittances-*-ios-simulateur.tar.gz
+tar -xzf Gestion-Locative-*-ios-simulateur.tar.gz
 xcrun simctl install booted Quittances.app
 ```
 
@@ -235,7 +235,7 @@ mais **compilé pour l'appareil** — c'est exactement ce qu'attend eSign.
 1. Onglet **Actions** → flux **« IPA appareil »** (`ios-ipa-appareil.yml`) → *Run workflow*. Comptez une
    quinzaine de minutes.
 2. À la fin, téléchargez l'artefact **`ipa-appareil-non-signe`** : il contient
-   l'IPA, nommé `Quittances-<version>-appareil-non-signe.ipa`. La version est
+   l'IPA, nommé `Gestion-Locative-<version>-appareil-non-signe.ipa`. La version est
    celle de `app.json` — le flux la lit, il ne la recopie pas.
 3. Transférez le fichier sur votre iPhone (AirDrop, l'app Fichiers, ou un lien
    de partage), ouvrez-le dans **eSign**, puis signez-le avec votre certificat.

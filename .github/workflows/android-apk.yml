@@ -96,7 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           version=$(node -p "require('./app.json').expo.version")
-          fichier="Quittances-${version}-android.apk"
+          fichier="Gestion-Locative-${version}-android.apk"
 
           # La compilation distante d'abord : c'est l'image d'Expo, preparee pour
           # ce projet. `--wait` attend la fin et rapatrie le fichier dans ce job.
@@ -168,7 +168,7 @@ jobs:
           # ne disait pas non plus quelle version il portait, et rien ne
           # permettait de distinguer deux telechargements.
           version=$(node -p "require('./app.json').expo.version")
-          fichier="Quittances-${version}-android.${extension}"
+          fichier="Gestion-Locative-${version}-android.${extension}"
           curl --fail --location "$adresse" --output "$fichier"
           ls -lh "$fichier"
           echo "FICHIER=${fichier}" >> "$GITHUB_ENV"
@@ -195,7 +195,7 @@ jobs:
           etiquette="${GITHUB_REF_NAME}"
           if gh release view "$etiquette" >/dev/null 2>&1; then
             gh release upload "$etiquette" "$FICHIER" --clobber
-          elif gh release create "$etiquette" "$FICHIER" --title "Quittances ${etiquette}" --generate-notes; then
+          elif gh release create "$etiquette" "$FICHIER" --title "Gestion Locative ${etiquette}" --generate-notes; then
             echo "Publication ${etiquette} créée."
           else
             # Les deux flux se déclenchent sur la même étiquette : la

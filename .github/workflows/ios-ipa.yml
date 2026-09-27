@@ -175,7 +175,7 @@ jobs:
           # dont un seul sert. Le nom local des binaires conserves est deja
           # celui-la ; le flux le rejoint.
           version=$(node -p "require('./app.json').expo.version")
-          fichier="Quittances-${version}-ios-simulateur-non-installable.${extension}"
+          fichier="Gestion-Locative-${version}-ios-simulateur-non-installable.${extension}"
           curl --fail --location "$adresse" --output "$fichier"
           ls -lh "$fichier"
           echo "extension reelle : ${extension}"
@@ -203,7 +203,7 @@ jobs:
           etiquette="${GITHUB_REF_NAME}"
           if gh release view "$etiquette" >/dev/null 2>&1; then
             gh release upload "$etiquette" "$FICHIER" --clobber
-          elif gh release create "$etiquette" "$FICHIER" --title "Quittances ${etiquette}" --generate-notes; then
+          elif gh release create "$etiquette" "$FICHIER" --title "Gestion Locative ${etiquette}" --generate-notes; then
             echo "Publication ${etiquette} créée."
           else
             # Les deux flux se déclenchent sur la même étiquette : la

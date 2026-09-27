@@ -165,7 +165,7 @@ jobs:
           # binaire 1.0.1 ne se voit qu'après l'installation, et le nom est
           # justement ce qui sert à choisir le bon fichier.
           version=$(node -p "require('./app.json').expo.version")
-          fichier="Quittances-${version}-appareil-non-signe.ipa"
+          fichier="Gestion-Locative-${version}-appareil-non-signe.ipa"
           rm -f "$fichier"
           zip -qry "$fichier" Payload
           ls -lh "$fichier"
