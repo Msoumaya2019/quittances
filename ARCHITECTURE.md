@@ -308,6 +308,12 @@ deux écrans qui saisissent un locataire — `app/logement/nouveau.tsx` et
 écran ne peut donc pas proposer une civilité que le document refuserait
 d'imprimer. **Rien n'est présélectionné**, la valeur vide étant un état légitime.
 
+**Les deux changements sont prouvés dans les binaires livrés**, et pas seulement
+dans les sources. Huit fragments — dont `toutesEnGras` et la valeur `Mlle`
+elle-même — ont été cherchés dans le bundle des deux plateformes : **absents**
+des binaires 1.1.4 publiés, **présents** dans ceux de la 1.1.5, sur l'APK comme
+sur l'IPA. Le contrôle refuse l'ancien et accepte le neuf.
+
 ## Les baux de location
 
 Un bail n'est pas une quittance. La quittance **atteste un paiement** et se
@@ -1115,6 +1121,21 @@ sensible est le secret `EXPO_TOKEN`, stocké dans les secrets GitHub. Les
 compilations refusent de produire une application dont les types ou les tests
 échouent, pour qu'un artefact publié soit toujours un artefact vérifié.
 
+**Une compilation verte ne dit pas ce que le binaire contient.** La routine après
+chaque compilation est donc de rapatrier l'artefact, de lire la version **dans**
+le fichier — `versionName` / `versionCode` de l'APK,
+`CFBundleShortVersionString` / `CFBundleVersion` de l'IPA —, de chercher les
+témoins dans le bundle des deux plateformes, de comparer les certificats de l'APK
+à ceux de la version publiée (`.verif/comparer-signatures.py` : sans quoi Android
+refuse la mise à jour, et la désinstallation **efface les données locales**),
+puis de publier. Le `Info.plist` de l'application se désigne par son **chemin
+exact** (`Payload/Quittances.app/Info.plist`) : l'archive en porte plusieurs, et
+un filtre par suffixe prend celui d'un sous-bundle — mesuré, un premier essai a
+lu `CFBundleShortVersionString 0.86.3`, la version d'un paquet tiers.
+Mesure du 27 septembre 2026 : **1.1.5 / code 9** sur les deux plateformes,
+40 témoins présents sur l'APK et 37 sur l'IPA, certificat `825217eb…`
+**identique** à celui de la 1.1.4.
+
 ## La mémoire du projet
 
 Le fichier `.workbuddy-ai/memory/MEMORY.md`, **hors du dépôt** (un cran au-dessus,
@@ -1236,6 +1257,13 @@ apparaîtrait dans `git status` comme si elle faisait partie du projet — et
 **prouve la restauration sur les octets**, jamais sur la couleur des tests : une
 source laissée mutée peut rendre les tests verts par chance.
 
+`.verif/falsifier-temoins-v115.py` suit une variante : il ne mute **rien**. Il
+joue les deux contrôleurs sur **quatre binaires réels** — l'APK et l'IPA de la
+version publiée, ceux de la version compilée — et exige que l'ancien soit
+**refusé**, le neuf **accepté**, et le refus **nommé**. L'ensemble attendu n'y est
+pas écrit à la main : il est dérivé des témoins déclarés et de la lecture des
+binaires.
+
 **Les fins de ligne sont réglées par un `.gitattributes`, et il en fallait un.**
 Mesuré le 24 septembre 2026 : `src/pdf/etat-des-lieux.ts` et `src/pdf/styles.ts`
 revenaient en **CRLF** après une édition, alors que les objets Git portent des
@@ -1313,6 +1341,27 @@ Android y sont déclarés **à part** (`TEMOINS_ANDROID`) et la plateforme est
 déclarée à la lecture : la branche `Platform.OS === 'android'` est retirée du
 bundle iOS, et l'exiger de l'IPA faisait échouer le contrôle sur un binaire
 conforme. Les témoins non jugés sont annoncés **hors plateforme**.
+
+**Un témoin s'adopte après avoir été mesuré, jamais parce qu'il sonne juste.**
+`.verif/mesurer-temoins-v115.py` lit les quatre binaires — l'APK et l'IPA de la
+1.1.4 publiée, ceux de la 1.1.5 compilée — dans les **deux** encodages, et
+n'annonce adoptable qu'un fragment **absent des deux anciens et présent dans les
+deux neufs**. Deux candidats ont été mesurés puis **rejetés** : `nomPourDocument`
+compte 1 des deux côtés — il vient du commit d'origine (`9a4cbf4`), ce changement
+l'a *étendu* à la civilité, pas créé ; et le libellé « Civilité » passe de 1 à 2
+seulement, parce qu'il servait déjà à la civilité **du bailleur** dans
+`app/mentions.tsx`. Tous deux auraient été verts quoi qu'on livre.
+
+`.verif/falsifier-temoins-v115.py` éprouve l'ensemble ainsi constitué : il fait
+**refuser** le binaire précédent et **accepter** le neuf, et exige que le refus
+nomme exactement les témoins qui discriminent. Sa première version portait cette
+liste **écrite à la main**, et sa falsification l'a prise en défaut : retirer un
+nom de la liste laissait le banc vert, parce que rien ne reliait la liste à
+`temoins.py`. L'ensemble attendu est donc **dérivé par la mesure**, et un
+plancher (`MINIMUM_DISCRIMINANTS`) empêche qu'il rétrécisse en silence quand une
+déclaration disparaît. Ce que ce banc **ne peut pas** voir reste écrit dans son
+en-tête : un témoin présent des deux côtés ne le fait pas échouer — c'est la
+mesure qui l'attrape, et c'est pourquoi chaque adoption porte la sienne.
 
 `.verif/mesurer-marges-bail.py` mesure la marge réellement **imprimée** sur
 chaque page du bail, et non celle écrite dans le CSS. La règle de page de
